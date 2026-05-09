@@ -1,0 +1,21 @@
+# Upstream JLPT data — fetch via scripts/seed-srs.ts, not source-controlled
+data/
+
+# Notes vault — agent output, personal data. Override with AGENTS_TEAM_VAULT_PATH
+# if you'd rather point at your real Obsidian vault.
+vault/
+
+# Pi runtime state (sessions, SRS deck progress, meta-logs)
+.pi/state/
+.pi/sessions/
+.pi/meta-logs/
+
+# Pi-managed extension artifacts
+.pi/extensions/**/dist/
+.pi/extensions/**/node_modules/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
