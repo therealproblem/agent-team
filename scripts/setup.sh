@@ -79,24 +79,47 @@ else
 	ok "tmux installed ($(tmux -V))"
 fi
 
-# tmux config: ensure extended-keys is on (aoe needs it for modified Enter).
+# tmux config: ensure aoe / Pi requirements are present.
+#   extended-keys on        -- aoe needs modified Enter etc. reported correctly
+#   extended-keys-format csi-u -- Pi needs csi-u encoding (default xterm format
+#                                  drops some modifier+key combinations)
 TMUX_CONF="${HOME}/.tmux.conf"
-if [[ -f "$TMUX_CONF" ]] && grep -q "extended-keys" "$TMUX_CONF"; then
-	ok "~/.tmux.conf already has extended-keys"
-else
-	info "appending extended-keys to ~/.tmux.conf"
-	{
-		echo ""
-		echo "# Required by agent-of-empires (aoe). Reports modified Enter etc. correctly."
-		echo "set -g extended-keys on"
-	} >> "$TMUX_CONF"
-	ok "~/.tmux.conf updated"
-fi
+
+# format: key|value|comment
+declare -a TMUX_SETTINGS=(
+	"extended-keys|on|Required by agent-of-empires (aoe). Reports modified Enter etc."
+	"extended-keys-format|csi-u|Required by Pi. Uses csi-u modifier-key encoding."
+)
+
+ensure_tmux_setting() {
+	local key="$1" value="$2" comment="$3"
+	# Match `set -g <key>` exactly — trailing whitespace prevents matching
+	# longer keys with the same prefix (e.g. extended-keys vs extended-keys-format).
+	if [[ -f "$TMUX_CONF" ]] && grep -qE "^[[:space:]]*set[[:space:]]+-g[[:space:]]+${key}[[:space:]]" "$TMUX_CONF"; then
+		ok "~/.tmux.conf already sets ${key}"
+	else
+		info "appending '${key} ${value}' to ~/.tmux.conf"
+		{
+			echo ""
+			echo "# ${comment}"
+			echo "set -g ${key} ${value}"
+		} >> "$TMUX_CONF"
+		ok "~/.tmux.conf updated with ${key}"
+	fi
+}
+
+for entry in "${TMUX_SETTINGS[@]}"; do
+	IFS='|' read -r key value comment <<< "$entry"
+	ensure_tmux_setting "$key" "$value" "$comment"
+done
 
 # Apply to any running tmux server so we don't have to kill sessions.
 if tmux info >/dev/null 2>&1; then
-	tmux set -g extended-keys on >/dev/null 2>&1 || true
-	ok "applied extended-keys to running tmux server"
+	for entry in "${TMUX_SETTINGS[@]}"; do
+		IFS='|' read -r key value _comment <<< "$entry"
+		tmux set -g "$key" "$value" >/dev/null 2>&1 || true
+	done
+	ok "applied tmux settings to running server"
 fi
 
 # ---------------------------------------------------------------------------
