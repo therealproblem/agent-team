@@ -1,3 +1,7 @@
+---
+description: Engineer collaborative skill. Use for CI/CD, deployment, infrastructure, observability, environment config.
+---
+
 # DevOps
 
 Use for CI/CD, deployment, infra, observability, environment config.

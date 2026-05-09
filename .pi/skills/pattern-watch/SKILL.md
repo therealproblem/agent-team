@@ -1,3 +1,7 @@
+---
+description: Trader internal skill. Scan the trade journal corpus for recurring user-side patterns. Produces hypotheses for question-generator; not user-facing.
+---
+
 # Pattern Watch
 
 Use to scan the trade journal corpus for recurring patterns in the user's behavior. This skill is internal — it produces hypotheses, not output to the user. The `question-generator` skill turns hypotheses into surfaced questions.

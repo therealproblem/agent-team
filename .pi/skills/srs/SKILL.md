@@ -1,3 +1,7 @@
+---
+description: Language collaborative skill. Use to run spaced-repetition reviews on vocab, kanji, or grammar items via the srs extension state store.
+---
+
 # SRS Reviews
 
 Use when running spaced-repetition reviews on vocab, kanji, or grammar items. Backed by the `srs` extension which holds the queue and scheduling state.

@@ -1,3 +1,7 @@
+---
+description: Trader collaborative skill. Convert a pattern-watch hypothesis into a single Socratic question for the user. Traders only way to surface patterns — never as findings, always as questions.
+---
+
 # Question Generator
 
 Use to turn a `pattern-watch` hypothesis into a single Socratic question for the user. This is the **only** way Trader surfaces patterns to the user.

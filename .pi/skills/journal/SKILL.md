@@ -1,3 +1,7 @@
+---
+description: Trader collaborative skill. Use to capture a single trade — structured fields (setup, entry, exit, P&L) plus narrated reasoning in the user voice.
+---
+
 # Trade Journal
 
 Use to capture a single trade. Structured fields plus free-text narration.

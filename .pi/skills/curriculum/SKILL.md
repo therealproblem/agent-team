@@ -1,3 +1,7 @@
+---
+description: Educator collaborative skill. Use when sequencing topics into a learning path with prerequisites and active-recall prompts.
+---
+
 # Curriculum Design
 
 Use when sequencing topics into a learning path.

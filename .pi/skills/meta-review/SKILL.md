@@ -1,3 +1,7 @@
+---
+description: Synthesize across .pi/state/profiles/ to surface stable patterns, contradictions, and tacit knowledge across domains. Layer 0 self-knowledge pass; on-demand only.
+---
+
 # Meta Review
 
 Use this skill when the user wants to step back and look at what the system has learned about them across domains. This is the Layer 0 self-knowledge synthesis pass.

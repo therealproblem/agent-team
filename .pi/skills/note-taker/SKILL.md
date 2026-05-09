@@ -1,3 +1,7 @@
+---
+description: Persist notes to the Obsidian vault. Call when something is worth saving — PRD, trade journal entry, lesson, meeting notes, captured idea. Centralizes folder structure and frontmatter conventions; agents must not write to the vault directly.
+---
+
 # Note-taker
 
 Use this skill whenever something is worth persisting to the Obsidian vault — captured ideas, meeting notes, trade journal entries, lesson summaries, research findings, or anything an agent or user wants to save for later retrieval.

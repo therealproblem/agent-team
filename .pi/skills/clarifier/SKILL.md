@@ -1,3 +1,7 @@
+---
+description: Trader collaborative skill. Use to ask follow-up questions that fill gaps in a trade journal entry. One question at a time.
+---
+
 # Clarifier
 
 Use to ask follow-up questions that fill gaps in a trade journal entry. One question at a time, picking the most informative gap.

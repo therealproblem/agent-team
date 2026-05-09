@@ -1,3 +1,7 @@
+---
+description: Educator collaborative skill. Use when writing the actual lesson body for a curriculum module.
+---
+
 # Content Authoring
 
 Use when writing the actual lesson body for a module the curriculum specified.

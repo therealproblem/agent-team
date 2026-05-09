@@ -1,3 +1,7 @@
+---
+description: Educator collaborative skill. Use when writing quizzes, problem sets, or rubrics tied to learning objectives.
+---
+
 # Assessment Authoring
 
 Use when writing quizzes, problem sets, or rubrics.

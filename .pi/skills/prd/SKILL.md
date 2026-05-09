@@ -1,3 +1,7 @@
+---
+description: PM collaborative skill. Use when drafting or revising a Product Requirements Document. Structured problem-led template.
+---
+
 # PRD Authoring
 
 Use when drafting or revising a Product Requirements Document.

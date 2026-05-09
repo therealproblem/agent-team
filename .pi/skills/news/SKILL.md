@@ -1,3 +1,7 @@
+---
+description: Fetch and summarize recent news on user-specified topics. Used by domain agents (PM, Engineer, Trader) for context.
+---
+
 # News
 
 Use this skill when the user (or another agent) wants curated, summarized news on one or more topics. Backed by the `news-ingest` extension which fetches and caches articles.

@@ -1,3 +1,7 @@
+---
+description: Language collaborative skill. Use to present graded JLPT reading passages and comprehension questions tuned to the learner level.
+---
+
 # Reading Practice
 
 Use to present graded reading passages tuned to the learner's current JLPT level.

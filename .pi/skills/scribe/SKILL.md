@@ -1,3 +1,7 @@
+---
+description: Rephrase prose for a target audience and format. Audience presets include exec, non-technical, engineer, customer, JLPT learner levels. Tunes tone, length, and structure without inventing facts.
+---
+
 # Scribe
 
 Use this skill when prose needs to be tuned for a specific audience or format. Scribe takes raw input — bullet points, a draft, a technical explanation — plus a target spec, and returns polished output appropriate to the reader.
