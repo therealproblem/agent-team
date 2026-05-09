@@ -123,6 +123,44 @@ The user approves, edits, or rejects. If approved, the agent uses the `edit` too
 
 **Synthesis.** The `meta-review` skill (`.pi/skills/meta-review/SKILL.md`) reads all profiles on demand and surfaces cross-domain patterns, contradictions, and tacit knowledge that's emerged. Invoke when you want a step-back view of what the system has learned about you.
 
+## Web frontend — agent-of-empires
+
+For browser-based access to Pi sessions, this project uses [agent-of-empires](https://github.com/njbrake/agent-of-empires) (`aoe`). It's a tmux-backed session manager that renders the Pi TUI inside a web page — multi-session dashboard, optional remote access via Tailscale Funnel or Cloudflare Tunnel, installable as a PWA.
+
+It is **not** a chat-styled UI like LibreChat. It's the Pi terminal interface in a browser tab, with extra dashboard chrome.
+
+### One-time setup
+
+```bash
+# Install aoe (macOS)
+curl -fsSL https://raw.githubusercontent.com/njbrake/agent-of-empires/main/scripts/install.sh | bash
+brew install tmux                            # required dependency
+
+# Register this project as a Pi session
+cd /Users/joseph/Documents/Projects/agents-team
+aoe add --cmd pi --title "agents-team"
+```
+
+### Launching the web dashboard
+
+```bash
+aoe serve --no-auth                          # local-only, no password
+# → opens at http://127.0.0.1:8080
+```
+
+Other useful invocations:
+
+| Command | Purpose |
+|---|---|
+| `aoe serve` | Localhost with password (set via `--passphrase` or `AOE_SERVE_PASSPHRASE`) |
+| `aoe serve --remote` | Expose externally via Tailscale or Cloudflare Tunnel for phone access |
+| `aoe serve --daemon` | Run in background; `--stop` to halt |
+| `aoe` | Terminal TUI dashboard (no browser) |
+| `aoe agents` | Show which agents `aoe` recognizes as installed |
+| `aoe list` | Show registered sessions |
+
+In the dashboard, click the agents-team session to launch / attach. From there, you're talking to Pi the same way you would from the CLI — all `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` work the same.
+
 ## Implementation workflow rule
 
 **Build custom only when necessary.** Default is to find and reuse, not write.
