@@ -131,15 +131,16 @@ It is **not** a chat-styled UI like LibreChat. It's the Pi terminal interface in
 
 ### One-time setup
 
-```bash
-# Install aoe (macOS)
-curl -fsSL https://raw.githubusercontent.com/njbrake/agent-of-empires/main/scripts/install.sh | bash
-brew install tmux                            # required dependency
+Run the bootstrap script — installs Pi, aoe, tmux (with required config), registers this project as a session, and creates `.env` with a fresh passphrase:
 
-# Register this project as a Pi session
-cd /Users/joseph/Documents/Projects/agents-team
-aoe add --cmd pi --title "agents-team"
+```bash
+bash scripts/setup.sh                # installs everything + launches dashboard
+bash scripts/setup.sh --no-launch    # installs everything, doesn't start serve
 ```
+
+Idempotent — safe to re-run on this machine or any new one. Targets macOS (Homebrew) and Linux (apt/dnf/pacman) for tmux; Pi and aoe install paths are platform-agnostic.
+
+The script does not require sudo on macOS. Linux installs of tmux may prompt for sudo.
 
 ### Local secrets — `.env`
 
