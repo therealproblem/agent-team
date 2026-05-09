@@ -123,9 +123,36 @@ The user approves, edits, or rejects. If approved, the agent uses the `edit` too
 
 **Synthesis.** The `meta-review` skill (`.pi/skills/meta-review/SKILL.md`) reads all profiles on demand and surfaces cross-domain patterns, contradictions, and tacit knowledge that's emerged. Invoke when you want a step-back view of what the system has learned about you.
 
-## Web frontend
+## Web frontend (PWA)
 
-Not currently wired in. The CLI (`pi` from the repo root) is the only entry point right now. A web frontend is a planned next step — likely a small custom shim against Pi's RPC mode rather than a heavyweight tmux-in-browser dashboard. See git history (`agent-of-empires` was tried and removed) for context.
+PWA-installable chat UI via **Open WebUI** + a small OpenAI-compat shim:
+
+```
+Browser/PWA → Open WebUI (Docker) → POST /v1/chat/completions → pi-rpc-shim → RpcClient → pi
+```
+
+**Why this combo:** Open WebUI is the only mature open-source LLM chat UI with first-class PWA support (LibreChat declined to add it; aoe was a tmux-in-browser, not chat-shaped). The shim is OpenAI-compat so any chat UI in that family can swap in.
+
+**Run:**
+
+```bash
+cd services/pi-rpc-shim
+npm install
+npm start                                 # http://127.0.0.1:9090
+
+# in another terminal
+docker run -d -p 3000:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -v open-webui:/app/backend/data \
+  --name open-webui --restart always \
+  ghcr.io/open-webui/open-webui:main      # http://localhost:3000
+```
+
+Then in Open WebUI: Settings → Admin → Connections → OpenAI API → Base URL `http://host.docker.internal:9090/v1`, any API key. Pick `pi-distributor` as the model.
+
+**Install as PWA:** Share → Add to Home Screen (iOS), or ⋮ → Install (Android/desktop Chrome).
+
+See `services/pi-rpc-shim/README.md` for full details, env vars, and known limitations.
 
 ## One-time setup
 

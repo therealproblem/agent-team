@@ -18,6 +18,10 @@ vault/
 .pi/extensions/**/dist/
 .pi/extensions/**/node_modules/
 
+# Shim service artifacts
+services/**/node_modules/
+services/**/dist/
+
 # Editor / OS
 .DS_Store
 .idea/
