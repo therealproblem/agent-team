@@ -133,26 +133,49 @@ Browser/PWA → Open WebUI (Docker) → POST /v1/chat/completions → pi-rpc-shi
 
 **Why this combo:** Open WebUI is the only mature open-source LLM chat UI with first-class PWA support (LibreChat declined to add it; aoe was a tmux-in-browser, not chat-shaped). The shim is OpenAI-compat so any chat UI in that family can swap in.
 
-**Run:**
+### One-time setup
 
 ```bash
-cd services/pi-rpc-shim
-npm install
-npm start                                 # http://127.0.0.1:9090
-
-# in another terminal
-docker run -d -p 3000:8080 \
-  --add-host=host.docker.internal:host-gateway \
-  -v open-webui:/app/backend/data \
-  --name open-webui --restart always \
-  ghcr.io/open-webui/open-webui:main      # http://localhost:3000
+bash scripts/setup.sh
 ```
 
-Then in Open WebUI: Settings → Admin → Connections → OpenAI API → Base URL `http://host.docker.internal:9090/v1`, any API key. Pick `pi-distributor` as the model.
+Installs Pi (if missing), tmux + config, shim npm deps, and pulls the Open WebUI Docker image. Docker Desktop / dockerd needs to be installed and running for the image-pull step; if it's not, setup warns but doesn't fail — re-run after starting Docker.
 
-**Install as PWA:** Share → Add to Home Screen (iOS), or ⋮ → Install (Android/desktop Chrome).
+### Daily use
 
-See `services/pi-rpc-shim/README.md` for full details, env vars, and known limitations.
+```bash
+bash scripts/start.sh        # launches shim + Open WebUI container
+                             # → Open WebUI: http://localhost:3000
+                             # → shim:        http://127.0.0.1:9090
+bash scripts/stop.sh         # halts both; preserves Open WebUI volume
+```
+
+Variants:
+
+| Command | Behavior |
+|---|---|
+| `bash scripts/start.sh --shim-only` | Run the shim only (skip Open WebUI). Useful for `curl` testing or if Docker isn't running. |
+| `bash scripts/stop.sh` | Stops both. Idempotent (re-runs are no-ops). |
+
+### First-time Open WebUI setup
+
+After `start.sh` reports both up, open `http://localhost:3000`:
+
+1. Create an account (local-only data; first user is admin)
+2. **Settings → Admin → Connections → OpenAI API:**
+   - **API Base URL:** `http://host.docker.internal:9090/v1`
+   - **API Key:** anything (`not-required` works)
+3. Verify, then pick `pi-distributor` as the model in a new chat.
+
+### Install as PWA
+
+| Platform | How |
+|---|---|
+| iOS Safari | Share → "Add to Home Screen" |
+| Android Chrome | ⋮ → "Install app" |
+| Desktop Chrome / Edge | Address-bar install icon |
+
+See `services/pi-rpc-shim/README.md` for the shim's env vars, limitations, and curl examples for headless testing.
 
 ## One-time setup
 

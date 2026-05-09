@@ -165,6 +165,48 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 6. pi-rpc-shim — npm install
+# ---------------------------------------------------------------------------
+
+SHIM_DIR="${REPO_ROOT}/services/pi-rpc-shim"
+if [[ -d "$SHIM_DIR" ]]; then
+	if [[ -d "$SHIM_DIR/node_modules" ]]; then
+		ok "shim deps already installed"
+	else
+		info "installing pi-rpc-shim deps…"
+		(cd "$SHIM_DIR" && npm install >/dev/null 2>&1)
+		ok "shim deps installed"
+	fi
+else
+	warn "services/pi-rpc-shim not found — skipping shim install"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Docker (for Open WebUI) — soft requirement
+# ---------------------------------------------------------------------------
+
+if have docker; then
+	if docker info >/dev/null 2>&1; then
+		ok "Docker installed and running"
+		# Pull Open WebUI image so first start.sh is fast.
+		if docker images -q ghcr.io/open-webui/open-webui:main 2>/dev/null | grep -q .; then
+			ok "Open WebUI image already pulled"
+		else
+			info "pulling Open WebUI image (this may take a minute)…"
+			if docker pull ghcr.io/open-webui/open-webui:main >/dev/null 2>&1; then
+				ok "Open WebUI image ready"
+			else
+				warn "Open WebUI image pull failed. Re-run setup or pull manually with 'docker pull ghcr.io/open-webui/open-webui:main'."
+			fi
+		fi
+	else
+		warn "Docker installed but not running. Start Docker Desktop / dockerd, then re-run setup."
+	fi
+else
+	warn "Docker not installed. Open WebUI requires Docker — install from https://docker.com (macOS: Docker Desktop). The shim works without Docker if you only want curl access."
+fi
+
+# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 
@@ -172,7 +214,8 @@ cat <<EOF
 
 Setup complete. Next steps:
 
-  • Pi is installed; run 'pi' from the repo root to start an interactive session.
-  • A web frontend is not yet wired in. See AGENTS.md for status.
+  • Start everything:  bash scripts/start.sh    # shim + Open WebUI
+  • Stop everything:   bash scripts/stop.sh
+  • Pi CLI directly:   pi    (from this repo root)
 
 EOF
