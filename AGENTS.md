@@ -141,20 +141,32 @@ cd /Users/joseph/Documents/Projects/agents-team
 aoe add --cmd pi --title "agents-team"
 ```
 
+### Local secrets — `.env`
+
+Project-local secrets (the aoe passphrase, optional vault path override) live in `.env` (gitignored). Copy from the template and fill in:
+
+```bash
+cp .env.example .env
+# Edit .env — generate a passphrase with:
+#   openssl rand -base64 24 | tr -d '/+=' | head -c 32
+```
+
 ### Launching the web dashboard
 
 ```bash
-aoe serve --no-auth                          # local-only, no password
-# → opens at http://127.0.0.1:8080
+set -a; source .env; set +a              # load AOE_SERVE_PASSPHRASE into env
+aoe serve                                # → http://127.0.0.1:8080
 ```
+
+Authentication is on by default (localhost binding + passphrase from env). Open the URL, enter the passphrase, click the **agents-team** session to attach.
 
 Other useful invocations:
 
 | Command | Purpose |
 |---|---|
-| `aoe serve` | Localhost with password (set via `--passphrase` or `AOE_SERVE_PASSPHRASE`) |
-| `aoe serve --remote` | Expose externally via Tailscale or Cloudflare Tunnel for phone access |
-| `aoe serve --daemon` | Run in background; `--stop` to halt |
+| `aoe serve --no-auth` | Skip the passphrase entirely (only allowed on localhost binding) |
+| `aoe serve --remote` | Expose externally via Tailscale / Cloudflare Tunnel for phone access |
+| `aoe serve --daemon` | Run in background; `aoe serve --stop` to halt |
 | `aoe` | Terminal TUI dashboard (no browser) |
 | `aoe agents` | Show which agents `aoe` recognizes as installed |
 | `aoe list` | Show registered sessions |

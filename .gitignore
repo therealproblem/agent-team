@@ -5,6 +5,10 @@ data/
 # if you'd rather point at your real Obsidian vault.
 vault/
 
+# Local secrets — copy .env.example to .env and fill in. Never commit .env.
+.env
+.env.local
+
 # Pi runtime state (sessions, SRS deck progress, meta-logs)
 .pi/state/
 .pi/sessions/
