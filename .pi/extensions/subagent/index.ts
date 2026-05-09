@@ -28,6 +28,12 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 
+// Project-scope agent names already confirmed by the user in this Pi process.
+// One Pi process == one session, so this trust set lives for the lifetime of
+// the current session and resets on next launch. Avoids re-prompting for the
+// same agent on every spawn within a session.
+const trustedProjectAgents = new Set<string>();
+
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -483,8 +489,13 @@ export default function (pi: ExtensionAPI) {
 					.map((name) => agents.find((a) => a.name === name))
 					.filter((a): a is AgentConfig => a?.source === "project");
 
-				if (projectAgentsRequested.length > 0) {
-					const names = projectAgentsRequested.map((a) => a.name).join(", ");
+				// Drop agents already trusted earlier in this session.
+				const unconfirmed = projectAgentsRequested.filter(
+					(a) => !trustedProjectAgents.has(a.name),
+				);
+
+				if (unconfirmed.length > 0) {
+					const names = unconfirmed.map((a) => a.name).join(", ");
 					const dir = discovery.projectAgentsDir ?? "(unknown)";
 					const ok = await ctx.ui.confirm(
 						"Run project-local agents?",
@@ -495,6 +506,8 @@ export default function (pi: ExtensionAPI) {
 							content: [{ type: "text", text: "Canceled: project-local agents not approved." }],
 							details: makeDetails(hasChain ? "chain" : hasTasks ? "parallel" : "single")([]),
 						};
+					// Trust these agents for the rest of this Pi session.
+					for (const a of unconfirmed) trustedProjectAgents.add(a.name);
 				}
 			}
 
