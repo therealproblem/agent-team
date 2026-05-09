@@ -174,6 +174,10 @@ Other useful invocations:
 
 In the dashboard, click the agents-team session to launch / attach. From there, you're talking to Pi the same way you would from the CLI — all `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` work the same.
 
+### Known issues
+
+- **Safari + Cloudflare Tunnel breaks WebSocket auth.** Page loads, terminal panel hangs at "connecting", browser console shows `WebSocket connection failed: bad response from the server` and the WS request returns `401`. Safari does not attach the aoe session cookie to WebSocket upgrade requests through a Cloudflare Tunnel. Diagnosed: request lacks `Cookie:` header. Same setup works in Chrome and Firefox. **Workaround: use Chrome or Firefox** for the dashboard when accessing via the tunnel. Direct localhost access in Safari is unaffected.
+
 ## Implementation workflow rule
 
 **Build custom only when necessary.** Default is to find and reuse, not write.
