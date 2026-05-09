@@ -123,60 +123,29 @@ The user approves, edits, or rejects. If approved, the agent uses the `edit` too
 
 **Synthesis.** The `meta-review` skill (`.pi/skills/meta-review/SKILL.md`) reads all profiles on demand and surfaces cross-domain patterns, contradictions, and tacit knowledge that's emerged. Invoke when you want a step-back view of what the system has learned about you.
 
-## Web frontend — agent-of-empires
+## Web frontend
 
-For browser-based access to Pi sessions, this project uses [agent-of-empires](https://github.com/njbrake/agent-of-empires) (`aoe`). It's a tmux-backed session manager that renders the Pi TUI inside a web page — multi-session dashboard, optional remote access via Tailscale Funnel or Cloudflare Tunnel, installable as a PWA.
+Not currently wired in. The CLI (`pi` from the repo root) is the only entry point right now. A web frontend is a planned next step — likely a small custom shim against Pi's RPC mode rather than a heavyweight tmux-in-browser dashboard. See git history (`agent-of-empires` was tried and removed) for context.
 
-It is **not** a chat-styled UI like LibreChat. It's the Pi terminal interface in a browser tab, with extra dashboard chrome.
+## One-time setup
 
-### One-time setup
-
-Run the bootstrap script — installs Pi, aoe, tmux (with required config), registers this project as a session, and creates `.env` with a fresh passphrase:
+Run the bootstrap script. Installs Pi, tmux (with Pi-friendly config), and creates a `.env` from the template:
 
 ```bash
-bash scripts/setup.sh                # installs everything + launches dashboard
-bash scripts/setup.sh --no-launch    # installs everything, doesn't start serve
+bash scripts/setup.sh
 ```
 
-Idempotent — safe to re-run on this machine or any new one. Targets macOS (Homebrew) and Linux (apt/dnf/pacman) for tmux; Pi and aoe install paths are platform-agnostic.
+Idempotent — safe to re-run on this machine or any new one. Targets macOS (Homebrew) and Linux (apt/dnf/pacman) for tmux; the Pi install step is platform-agnostic. Does not require sudo on macOS.
 
-The script does not require sudo on macOS. Linux installs of tmux may prompt for sudo.
+## Local secrets — `.env`
 
-### Local secrets — `.env`
-
-Project-local secrets (the aoe passphrase, optional vault path override) live in `.env` (gitignored). Copy from the template and fill in:
+Project-local secrets and overrides live in `.env` (gitignored). Copy from the template:
 
 ```bash
 cp .env.example .env
-# Edit .env — generate a passphrase with:
-#   openssl rand -base64 24 | tr -d '/+=' | head -c 32
 ```
 
-### Launching the web dashboard
-
-```bash
-set -a; source .env; set +a              # load AOE_SERVE_PASSPHRASE into env
-aoe serve                                # → http://127.0.0.1:8080
-```
-
-Authentication is on by default (localhost binding + passphrase from env). Open the URL, enter the passphrase, click the **agents-team** session to attach.
-
-Other useful invocations:
-
-| Command | Purpose |
-|---|---|
-| `aoe serve --no-auth` | Skip the passphrase entirely (only allowed on localhost binding) |
-| `aoe serve --remote` | Expose externally via Tailscale / Cloudflare Tunnel for phone access |
-| `aoe serve --daemon` | Run in background; `aoe serve --stop` to halt |
-| `aoe` | Terminal TUI dashboard (no browser) |
-| `aoe agents` | Show which agents `aoe` recognizes as installed |
-| `aoe list` | Show registered sessions |
-
-In the dashboard, click the agents-team session to launch / attach. From there, you're talking to Pi the same way you would from the CLI — all `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` work the same.
-
-### Known issues
-
-- **Safari + Cloudflare Tunnel breaks WebSocket auth.** Page loads, terminal panel hangs at "connecting", browser console shows `WebSocket connection failed: bad response from the server` and the WS request returns `401`. Safari does not attach the aoe session cookie to WebSocket upgrade requests through a Cloudflare Tunnel. Diagnosed: request lacks `Cookie:` header. Same setup works in Chrome and Firefox. **Workaround: use Chrome or Firefox** for the dashboard when accessing via the tunnel. Direct localhost access in Safari is unaffected.
+Currently the only var of interest is the optional `AGENTS_TEAM_VAULT_PATH` for pointing at your real Obsidian vault.
 
 ## Implementation workflow rule
 

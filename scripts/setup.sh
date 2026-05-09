@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
-# Bootstrap a fresh machine to run this agents-team project under aoe.
+# Bootstrap a fresh machine to run this agents-team project.
 # Idempotent: safe to re-run. Skips anything already installed/configured.
 #
-#   bash scripts/setup.sh             # install + register + launch dashboard
-#   bash scripts/setup.sh --no-launch # install + register, don't start serve
+#   bash scripts/setup.sh
 #
 # Targets macOS today. Linux is partially supported via apt/dnf fallback for
-# tmux; pi/aoe install steps work on Linux too. Other platforms bail out.
+# tmux; the Pi install step works on Linux too. Other platforms bail out.
 
 set -euo pipefail
 
@@ -28,10 +27,8 @@ fail()  { printf "${C_RED}[fail]${C_RESET}  %s\n" "$*" >&2; exit 1; }
 
 have()  { command -v "$1" >/dev/null 2>&1; }
 
-LAUNCH=true
 for arg in "$@"; do
 	case "$arg" in
-		--no-launch) LAUNCH=false ;;
 		-h|--help)
 			grep '^#' "$0" | sed -E 's/^# ?//' ; exit 0 ;;
 		*)
@@ -79,15 +76,16 @@ else
 	ok "tmux installed ($(tmux -V))"
 fi
 
-# tmux config: ensure aoe / Pi requirements are present.
-#   extended-keys on        -- aoe needs modified Enter etc. reported correctly
-#   extended-keys-format csi-u -- Pi needs csi-u encoding (default xterm format
-#                                  drops some modifier+key combinations)
+# tmux config: ensure Pi-friendly key handling.
+#   extended-keys on           -- reports modified Enter etc. correctly
+#   extended-keys-format csi-u -- csi-u modifier-key encoding (default xterm
+#                                  format drops some modifier+key combinations
+#                                  that Pi relies on)
 TMUX_CONF="${HOME}/.tmux.conf"
 
 # format: key|value|comment
 declare -a TMUX_SETTINGS=(
-	"extended-keys|on|Required by agent-of-empires (aoe). Reports modified Enter etc."
+	"extended-keys|on|Reports modified Enter / Shift+Enter etc. to terminal apps."
 	"extended-keys-format|csi-u|Required by Pi. Uses csi-u modifier-key encoding."
 )
 
@@ -149,40 +147,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. aoe (the web dashboard)
-# ---------------------------------------------------------------------------
-
-if have aoe; then
-	ok "aoe already installed ($(aoe --version 2>/dev/null || echo unknown))"
-else
-	info "installing aoe via official script…"
-	curl -fsSL https://raw.githubusercontent.com/njbrake/agent-of-empires/main/scripts/install.sh | bash
-	# The installer puts aoe in ~/.local/bin; make sure it's reachable from this shell.
-	export PATH="${HOME}/.local/bin:${PATH}"
-	have aoe || fail "aoe install completed but binary not found on PATH. Add ~/.local/bin to PATH and re-run."
-	ok "aoe installed"
-fi
-
-# Sanity check: aoe sees pi as installed. Strip ANSI escapes before grepping.
-if ! aoe agents 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -qE "pi[[:space:]]+installed"; then
-	warn "aoe agents doesn't recognize pi as installed. Run 'aoe agents' to inspect."
-fi
-
-# ---------------------------------------------------------------------------
-# 6. Register this project as an aoe session (idempotent)
-# ---------------------------------------------------------------------------
-
-PROJECT_TITLE="agents-team"
-if aoe list 2>/dev/null | grep -q "$PROJECT_TITLE"; then
-	ok "aoe session '$PROJECT_TITLE' already registered"
-else
-	info "registering '$PROJECT_TITLE' session with aoe…"
-	aoe add --cmd pi --title "$PROJECT_TITLE" "$REPO_ROOT" >/dev/null
-	ok "session registered"
-fi
-
-# ---------------------------------------------------------------------------
-# 7. .env from .env.example (preserves existing .env)
+# 5. .env scaffold (preserves existing .env)
 # ---------------------------------------------------------------------------
 
 ENV_FILE="${REPO_ROOT}/.env"
@@ -190,48 +155,24 @@ ENV_EXAMPLE="${REPO_ROOT}/.env.example"
 
 if [[ -f "$ENV_FILE" ]]; then
 	ok ".env already present (not overwriting)"
-else
-	[[ -f "$ENV_EXAMPLE" ]] || fail ".env.example missing — repo state unexpected."
-	info "creating .env from template with a fresh passphrase…"
-	# Generate a 32-char alnum passphrase (avoids shell-escaping headaches).
-	PASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
-	# macOS sed and GNU sed differ on -i; use a portable form.
+elif [[ -f "$ENV_EXAMPLE" ]]; then
+	info "creating .env from template…"
 	cp "$ENV_EXAMPLE" "$ENV_FILE"
-	# Replace the placeholder line; works on both macOS and GNU sed.
-	if [[ "$OS" == "Darwin" ]]; then
-		sed -i '' "s|^AOE_SERVE_PASSPHRASE=.*|AOE_SERVE_PASSPHRASE=${PASS}|" "$ENV_FILE"
-	else
-		sed -i "s|^AOE_SERVE_PASSPHRASE=.*|AOE_SERVE_PASSPHRASE=${PASS}|" "$ENV_FILE"
-	fi
 	chmod 600 "$ENV_FILE"
-	ok ".env created with a fresh passphrase"
+	ok ".env created — edit it to fill in any project-local secrets"
+else
+	info "no .env.example found; skipping .env scaffold"
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Launch the dashboard (or print instructions)
+# Done
 # ---------------------------------------------------------------------------
 
-if [[ "$LAUNCH" == "true" ]]; then
-	info "loading .env and launching aoe serve as daemon…"
-	# shellcheck source=/dev/null
-	set -a; source "$ENV_FILE"; set +a
-	# Stop any existing daemon so we don't end up with two instances.
-	aoe serve --stop >/dev/null 2>&1 || true
-	aoe serve --daemon >/dev/null
-	ok "dashboard running at http://127.0.0.1:8080"
-	info "passphrase is in $ENV_FILE (env var AOE_SERVE_PASSPHRASE)"
-	info "to stop: aoe serve --stop"
-else
-	info "skipping launch (--no-launch passed)."
-	cat <<EOF
+cat <<EOF
 
-To start the dashboard manually:
+Setup complete. Next steps:
 
-  set -a; source .env; set +a
-  aoe serve
-  # → http://127.0.0.1:8080
-
-The passphrase is in $ENV_FILE.
+  • Pi is installed; run 'pi' from the repo root to start an interactive session.
+  • A web frontend is not yet wired in. See AGENTS.md for status.
 
 EOF
-fi
