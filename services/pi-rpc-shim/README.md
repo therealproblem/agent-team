@@ -37,13 +37,13 @@ Default bind: `http://127.0.0.1:9090` (localhost-only).
 
 1. **Run Open WebUI:**
    ```bash
-   docker run -d -p 3000:8080 \
+   docker run -d -p 8080:8080 \
      --add-host=host.docker.internal:host-gateway \
      -v open-webui:/app/backend/data \
      --name open-webui --restart always \
      ghcr.io/open-webui/open-webui:main
    ```
-2. Open `http://localhost:3000` in your browser. Create an account (it's local-only data — first user is admin).
+2. Open `http://localhost:8080` in your browser. Create an account (it's local-only data — first user is admin).
 3. **Settings → Admin → Connections → OpenAI API**:
    - **API Base URL**: `http://host.docker.internal:9090/v1`
      - Linux without Docker Desktop: use `172.17.0.1` instead, or whatever resolves to your host (`docker network inspect bridge`)

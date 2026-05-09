@@ -145,7 +145,7 @@ Installs Pi (if missing), tmux + config, shim npm deps, and pulls the Open WebUI
 
 ```bash
 bash scripts/start.sh        # launches shim + Open WebUI container
-                             # → Open WebUI: http://localhost:3000
+                             # → Open WebUI: http://localhost:8080
                              # → shim:        http://127.0.0.1:9090
 bash scripts/stop.sh         # halts both; preserves Open WebUI volume
 ```
@@ -159,7 +159,7 @@ Variants:
 
 ### First-time Open WebUI setup
 
-After `start.sh` reports both up, open `http://localhost:3000`:
+After `start.sh` reports both up, open `http://localhost:8080`:
 
 1. Create an account (local-only data; first user is admin)
 2. **Settings → Admin → Connections → OpenAI API:**

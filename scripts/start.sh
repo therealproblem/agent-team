@@ -46,7 +46,7 @@ SHIM_LOG_FILE="/tmp/pi-rpc-shim.log"
 SHIM_PORT=9090
 
 WEBUI_NAME="open-webui"
-WEBUI_PORT=3000
+WEBUI_PORT=8080
 WEBUI_IMAGE="ghcr.io/open-webui/open-webui:main"
 
 # Load .env if present (overrides for AGENTS_TEAM_VAULT_PATH etc.).
