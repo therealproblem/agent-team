@@ -94,6 +94,18 @@ fi
 
 mkdir -p "$HOME_DIR"
 
+# Share the host's Pi config (~/.pi) with piclaw so it inherits providers,
+# models, and API keys configured via the host `pi` CLI. Overlay sits
+# inside /config (the outer mount), so `home/` still backs anything piclaw
+# wants to put outside .pi (e.g. .bashrc, .gitconfig).
+declare -a EXTRA_MOUNTS=()
+if [[ -f "${HOME}/.pi/agent/models.json" ]]; then
+	EXTRA_MOUNTS+=(-v "${HOME}/.pi:/config/.pi")
+	info "sharing host ~/.pi with piclaw (provider config inherited)"
+else
+	info "host ~/.pi/agent/models.json not found — piclaw will need /login on first use"
+fi
+
 info "starting piclaw…"
 docker run -d \
 	--init \
@@ -103,6 +115,7 @@ docker run -d \
 	-e PICLAW_WEB_PORT=8080 \
 	-v "${HOME_DIR}:/config" \
 	-v "${REPO_ROOT}:/workspace" \
+	"${EXTRA_MOUNTS[@]}" \
 	"$IMAGE" >/dev/null
 
 # ---------------------------------------------------------------------------
@@ -129,14 +142,15 @@ fi
 cat <<EOF
 
   • piclaw:    http://localhost:${WEB_PORT}
-  • workspace: /workspace  ← bound to ${REPO_ROOT}
-  • config:    /config     ← bound to ${HOME_DIR} (Pi auth, models)
+  • workspace: /workspace      ← bound to ${REPO_ROOT}
+  • pi state:  /config/.pi     ← bound to ${HOME}/.pi  (shared with host pi)
+  • config:    /config (other) ← bound to ${HOME_DIR}  (gitignored)
   • Stop:      bash scripts/stop.sh
   • Logs:      docker logs -f ${CONTAINER_NAME}
 
-First-time setup:
-  1. Open http://localhost:${WEB_PORT}
-  2. Type /login in the chat to configure your LLM provider
-  3. Pi inside the container auto-discovers .pi/agents from /workspace
+Notes:
+  • piclaw inherits provider config from your host ~/.pi (no /login needed if
+    you've already configured pi locally).
+  • Pi inside the container auto-discovers .pi/agents from /workspace.
 
 EOF

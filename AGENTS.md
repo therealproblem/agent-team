@@ -150,7 +150,8 @@ bash scripts/stop.sh         # halts the container; preserves chat history + aut
 
 Container mounts:
 - `${REPO_ROOT}` → `/workspace` — Pi inside the container auto-discovers `.pi/agents/{pm,engineer,...}` from the project root.
-- `${REPO_ROOT}/home` → `/config` — Pi `auth.json`, `models.json`, encrypted keychain (gitignored).
+- `~/.pi` → `/config/.pi` — provider config + API keys are inherited from your host `pi`. No re-login needed.
+- `${REPO_ROOT}/home` → `/config` (rest) — anything piclaw wants outside `.pi` (e.g. `.bashrc`); gitignored.
 
 Override the port with `PICLAW_WEB_PORT=<n>` in `.env` if 8080 is taken.
 
