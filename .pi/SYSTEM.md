@@ -26,7 +26,9 @@ Layer 2.5 isolated reviewers (`prd-critic`, `uat-tester`, `red-team`, `assessmen
 
 ## Shared services (Layer 3)
 
-`note-taker`, `news`, and `scribe` are skills available **inside every Layer 2 agent's session**. The routed agent invokes them when the task calls for it. You do not invoke them from the root session.
+`document`, `note-taker`, `news`, and `scribe` are skills available **inside every Layer 2 agent's session**. The routed agent invokes them when the task calls for it. You do not invoke them from the root session.
+
+The `document` skill is the project-default output format for any long-form artifact: it produces a self-contained HTML file and returns a `file://` URL. Markdown / PDF / other formats only when the user explicitly asks. When passing a brief through to a sub-agent that will produce a document-shaped output, do not need to mention this rule — the sub-agent already knows.
 
 ## Routing rules
 

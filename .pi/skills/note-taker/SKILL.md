@@ -1,12 +1,16 @@
 ---
-description: Persist notes to the Obsidian vault. Call when something is worth saving — PRD, trade journal entry, lesson, meeting notes, captured idea. Centralizes folder structure and frontmatter conventions; agents must not write to the vault directly.
+description: Persist short markdown notes to the Obsidian vault — captured ideas, journal entries, meeting notes, one-liners. For long-form artifacts (PRDs, reports, lessons, summaries with multiple sections) use the `document` skill, which produces self-contained HTML. Agents must not write to the vault directly.
 ---
 
 # Note-taker
 
-Use this skill whenever something is worth persisting to the Obsidian vault — captured ideas, meeting notes, trade journal entries, lesson summaries, research findings, or anything an agent or user wants to save for later retrieval.
+Use this skill for **short markdown captures** that belong in the vault — captured ideas, meeting notes, trade journal entries, single-paragraph summaries, anything sub-200-words and unstructured.
 
-This is the **only** way agents should write to the vault. Do not write directly to the vault path. Centralizing through this skill keeps folder structure, frontmatter, and link conventions consistent.
+For longer artifacts (PRDs, design docs, reports, lesson plans, exec briefs, anything multi-section) — use the **`document`** skill instead. That skill produces self-contained HTML and returns a `file://` URL, which is the project default for any non-trivial document.
+
+> Rule of thumb: if you would normally write a multi-section markdown doc with H2 headings, you want `document`, not `note-taker`.
+
+`note-taker` and `document` are the **only** ways agents should write to the vault. Do not call `write_note` directly. Centralizing through these skills keeps folder structure, format, and conventions consistent.
 
 ## When to call
 

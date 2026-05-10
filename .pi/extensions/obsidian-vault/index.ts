@@ -42,19 +42,34 @@ const writeNote = defineTool({
 	name: "write_note",
 	label: "Write Note",
 	description:
-		"Write a note to the user's Obsidian vault. Called by the `note-taker` skill; agents should not call this directly.",
+		"Write a note or document to the user's Obsidian vault. Called by the `note-taker` skill (markdown notes) and the `document` skill (self-contained HTML). Agents should not call this directly.",
 	parameters: Type.Object({
 		title: Type.String({ description: "Short noun-phrase title for the note." }),
-		body: Type.String({ description: "Markdown body. Frontmatter is added automatically." }),
+		body: Type.String({
+			description:
+				"Note body. For format='markdown' (default), this is markdown (frontmatter is prepended automatically). For format='html', this is the COMPLETE self-contained HTML document — written verbatim with no frontmatter, no link footer.",
+		}),
+		format: Type.Optional(
+			Type.Union([Type.Literal("markdown"), Type.Literal("html")], {
+				description:
+					"Output format. 'markdown' (default) writes a .md file with YAML frontmatter. 'html' writes a .html file verbatim — caller is responsible for the full <!doctype>…</html>.",
+			}),
+		),
 		folder: Type.Optional(
-			Type.String({ description: "Vault subfolder. Default: 'inbox'." }),
+			Type.String({
+				description:
+					"Vault subfolder. Default: 'inbox' for markdown, 'docs' for html.",
+			}),
 		),
 		tags: Type.Optional(
-			Type.Array(Type.String(), { description: "Tags to add to frontmatter." }),
+			Type.Array(Type.String(), {
+				description: "Tags (markdown only — added to frontmatter).",
+			}),
 		),
 		links: Type.Optional(
 			Type.Array(Type.String(), {
-				description: "Wiki-link targets (note titles) to append at the bottom.",
+				description:
+					"Wiki-link targets (markdown only — appended at the bottom).",
 			}),
 		),
 		source_agent: Type.Optional(
@@ -63,8 +78,10 @@ const writeNote = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const folder = params.folder ?? "inbox";
-		const filename = `${todayIso()}-${slugify(params.title)}.md`;
+		const format = params.format ?? "markdown";
+		const folder = params.folder ?? (format === "html" ? "docs" : "inbox");
+		const ext = format === "html" ? "html" : "md";
+		const filename = `${todayIso()}-${slugify(params.title)}.${ext}`;
 		const path = join(VAULT_ROOT, folder, filename);
 
 		try {
@@ -72,31 +89,43 @@ const writeNote = defineTool({
 				await mkdir(dirname(path), { recursive: true });
 			}
 
-			const fmLines = ["---"];
-			fmLines.push(`title: ${JSON.stringify(params.title)}`);
-			fmLines.push(`created: ${new Date().toISOString()}`);
-			if (params.source_agent) fmLines.push(`source_agent: ${params.source_agent}`);
-			if (params.tags?.length) {
-				fmLines.push(
-					`tags: [${params.tags.map((t: string) => JSON.stringify(t)).join(", ")}]`,
-				);
+			let fileContents: string;
+			if (format === "html") {
+				// HTML: write verbatim. The caller (document skill) owns the
+				// full document including <!doctype>, <head>, embedded styles.
+				// No frontmatter, no link footer.
+				fileContents = params.body;
+			} else {
+				const fmLines = ["---"];
+				fmLines.push(`title: ${JSON.stringify(params.title)}`);
+				fmLines.push(`created: ${new Date().toISOString()}`);
+				if (params.source_agent)
+					fmLines.push(`source_agent: ${params.source_agent}`);
+				if (params.tags?.length) {
+					fmLines.push(
+						`tags: [${params.tags.map((t: string) => JSON.stringify(t)).join(", ")}]`,
+					);
+				}
+				fmLines.push("---", "");
+				const frontmatter = fmLines.join("\n");
+
+				let linksFooter = "";
+				if (params.links?.length) {
+					const wiki = params.links.map((l: string) => `[[${l}]]`).join(" · ");
+					linksFooter = `\n\n---\nLinks: ${wiki}\n`;
+				}
+
+				fileContents = frontmatter + params.body + linksFooter;
 			}
-			fmLines.push("---", "");
-			const frontmatter = fmLines.join("\n");
 
-			let linksFooter = "";
-			if (params.links?.length) {
-				const wiki = params.links.map((l: string) => `[[${l}]]`).join(" · ");
-				linksFooter = `\n\n---\nLinks: ${wiki}\n`;
-			}
+			await writeFile(path, fileContents, { encoding: "utf8" });
 
-			await writeFile(path, frontmatter + params.body + linksFooter, {
-				encoding: "utf8",
-			});
-
+			// Always include a file:// URL — the `document` skill surfaces this
+			// to the user; `note-taker` ignores it for plain markdown notes.
+			const url = `file://${path}`;
 			return {
 				content: [{ type: "text", text: `Wrote ${path}` }],
-				details: { path, title: params.title },
+				details: { path, url, title: params.title, format },
 			};
 		} catch (e) {
 			const message = (e as Error).message;

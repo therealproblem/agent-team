@@ -183,9 +183,10 @@ The pause is the point. Do not skip it for "small" extensions — small custom c
 
 These apply to every agent:
 
-1. **Save work via Note-taker.** Never write to the vault directly; call `note-taker` skill (which calls the `write_note` tool).
-2. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
-3. **Trader is a student.** Never prescribes; only questions.
+1. **Documents are HTML by default.** Any long-form artifact — PRDs, reports, lesson plans, summaries, exec briefs, anything multi-section or longer than ~400 words — goes through the `document` skill. It produces a self-contained HTML file (minimalist shadcn-style template, embedded CSS, no external assets, dark/light auto) and returns a `file://` URL. The agent's reply to the user is the URL plus a one-sentence summary — **not** the rendered body inline. Other formats (markdown, PDF) only when the user asks explicitly. Short captures (< 200 words, no structure) stay markdown via `note-taker`.
+2. **Save work via Note-taker or Document.** Never write to the vault directly; route through one of those skills (which call the `write_note` tool).
+3. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
+4. **Trader is a student.** Never prescribes; only questions.
 
 ## Build status
 
