@@ -123,51 +123,9 @@ The user approves, edits, or rejects. If approved, the agent uses the `edit` too
 
 **Synthesis.** The `meta-review` skill (`.pi/skills/meta-review/SKILL.md`) reads all profiles on demand and surfaces cross-domain patterns, contradictions, and tacit knowledge that's emerged. Invoke when you want a step-back view of what the system has learned about you.
 
-## Web frontend (PWA)
+## Web frontend
 
-PWA-installable web workspace via **piclaw** — a Pi-native self-hosted UI (https://github.com/rcarmo/piclaw):
-
-```
-Browser/PWA → piclaw container (Docker) → Pi runtime (auto-discovers /workspace/.pi/)
-```
-
-**Why piclaw:** purpose-built around Pi (no OpenAI-compat translation layer); MIT, actively maintained; first-class iOS PWA support; SQLite-backed history; optional TOTP / passkey auth; bundles editor, terminal, and viewers alongside chat. Replaced the earlier Open WebUI + custom shim approach: zero glue code, one container.
-
-### One-time setup
-
-```bash
-bash scripts/setup.sh
-```
-
-Installs Pi (if missing), tmux + config, and pulls the piclaw Docker image. Docker Desktop / dockerd must be installed and running for the image-pull step; if it's not, setup warns but doesn't fail — re-run after starting Docker.
-
-### Daily use
-
-```bash
-bash scripts/start.sh        # launches piclaw on http://localhost:8080
-bash scripts/stop.sh         # halts the container; preserves chat history + auth
-```
-
-Container mounts:
-- `${REPO_ROOT}` → `/workspace` — Pi inside the container auto-discovers `.pi/agents/{pm,engineer,...}` from the project root.
-- `~/.pi` → `/config/.pi` — provider config + API keys are inherited from your host `pi`. No re-login needed.
-- `${REPO_ROOT}/home` → `/config` (rest) — anything piclaw wants outside `.pi` (e.g. `.bashrc`); gitignored.
-
-Override the port with `PICLAW_WEB_PORT=<n>` in `.env` if 8080 is taken.
-
-### First-time
-
-1. Open `http://localhost:8080`.
-2. Type `/login` in the chat and configure your LLM provider (Anthropic, OpenAI, or any OpenAI-compat endpoint).
-3. Start chatting. The Distributor (project root system prompt) routes to your domain agents.
-
-### Install as PWA
-
-| Platform | How |
-|---|---|
-| iOS Safari | Share → "Add to Home Screen" |
-| Android Chrome | ⋮ → "Install app" |
-| Desktop Chrome / Edge | Address-bar install icon |
+Not currently wired in — being built from scratch. The CLI (`pi` from the repo root) is the only entry point right now.
 
 ## One-time setup
 

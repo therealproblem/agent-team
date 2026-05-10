@@ -165,41 +165,6 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Docker + piclaw image (web frontend)
-# ---------------------------------------------------------------------------
-
-PICLAW_IMAGE="ghcr.io/rcarmo/piclaw:latest"
-
-if have docker; then
-	if docker info >/dev/null 2>&1; then
-		ok "Docker installed and running"
-
-		# Migration: clean up any leftover open-webui from the previous frontend.
-		if docker ps -aq -f "name=^open-webui$" 2>/dev/null | grep -q .; then
-			info "removing legacy open-webui container (replaced by piclaw)…"
-			docker rm -f open-webui >/dev/null 2>&1 || true
-			ok "legacy container removed"
-		fi
-
-		# Pull piclaw so first start.sh is fast.
-		if docker images -q "$PICLAW_IMAGE" 2>/dev/null | grep -q .; then
-			ok "piclaw image already pulled"
-		else
-			info "pulling piclaw image (may take a minute)…"
-			if docker pull "$PICLAW_IMAGE" >/dev/null 2>&1; then
-				ok "piclaw image ready"
-			else
-				warn "piclaw image pull failed. Re-run setup or pull manually with 'docker pull $PICLAW_IMAGE'."
-			fi
-		fi
-	else
-		warn "Docker installed but not running. Start Docker Desktop / dockerd, then re-run setup."
-	fi
-else
-	warn "Docker not installed. piclaw requires Docker — install from https://docker.com (macOS: Docker Desktop). Pi CLI works without Docker if you only want terminal access."
-fi
-
-# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 
@@ -207,8 +172,7 @@ cat <<EOF
 
 Setup complete. Next steps:
 
-  • Start the web UI:  bash scripts/start.sh    # piclaw on http://localhost:8080
-  • Stop:              bash scripts/stop.sh
-  • Pi CLI directly:   pi    (from this repo root)
+  • Pi CLI:   pi    (from this repo root)
+  • Web UI:   not yet wired in — being built from scratch
 
 EOF
