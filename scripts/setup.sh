@@ -165,6 +165,49 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 6. Legacy frontend cleanup
+#
+# Removes folders, tmp files, and Docker containers left behind by earlier
+# frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
+# when there's nothing to clean.
+# ---------------------------------------------------------------------------
+
+removed_any=false
+
+# Repo-local folders left by the shim or piclaw bind mounts.
+for legacy_dir in services home .piclaw; do
+	if [[ -e "${REPO_ROOT}/${legacy_dir}" ]]; then
+		info "removing legacy folder: ${legacy_dir}/"
+		rm -rf "${REPO_ROOT}/${legacy_dir}"
+		removed_any=true
+	fi
+done
+
+# Tmp files from the old pi-rpc-shim.
+for legacy_file in /tmp/pi-rpc-shim.pid /tmp/pi-rpc-shim.log; do
+	if [[ -e "$legacy_file" ]]; then
+		info "removing ${legacy_file}"
+		rm -f "$legacy_file"
+		removed_any=true
+	fi
+done
+
+# Containers from prior frontends (only if Docker is reachable).
+if have docker && docker info >/dev/null 2>&1; then
+	for legacy_container in piclaw open-webui; do
+		if docker ps -aq -f "name=^${legacy_container}$" 2>/dev/null | grep -q .; then
+			info "removing legacy container: ${legacy_container}"
+			docker rm -f "$legacy_container" >/dev/null 2>&1 || true
+			removed_any=true
+		fi
+	done
+fi
+
+if [[ "$removed_any" == "true" ]]; then
+	ok "legacy frontend state cleaned up"
+fi
+
+# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 
