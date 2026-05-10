@@ -125,13 +125,13 @@ The user approves, edits, or rejects. If approved, the agent uses the `edit` too
 
 ## Web frontend (PWA)
 
-PWA-installable chat UI via **Open WebUI** + a small OpenAI-compat shim:
+PWA-installable web workspace via **piclaw** — a Pi-native self-hosted UI (https://github.com/rcarmo/piclaw):
 
 ```
-Browser/PWA → Open WebUI (Docker) → POST /v1/chat/completions → pi-rpc-shim → RpcClient → pi
+Browser/PWA → piclaw container (Docker) → Pi runtime (auto-discovers /workspace/.pi/)
 ```
 
-**Why this combo:** Open WebUI is the only mature open-source LLM chat UI with first-class PWA support (LibreChat declined to add it; aoe was a tmux-in-browser, not chat-shaped). The shim is OpenAI-compat so any chat UI in that family can swap in.
+**Why piclaw:** purpose-built around Pi (no OpenAI-compat translation layer); MIT, actively maintained; first-class iOS PWA support; SQLite-backed history; optional TOTP / passkey auth; bundles editor, terminal, and viewers alongside chat. Replaced the earlier Open WebUI + custom shim approach: zero glue code, one container.
 
 ### One-time setup
 
@@ -139,33 +139,26 @@ Browser/PWA → Open WebUI (Docker) → POST /v1/chat/completions → pi-rpc-shi
 bash scripts/setup.sh
 ```
 
-Installs Pi (if missing), tmux + config, shim npm deps, and pulls the Open WebUI Docker image. Docker Desktop / dockerd needs to be installed and running for the image-pull step; if it's not, setup warns but doesn't fail — re-run after starting Docker.
+Installs Pi (if missing), tmux + config, and pulls the piclaw Docker image. Docker Desktop / dockerd must be installed and running for the image-pull step; if it's not, setup warns but doesn't fail — re-run after starting Docker.
 
 ### Daily use
 
 ```bash
-bash scripts/start.sh        # launches shim + Open WebUI container
-                             # → Open WebUI: http://localhost:8080
-                             # → shim:        http://127.0.0.1:9090
-bash scripts/stop.sh         # halts both; preserves Open WebUI volume
+bash scripts/start.sh        # launches piclaw on http://localhost:8080
+bash scripts/stop.sh         # halts the container; preserves chat history + auth
 ```
 
-Variants:
+Container mounts:
+- `${REPO_ROOT}` → `/workspace` — Pi inside the container auto-discovers `.pi/agents/{pm,engineer,...}` from the project root.
+- `${REPO_ROOT}/home` → `/config` — Pi `auth.json`, `models.json`, encrypted keychain (gitignored).
 
-| Command | Behavior |
-|---|---|
-| `bash scripts/start.sh --shim-only` | Run the shim only (skip Open WebUI). Useful for `curl` testing or if Docker isn't running. |
-| `bash scripts/stop.sh` | Stops both. Idempotent (re-runs are no-ops). |
+Override the port with `PICLAW_WEB_PORT=<n>` in `.env` if 8080 is taken.
 
-### First-time Open WebUI setup
+### First-time
 
-After `start.sh` reports both up, open `http://localhost:8080`:
-
-1. Create an account (local-only data; first user is admin)
-2. **Settings → Admin → Connections → OpenAI API:**
-   - **API Base URL:** `http://host.docker.internal:9090/v1`
-   - **API Key:** anything (`not-required` works)
-3. Verify, then pick `pi-distributor` as the model in a new chat.
+1. Open `http://localhost:8080`.
+2. Type `/login` in the chat and configure your LLM provider (Anthropic, OpenAI, or any OpenAI-compat endpoint).
+3. Start chatting. The Distributor (project root system prompt) routes to your domain agents.
 
 ### Install as PWA
 
@@ -174,8 +167,6 @@ After `start.sh` reports both up, open `http://localhost:8080`:
 | iOS Safari | Share → "Add to Home Screen" |
 | Android Chrome | ⋮ → "Install app" |
 | Desktop Chrome / Edge | Address-bar install icon |
-
-See `services/pi-rpc-shim/README.md` for the shim's env vars, limitations, and curl examples for headless testing.
 
 ## One-time setup
 

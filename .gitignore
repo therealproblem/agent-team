@@ -18,9 +18,11 @@ vault/
 .pi/extensions/**/dist/
 .pi/extensions/**/node_modules/
 
-# Shim service artifacts
-services/**/node_modules/
-services/**/dist/
+# piclaw container state
+#   home/    — /config bind mount (Pi auth.json, models.json, encrypted keychain)
+#   .piclaw/ — /workspace/.piclaw (chat history SQLite, media, task state)
+home/
+.piclaw/
 
 # Editor / OS
 .DS_Store

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 #
-# Launch pi-rpc-shim + Open WebUI for browser/PWA access to Pi.
-# Idempotent: stops any previous shim instance before starting a new one.
+# Launch piclaw — self-hosted PWA web workspace driving Pi.
+# Idempotent: replaces any prior piclaw container before starting.
 #
-#   bash scripts/start.sh             # both shim and Open WebUI
-#   bash scripts/start.sh --shim-only # just the shim, no Open WebUI
+#   bash scripts/start.sh
+#
+# After it reports up, open http://localhost:8080 and type /login
+# in the chat to configure your LLM provider.
 
 set -euo pipefail
 
@@ -24,10 +26,8 @@ warn() { printf "${C_YELLOW}[warn]${C_RESET}  %s\n" "$*" >&2; }
 fail() { printf "${C_RED}[fail]${C_RESET}  %s\n" "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-SHIM_ONLY=false
 for arg in "$@"; do
 	case "$arg" in
-		--shim-only) SHIM_ONLY=true ;;
 		-h|--help) grep '^#' "$0" | sed -E 's/^# ?//' ; exit 0 ;;
 		*) fail "Unknown argument: $arg" ;;
 	esac
@@ -40,14 +40,10 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-SHIM_DIR="${REPO_ROOT}/services/pi-rpc-shim"
-SHIM_PID_FILE="/tmp/pi-rpc-shim.pid"
-SHIM_LOG_FILE="/tmp/pi-rpc-shim.log"
-SHIM_PORT=9090
-
-WEBUI_NAME="open-webui"
-WEBUI_PORT=8080
-WEBUI_IMAGE="ghcr.io/open-webui/open-webui:main"
+CONTAINER_NAME="piclaw"
+WEB_PORT="${PICLAW_WEB_PORT:-8080}"
+IMAGE="ghcr.io/rcarmo/piclaw:latest"
+HOME_DIR="${REPO_ROOT}/home"
 
 # Load .env if present (overrides for AGENTS_TEAM_VAULT_PATH etc.).
 if [[ -f "$REPO_ROOT/.env" ]]; then
@@ -55,119 +51,92 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 1. shim
+# 1. Migration cleanup — remove legacy shim / open-webui state
 # ---------------------------------------------------------------------------
 
-[[ -d "$SHIM_DIR" ]] || fail "services/pi-rpc-shim not found. Run scripts/setup.sh first."
-[[ -d "$SHIM_DIR/node_modules" ]] || fail "shim deps missing. Run scripts/setup.sh first."
-
-# Stop any previous shim cleanly.
-if [[ -f "$SHIM_PID_FILE" ]]; then
-	OLD_PID=$(cat "$SHIM_PID_FILE")
-	if kill -0 "$OLD_PID" 2>/dev/null; then
-		info "stopping previous shim (pid $OLD_PID)…"
-		kill "$OLD_PID" 2>/dev/null || true
-		# Give it a moment to release the port.
-		for _ in 1 2 3 4 5; do
-			lsof -ti :$SHIM_PORT >/dev/null 2>&1 || break
-			sleep 0.5
-		done
-	fi
-	rm -f "$SHIM_PID_FILE"
+if [[ -f /tmp/pi-rpc-shim.pid ]]; then
+	info "cleaning up legacy shim PID file…"
+	OLD_PID=$(cat /tmp/pi-rpc-shim.pid)
+	kill "$OLD_PID" 2>/dev/null || true
+	rm -f /tmp/pi-rpc-shim.pid
+fi
+if lsof -ti :9090 >/dev/null 2>&1; then
+	warn "process on legacy shim port :9090; killing"
+	kill $(lsof -ti :9090) 2>/dev/null || true
 fi
 
-# Belt-and-braces: kill any stray process on the port.
-if lsof -ti :$SHIM_PORT >/dev/null 2>&1; then
-	warn "port $SHIM_PORT busy after shim stop attempt; killing residual process"
-	kill -9 $(lsof -ti :$SHIM_PORT) 2>/dev/null || true
-	sleep 1
+# ---------------------------------------------------------------------------
+# 2. Docker preflight
+# ---------------------------------------------------------------------------
+
+have docker || fail "Docker required. Install Docker Desktop (macOS) or dockerd (Linux), then re-run scripts/setup.sh."
+docker info >/dev/null 2>&1 || fail "Docker installed but daemon not running. Start Docker Desktop / dockerd and retry."
+
+# Legacy open-webui container, if any, is cleaned up here too.
+if docker ps -aq -f "name=^open-webui$" 2>/dev/null | grep -q .; then
+	info "removing legacy open-webui container…"
+	docker rm -f open-webui >/dev/null 2>&1 || true
 fi
 
-info "starting pi-rpc-shim…"
-(
-	cd "$SHIM_DIR"
-	AGENTS_TEAM_ROOT="$REPO_ROOT" nohup npm start >"$SHIM_LOG_FILE" 2>&1 &
-	echo $! > "$SHIM_PID_FILE"
-)
-disown 2>/dev/null || true
+# ---------------------------------------------------------------------------
+# 3. Stop any prior piclaw container and start a fresh one
+# ---------------------------------------------------------------------------
 
-# Wait up to 10s for the shim to come up.
-SHIM_UP=false
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-	if curl -fs http://127.0.0.1:$SHIM_PORT/health >/dev/null 2>&1; then
-		SHIM_UP=true
+if docker ps -aq -f "name=^${CONTAINER_NAME}$" 2>/dev/null | grep -q .; then
+	info "removing previous piclaw container…"
+	docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+fi
+
+# Belt-and-braces: error out if something else holds the port.
+if lsof -iTCP:${WEB_PORT} -sTCP:LISTEN >/dev/null 2>&1; then
+	fail "Port ${WEB_PORT} is busy. Stop whatever is listening, or set PICLAW_WEB_PORT=<other> in .env."
+fi
+
+mkdir -p "$HOME_DIR"
+
+info "starting piclaw…"
+docker run -d \
+	--init \
+	--name "$CONTAINER_NAME" \
+	--restart unless-stopped \
+	-p "127.0.0.1:${WEB_PORT}:8080" \
+	-e PICLAW_WEB_PORT=8080 \
+	-v "${HOME_DIR}:/config" \
+	-v "${REPO_ROOT}:/workspace" \
+	"$IMAGE" >/dev/null
+
+# ---------------------------------------------------------------------------
+# 4. Wait for readiness
+# ---------------------------------------------------------------------------
+
+UP=false
+for _ in $(seq 1 30); do
+	if curl -fs "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1; then
+		UP=true
 		break
 	fi
 	sleep 1
 done
 
-if [[ "$SHIM_UP" == "true" ]]; then
-	ok "shim listening on http://127.0.0.1:$SHIM_PORT  (pid $(cat $SHIM_PID_FILE), log $SHIM_LOG_FILE)"
+if [[ "$UP" == "true" ]]; then
+	ok "piclaw listening on http://localhost:${WEB_PORT}"
 else
-	tail -10 "$SHIM_LOG_FILE" >&2 || true
-	fail "shim failed to start. See $SHIM_LOG_FILE for details."
-fi
-
-# ---------------------------------------------------------------------------
-# 2. Open WebUI (optional)
-# ---------------------------------------------------------------------------
-
-if [[ "$SHIM_ONLY" == "true" ]]; then
-	cat <<EOF
-
-Shim-only mode. To use Open WebUI later: run scripts/start.sh without --shim-only.
-
-  • shim:        http://127.0.0.1:$SHIM_PORT
-  • shim log:    $SHIM_LOG_FILE
-  • Stop:        bash scripts/stop.sh
-
-EOF
-	exit 0
-fi
-
-if ! have docker; then
-	warn "Docker not installed — skipping Open WebUI. The shim is up; you can curl it directly."
-	exit 0
-fi
-
-if ! docker info >/dev/null 2>&1; then
-	warn "Docker not running — start Docker Desktop / dockerd and re-run. Shim is up regardless."
-	exit 0
-fi
-
-if docker ps -q -f "name=^${WEBUI_NAME}$" 2>/dev/null | grep -q .; then
-	ok "Open WebUI already running"
-elif docker ps -aq -f "name=^${WEBUI_NAME}$" 2>/dev/null | grep -q .; then
-	info "starting existing Open WebUI container…"
-	docker start "$WEBUI_NAME" >/dev/null
-	ok "Open WebUI started"
-else
-	info "first launch — creating Open WebUI container…"
-	docker run -d \
-		-p "$WEBUI_PORT:8080" \
-		--add-host=host.docker.internal:host-gateway \
-		-v open-webui:/app/backend/data \
-		--name "$WEBUI_NAME" \
-		--restart unless-stopped \
-		"$WEBUI_IMAGE" >/dev/null
-	ok "Open WebUI container created"
+	warn "piclaw did not respond on :${WEB_PORT} within 30s. It may still be starting."
+	warn "  Logs:   docker logs -f ${CONTAINER_NAME}"
+	warn "  Status: docker ps -a -f name=^${CONTAINER_NAME}\$"
 fi
 
 cat <<EOF
 
-Everything up.
+  • piclaw:    http://localhost:${WEB_PORT}
+  • workspace: /workspace  ← bound to ${REPO_ROOT}
+  • config:    /config     ← bound to ${HOME_DIR} (Pi auth, models)
+  • Stop:      bash scripts/stop.sh
+  • Logs:      docker logs -f ${CONTAINER_NAME}
 
-  • Open WebUI:   http://localhost:$WEBUI_PORT
-  • shim:         http://127.0.0.1:$SHIM_PORT
-  • shim log:     $SHIM_LOG_FILE
-  • Stop:         bash scripts/stop.sh
-
-First-time Open WebUI setup:
-  1. Open http://localhost:$WEBUI_PORT
-  2. Create an account (local — first user is admin)
-  3. Settings → Admin → Connections → OpenAI API:
-     • API Base URL: http://host.docker.internal:$SHIM_PORT/v1
-     • API Key:       not-required (anything works)
-  4. Verify, then pick "pi-distributor" as the model in a new chat.
+First-time setup:
+  1. Open http://localhost:${WEB_PORT}
+  2. Type /login in the chat to configure your LLM provider
+  3. Pi inside the container auto-discovers .pi/agents from /workspace
 
 EOF

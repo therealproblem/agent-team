@@ -165,45 +165,38 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. pi-rpc-shim — npm install
+# 6. Docker + piclaw image (web frontend)
 # ---------------------------------------------------------------------------
 
-SHIM_DIR="${REPO_ROOT}/services/pi-rpc-shim"
-if [[ -d "$SHIM_DIR" ]]; then
-	if [[ -d "$SHIM_DIR/node_modules" ]]; then
-		ok "shim deps already installed"
-	else
-		info "installing pi-rpc-shim deps…"
-		(cd "$SHIM_DIR" && npm install >/dev/null 2>&1)
-		ok "shim deps installed"
-	fi
-else
-	warn "services/pi-rpc-shim not found — skipping shim install"
-fi
-
-# ---------------------------------------------------------------------------
-# 7. Docker (for Open WebUI) — soft requirement
-# ---------------------------------------------------------------------------
+PICLAW_IMAGE="ghcr.io/rcarmo/piclaw:latest"
 
 if have docker; then
 	if docker info >/dev/null 2>&1; then
 		ok "Docker installed and running"
-		# Pull Open WebUI image so first start.sh is fast.
-		if docker images -q ghcr.io/open-webui/open-webui:main 2>/dev/null | grep -q .; then
-			ok "Open WebUI image already pulled"
+
+		# Migration: clean up any leftover open-webui from the previous frontend.
+		if docker ps -aq -f "name=^open-webui$" 2>/dev/null | grep -q .; then
+			info "removing legacy open-webui container (replaced by piclaw)…"
+			docker rm -f open-webui >/dev/null 2>&1 || true
+			ok "legacy container removed"
+		fi
+
+		# Pull piclaw so first start.sh is fast.
+		if docker images -q "$PICLAW_IMAGE" 2>/dev/null | grep -q .; then
+			ok "piclaw image already pulled"
 		else
-			info "pulling Open WebUI image (this may take a minute)…"
-			if docker pull ghcr.io/open-webui/open-webui:main >/dev/null 2>&1; then
-				ok "Open WebUI image ready"
+			info "pulling piclaw image (may take a minute)…"
+			if docker pull "$PICLAW_IMAGE" >/dev/null 2>&1; then
+				ok "piclaw image ready"
 			else
-				warn "Open WebUI image pull failed. Re-run setup or pull manually with 'docker pull ghcr.io/open-webui/open-webui:main'."
+				warn "piclaw image pull failed. Re-run setup or pull manually with 'docker pull $PICLAW_IMAGE'."
 			fi
 		fi
 	else
 		warn "Docker installed but not running. Start Docker Desktop / dockerd, then re-run setup."
 	fi
 else
-	warn "Docker not installed. Open WebUI requires Docker — install from https://docker.com (macOS: Docker Desktop). The shim works without Docker if you only want curl access."
+	warn "Docker not installed. piclaw requires Docker — install from https://docker.com (macOS: Docker Desktop). Pi CLI works without Docker if you only want terminal access."
 fi
 
 # ---------------------------------------------------------------------------
@@ -214,8 +207,8 @@ cat <<EOF
 
 Setup complete. Next steps:
 
-  • Start everything:  bash scripts/start.sh    # shim + Open WebUI
-  • Stop everything:   bash scripts/stop.sh
+  • Start the web UI:  bash scripts/start.sh    # piclaw on http://localhost:8080
+  • Stop:              bash scripts/stop.sh
   • Pi CLI directly:   pi    (from this repo root)
 
 EOF
