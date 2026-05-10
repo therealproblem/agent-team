@@ -67,6 +67,54 @@ function formatUsageStats(
 	return parts.join(" ");
 }
 
+function formatMs(ms: number): string {
+	if (ms < 1000) return `${ms}ms`;
+	return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatTimingStats(timing: TimingStats | undefined): string {
+	if (!timing) return "";
+	const parts = [`spawn:${formatMs(timing.spawnMs)}`];
+	if (timing.ttfbMs !== undefined) parts.push(`ttfb:${formatMs(timing.ttfbMs)}`);
+	parts.push(`total:${formatMs(timing.totalMs)}`);
+	return parts.join(" ");
+}
+
+/**
+ * Render usage + timing as a single dim line, separated by a middle dot.
+ * Returns "" when both are empty.
+ */
+function formatStatsLine(usage: UsageStats, timing?: TimingStats, model?: string): string {
+	const parts: string[] = [];
+	const usageStr = formatUsageStats(usage, model);
+	if (usageStr) parts.push(usageStr);
+	const timingStr = formatTimingStats(timing);
+	if (timingStr) parts.push(timingStr);
+	return parts.join("  ·  ");
+}
+
+function aggregateTiming(details: SubagentDetails): TimingStats | undefined {
+	const withTiming = details.results.map((r) => r.timing).filter((t): t is TimingStats => t !== undefined);
+	if (withTiming.length === 0) return undefined;
+
+	if (details.mode === "chain" || details.mode === "single") {
+		// Sequential: sum everything.
+		return {
+			spawnMs: withTiming.reduce((s, t) => s + t.spawnMs, 0),
+			ttfbMs: withTiming.reduce((s, t) => s + (t.ttfbMs ?? 0), 0) || undefined,
+			totalMs: withTiming.reduce((s, t) => s + t.totalMs, 0),
+		};
+	}
+	// Parallel: max wall, with per-task averages for spawn/ttfb as a rough indicator.
+	return {
+		spawnMs: Math.round(withTiming.reduce((s, t) => s + t.spawnMs, 0) / withTiming.length),
+		ttfbMs: withTiming.some((t) => t.ttfbMs !== undefined)
+			? Math.round(withTiming.reduce((s, t) => s + (t.ttfbMs ?? 0), 0) / withTiming.length)
+			: undefined,
+		totalMs: Math.max(...withTiming.map((t) => t.totalMs)),
+	};
+}
+
 function formatToolCall(
 	toolName: string,
 	args: Record<string, unknown>,
@@ -157,6 +205,16 @@ interface SingleResult {
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
+	timing?: TimingStats;
+}
+
+interface TimingStats {
+	/** Time from execute() entry to the moment spawn() returned (ms). */
+	spawnMs: number;
+	/** Time from spawn-returned to first byte of stdout from child (ms). Includes Node bootstrap, extension/skill discovery, and first-token inference latency. */
+	ttfbMs?: number;
+	/** Wall-clock time from execute() entry to child process close (ms). */
+	totalMs: number;
 }
 
 interface SubagentDetails {
@@ -296,6 +354,10 @@ async function runSingleAgent(
 		}
 	};
 
+	const t_invoke = Date.now();
+	let t_spawned: number | undefined;
+	let t_first_byte: number | undefined;
+
 	try {
 		if (agent.systemPrompt.trim()) {
 			const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
@@ -314,6 +376,7 @@ async function runSingleAgent(
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
 			});
+			t_spawned = Date.now();
 			let buffer = "";
 
 			const processLine = (line: string) => {
@@ -354,6 +417,7 @@ async function runSingleAgent(
 			};
 
 			proc.stdout.on("data", (data) => {
+				if (t_first_byte === undefined) t_first_byte = Date.now();
 				buffer += data.toString();
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
@@ -387,6 +451,13 @@ async function runSingleAgent(
 		});
 
 		currentResult.exitCode = exitCode;
+		const t_finished = Date.now();
+		const spawnEnd = t_spawned ?? t_invoke;
+		currentResult.timing = {
+			spawnMs: spawnEnd - t_invoke,
+			ttfbMs: t_first_byte !== undefined ? t_first_byte - spawnEnd : undefined,
+			totalMs: t_finished - t_invoke,
+		};
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
 	} finally {
@@ -788,7 +859,7 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 					}
-					const usageStr = formatUsageStats(r.usage, r.model);
+					const usageStr = formatStatsLine(r.usage, r.timing, r.model);
 					if (usageStr) {
 						container.addChild(new Spacer(1));
 						container.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
@@ -804,7 +875,7 @@ export default function (pi: ExtensionAPI) {
 					text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
 					if (displayItems.length > COLLAPSED_ITEM_COUNT) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 				}
-				const usageStr = formatUsageStats(r.usage, r.model);
+				const usageStr = formatStatsLine(r.usage, r.timing, r.model);
 				if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;
 				return new Text(text, 0, 0);
 			}
@@ -873,11 +944,11 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 
-						const stepUsage = formatUsageStats(r.usage, r.model);
+						const stepUsage = formatStatsLine(r.usage, r.timing, r.model);
 						if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
 					}
 
-					const usageStr = formatUsageStats(aggregateUsage(details.results));
+					const usageStr = formatStatsLine(aggregateUsage(details.results), aggregateTiming(details));
 					if (usageStr) {
 						container.addChild(new Spacer(1));
 						container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
@@ -898,7 +969,7 @@ export default function (pi: ExtensionAPI) {
 					if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;
 				}
-				const usageStr = formatUsageStats(aggregateUsage(details.results));
+				const usageStr = formatStatsLine(aggregateUsage(details.results), aggregateTiming(details));
 				if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
 				text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 				return new Text(text, 0, 0);
@@ -958,11 +1029,11 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 
-						const taskUsage = formatUsageStats(r.usage, r.model);
+						const taskUsage = formatStatsLine(r.usage, r.timing, r.model);
 						if (taskUsage) container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
 					}
 
-					const usageStr = formatUsageStats(aggregateUsage(details.results));
+					const usageStr = formatStatsLine(aggregateUsage(details.results), aggregateTiming(details));
 					if (usageStr) {
 						container.addChild(new Spacer(1));
 						container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
@@ -986,7 +1057,7 @@ export default function (pi: ExtensionAPI) {
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;
 				}
 				if (!isRunning) {
-					const usageStr = formatUsageStats(aggregateUsage(details.results));
+					const usageStr = formatStatsLine(aggregateUsage(details.results), aggregateTiming(details));
 					if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
 				}
 				if (!expanded) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
