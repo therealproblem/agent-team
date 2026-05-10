@@ -348,7 +348,10 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	// `--no-context-files` keeps the project's AGENTS.md / CLAUDE.md out of the
+	// child's prompt — they describe the orchestration architecture and would
+	// confuse a domain agent into thinking it's the Distributor.
+	const args: string[] = ["--mode", "json", "-p", "--no-session", "--no-context-files"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 	if (agent.thinking) args.push("--thinking", agent.thinking);
@@ -397,7 +400,11 @@ async function runSingleAgent(
 			const tmp = await writePromptToTempFile(agent.name, assembledPrompt);
 			tmpPromptDir = tmp.dir;
 			tmpPromptPath = tmp.filePath;
-			args.push("--append-system-prompt", tmpPromptPath);
+			// `--system-prompt` REPLACES Pi's default base. Without this, Pi
+			// auto-discovers `.pi/SYSTEM.md` (the Distributor's prompt) and uses
+			// it as the base — the child agent would see "always route via
+			// subagent" before its own identity prompt and try to route to itself.
+			args.push("--system-prompt", tmpPromptPath);
 		}
 
 		args.push(`Task: ${task}`);
