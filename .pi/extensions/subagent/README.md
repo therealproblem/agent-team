@@ -62,7 +62,7 @@ This tool executes a separate `pi` subprocess with a delegated system prompt and
 
 To enable project-local agents, pass `agentScope: "both"` (or `"project"`). Only do this for repositories you trust.
 
-When running interactively, the tool prompts for confirmation before running project-local agents. Set `confirmProjectAgents: false` to disable.
+**Local mod (this repo):** the confirmation prompt for project-local agents is **off by default** — this repo's `.pi/agents/` are trusted. Pass `confirmProjectAgents: true` if you want the prompt back. Trusted-once agents are also remembered for the rest of the session via an in-memory set.
 
 ## Usage
 

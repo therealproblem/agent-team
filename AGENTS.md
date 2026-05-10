@@ -260,5 +260,5 @@ Run smoke tests:
 pi --no-session -p "List your tools, skills, and agents."
 
 # Subagent spawn works
-pi --no-session -p "Use subagent with agentScope:'project', agent:'engineer', confirmProjectAgents:false, task:'Reply with PI-OK only'."
+pi --no-session -p "Use subagent with agentScope:'project', agent:'engineer', task:'Reply with PI-OK only'."
 ```
