@@ -13,6 +13,10 @@ export interface AgentConfig {
 	description: string;
 	tools?: string[];
 	model?: string;
+	/** Pi --thinking level: off | minimal | low | medium | high | xhigh. Set per-agent in frontmatter. */
+	thinking?: string;
+	/** Profile basenames to pre-load into the system prompt (e.g. ["_global", "trading"]). */
+	profiles?: string[];
 	systemPrompt: string;
 	source: "user" | "project";
 	filePath: string;
@@ -60,11 +64,18 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			.map((t: string) => t.trim())
 			.filter(Boolean);
 
+		const profiles = frontmatter.profiles
+			?.split(",")
+			.map((p: string) => p.trim())
+			.filter(Boolean);
+
 		agents.push({
 			name: frontmatter.name,
 			description: frontmatter.description,
 			tools: tools && tools.length > 0 ? tools : undefined,
 			model: frontmatter.model,
+			thinking: frontmatter.thinking,
+			profiles: profiles && profiles.length > 0 ? profiles : undefined,
 			systemPrompt: body,
 			source,
 			filePath,

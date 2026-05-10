@@ -271,6 +271,27 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 	return results;
 }
 
+/**
+ * Read each named profile file from <projectRoot>/.pi/state/profiles/<name>.md
+ * and concatenate. Missing files are skipped silently. Returns "" when nothing
+ * loads.
+ */
+function loadProfilesContent(profileNames: string[], projectAgentsDir: string | null): string {
+	if (!projectAgentsDir || profileNames.length === 0) return "";
+	const profilesDir = path.join(path.dirname(projectAgentsDir), "state", "profiles");
+	const sections: string[] = [];
+	for (const name of profileNames) {
+		const file = path.join(profilesDir, `${name}.md`);
+		try {
+			const content = fs.readFileSync(file, "utf-8");
+			if (content.trim()) sections.push(`<!-- profile: ${name} -->\n${content.trim()}`);
+		} catch {
+			// File missing — skip silently. Profile may not exist yet.
+		}
+	}
+	return sections.join("\n\n---\n\n");
+}
+
 async function writePromptToTempFile(agentName: string, prompt: string): Promise<{ dir: string; filePath: string }> {
 	const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pi-subagent-"));
 	const safeName = agentName.replace(/[^\w.-]+/g, "_");
@@ -302,6 +323,7 @@ type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 async function runSingleAgent(
 	defaultCwd: string,
 	agents: AgentConfig[],
+	projectAgentsDir: string | null,
 	agentName: string,
 	task: string,
 	cwd: string | undefined,
@@ -329,6 +351,7 @@ async function runSingleAgent(
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	if (agent.thinking) args.push("--thinking", agent.thinking);
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
@@ -358,9 +381,20 @@ async function runSingleAgent(
 	let t_spawned: number | undefined;
 	let t_first_byte: number | undefined;
 
+	// Pre-load configured profiles so the agent doesn't burn a turn reading
+	// them via the read tool. Profile content is prepended to systemPrompt as
+	// loaded context.
+	let assembledPrompt = agent.systemPrompt;
+	if (agent.profiles && agent.profiles.length > 0) {
+		const profileContent = loadProfilesContent(agent.profiles, projectAgentsDir);
+		if (profileContent) {
+			assembledPrompt = `# Loaded profiles (pre-fetched from .pi/state/profiles/)\n\n${profileContent}\n\n---\n\n${agent.systemPrompt}`;
+		}
+	}
+
 	try {
-		if (agent.systemPrompt.trim()) {
-			const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
+		if (assembledPrompt.trim()) {
+			const tmp = await writePromptToTempFile(agent.name, assembledPrompt);
 			tmpPromptDir = tmp.dir;
 			tmpPromptPath = tmp.filePath;
 			args.push("--append-system-prompt", tmpPromptPath);
@@ -608,6 +642,7 @@ export default function (pi: ExtensionAPI) {
 					const result = await runSingleAgent(
 						ctx.cwd,
 						agents,
+						discovery.projectAgentsDir,
 						step.agent,
 						taskWithContext,
 						step.cwd,
@@ -682,6 +717,7 @@ export default function (pi: ExtensionAPI) {
 					const result = await runSingleAgent(
 						ctx.cwd,
 						agents,
+						discovery.projectAgentsDir,
 						t.agent,
 						t.task,
 						t.cwd,
@@ -722,6 +758,7 @@ export default function (pi: ExtensionAPI) {
 				const result = await runSingleAgent(
 					ctx.cwd,
 					agents,
+					discovery.projectAgentsDir,
 					params.agent,
 					params.task,
 					params.cwd,
