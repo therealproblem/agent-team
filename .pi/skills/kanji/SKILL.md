@@ -35,7 +35,7 @@ Stroke count: 13
 
 - Reading drills: present the kanji in a compound, ask the user for the reading.
 - Meaning drills: present the kanji standalone, ask for the meaning.
-- Production drills: present meaning + reading hint, ask the user to write the kanji (recall, not recognition).
+- Production drills (typed only — no handwriting): present meaning + reading hint, ask the user to **type** the kanji using their IME (recall, not recognition). Acceptable shortcuts: "type the reading in hiragana"; "type the romaji". Never ask the user to write by hand or reproduce stroke order — stroke-order *references* are still fine as visual aids when explaining a kanji.
 
 ## Save
 
