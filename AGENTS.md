@@ -105,7 +105,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 
 - **Vault location.** Default: project-root `vault/` (gitignored). Override with the `AGENTS_TEAM_VAULT_PATH` env var if you want notes to land in your real Obsidian vault elsewhere on disk. Used by `obsidian-vault` and `trade-journal` extensions.
 - **Renders location.** Default: project-root `renders/`. Override with `AGENTS_TEAM_RENDERS_PATH`. Lives OUTSIDE the vault so HTML doesn't break Obsidian's graph.
-- **Exports location.** Default: project-root `exports/`. Override with `AGENTS_TEAM_EXPORTS_PATH`. Holds PDFs (and their companion HTML source) produced by the `export` skill.
+- **Exports location.** Default: project-root `exports/`. Override with `AGENTS_TEAM_EXPORTS_PATH`. Holds PDFs produced by the `export` skill. The intermediate HTML is deleted once Chrome confirms the PDF on disk; it survives only when Chrome itself fails, as a manual-recovery path.
 - **Chrome binary.** PDF export uses headless Chrome. Auto-detected on macOS (`/Applications/Google Chrome.app`), Linux, and Windows. Override with `AGENTS_TEAM_CHROME_PATH` if Chrome is installed elsewhere.
 - **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
 - **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
@@ -163,7 +163,12 @@ Project-local secrets and overrides live in `.env` (gitignored). Copy from the t
 cp .env.example .env
 ```
 
-Currently the only var of interest is the optional `AGENTS_TEAM_VAULT_PATH` for pointing at your real Obsidian vault.
+Vars worth setting:
+
+- `AGENTS_TEAM_VAULT_PATH` — point at your real Obsidian vault elsewhere on disk.
+- `AGENTS_TEAM_RENDERS_PATH` — relocate `renders/` (HTML derivatives).
+- `AGENTS_TEAM_EXPORTS_PATH` — relocate `exports/` (PDF deliverables).
+- `AGENTS_TEAM_CHROME_PATH` — override Chrome binary used for PDF export (auto-detected on macOS / Linux / Windows by default).
 
 ## Implementation workflow rule
 

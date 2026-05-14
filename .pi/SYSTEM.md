@@ -71,6 +71,7 @@ The Layer 3 skills are usable from any persona without a swap:
 
 - `note-taker` — **default and only path for writing to the Obsidian vault.** Markdown only, with proper YAML frontmatter, inline `#tags`, and `[[wiki-links]]` so Obsidian's graph view and backlinks work. Use for everything that needs to persist — short captures AND long-form artifacts (PRDs, ADRs, lessons, reports). The vault is markdown-first; length does not change the destination.
 - `render` — **optional second step** after `note-taker`. Takes a markdown note path and produces a self-contained interactive HTML file in `renders/` (outside the vault). Returns a `file://` URL. Use when the artifact would meaningfully benefit from diagrams, tabs, callouts, timelines, decks, configurators — i.e. when an interactive reading experience is worth the work. Don't render short captures, agent-to-agent output, or PR-review artifacts where the diff IS the read.
+- `export` — **PDF deliverable path.** Takes a markdown source (vault path OR inline content) and produces a print-ready Kami-styled PDF in `exports/` (outside the vault). Returns a `file://` URL to the PDF. Use when the artifact is a real deliverable — resume, cover letter, portfolio, equity report, changelog, quarterly review, one-pager, or PDF deck — that will be sent, printed, or formally archived. Picks one of eight Kami templates (one-pager · long-doc · letter · portfolio · resume · slides · equity-report · changelog). `render` is for on-screen exploration; `export` is for sending.
 - `scribe` — tune prose for a specific audience.
 - `news` — fetch a topic's recent context.
 - `research` — stealth web fetch + search via camoufox-pi (`tff-fetch_url`, `tff-search_web`). Returns excerpts + URLs; caller persona reasons.
@@ -78,7 +79,7 @@ The Layer 3 skills are usable from any persona without a swap:
 - `feynman` — verify understanding of any single concept by plain-language explanation. Test of production, not recognition. Same shape under every persona; the "plain words" bar adapts per context.
 - `reminders` — persistent todos. "Remind me X" captures; `/clear <N>` (no agent turn) or natural-language "done with X" resolves. Open items surface at every session start.
 
-**Vault = markdown. HTML = on-demand render.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML presentations are a separate, opt-in derivative produced by `render` *after* the markdown is saved, written to `renders/` outside the vault so Obsidian's graph stays clean. Personas decide when a render is worth it — there is no auto-render rule. Other formats (PDF, etc.) only when the user explicitly asks.
+**Vault = markdown. HTML / PDF = on-demand derivatives.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML presentations are produced by `render` (interactive, on-screen, in `renders/`); PDF deliverables by `export` (Kami-styled, print-ready, in `exports/`). Both read the saved markdown and write outside the vault — they never write back into it, so Obsidian's graph stays clean. Personas decide when each is worth it: render when an interactive read genuinely helps; export when the user wants something to send, print, or archive. There is no auto-render or auto-export rule.
 
 ## Meta observation (Layer 0)
 

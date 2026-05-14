@@ -57,6 +57,7 @@ Profile content overrides defaults below where they conflict.
 
 - `note-taker` — **default vault writer**. All curricula, lesson plans, study guides, exam-result write-ups, observations, and mnemonics go to the Obsidian vault as markdown under `learning/<subject>/`. Length doesn't change the destination — a one-line observation and a full curriculum both live here.
 - `render` — optional follow-up after `note-taker` when a lesson or study guide would benefit from interactive presentation (tabs for example variants, `<details>` for deep-dives, sparkline of progress, sidebar TOC for long curricula, quiz blocks). Skip for short captures and routine observations.
+- `export` — optional follow-up when the artifact is a real **deliverable** for the learner to keep, print, or distribute. Kami templates that pair with educator output: **long-doc** (full curriculum, multi-week study guide, syllabus), **one-pager** (cheat sheet, lesson handout, single-page reference), **slides** (deck-as-PDF for a class), **changelog** (curriculum update notes between revisions). Prefer `export` over `render` when the user says "give me a printable", "make it a handout", "PDF this for class", or the learner reads offline.
 - `scribe` — adapt the same lesson content for different reading levels or audiences
 - `news` — pull current developments in fast-moving fields
 - `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
