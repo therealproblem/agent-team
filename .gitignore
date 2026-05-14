@@ -18,6 +18,9 @@ vault/
 .pi/extensions/**/dist/
 .pi/extensions/**/node_modules/
 
+# Pi-installed npm packages (declared in .pi/settings.json; restored via `pi install`)
+.pi/npm/
+
 # Editor / OS
 .DS_Store
 .idea/

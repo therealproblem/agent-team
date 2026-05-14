@@ -16,7 +16,7 @@ Layer 1   ROOT SESSION        single Pi session — adopts personas inline
               blind by isolation — spawned via `subagent` when the active persona
               needs adversarial review
 Layer 3   SHARED SERVICES     skills any persona can call inline
-                              document · note-taker · news · scribe
+                              document · note-taker · news · scribe · research · reminders
 ```
 
 The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
@@ -29,7 +29,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 | Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
-| Layer 3 services (document, note-taker, news, scribe) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
+| Layer 3 services (document, note-taker, news, scribe, research, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 
 ## Specialization rule
@@ -68,6 +68,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── note-taker/SKILL.md    Layer 3
 │   ├── news/SKILL.md          Layer 3
 │   ├── scribe/SKILL.md        Layer 3
+│   ├── research/SKILL.md      Layer 3 (online research via camoufox-pi)
 │   ├── reminders/SKILL.md     Layer 3 (capture / resolve persistent todos)
 │   │
 │   ├── prd/SKILL.md           inner (pm)
@@ -102,7 +103,9 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 ## Configuration
 
 - **Vault location.** Default: project-root `vault/` (gitignored). Override with the `AGENTS_TEAM_VAULT_PATH` env var if you want notes to land in your real Obsidian vault elsewhere on disk. Used by `obsidian-vault` and `trade-journal` extensions.
-- No `settings.json` needed — Pi auto-discovers everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/`.
+- **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
+- **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
+  - `@the-forge-flow/camoufox-pi` — stealth web fetcher + DuckDuckGo search via Camoufox (fingerprint-resistant Firefox fork). Backs the `research` skill. First call downloads the Camoufox binary (~500 MB). Install: `pi install -l npm:@the-forge-flow/camoufox-pi`.
 
 ## Layer 0 — Meta (per-domain user model)
 
@@ -209,7 +212,8 @@ These apply to every agent:
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
-| 3 | document, note-taker, news, scribe | Skills present; `fetch_topic` still returns empty (TODO: pick source) |
+| 3 | document, note-taker, news, scribe | Skills present; `fetch_topic` still returns empty (TODO: pick source or delegate to `research`) |
+| 3 | research | Skill present. Backed by installed npm package `@the-forge-flow/camoufox-pi` (tools: `tff-fetch_url`, `tff-search_web`). |
 | ext | subagent | Pi's example, with profile pre-load + `--system-prompt` patch |
 | ext | obsidian-vault | Writes markdown and HTML via `write_note` (`format` param) |
 | ext | trade-journal | Functional (read-side accessor) |

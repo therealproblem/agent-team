@@ -35,12 +35,13 @@ Variety beats volume. The recommended composition:
 - **10–20 highly-cited papers in the field** — landmark papers, recent landmark reviews, the contentious ones
 - **Lecture transcripts / video courses** — MIT OCW, Stanford, university YouTube channels; download transcripts where possible
 
-Two flows for the corpus itself:
+Three flows for the corpus itself:
 
 1. **External corpus tool** (NotebookLM, Perplexity Spaces, etc.) — user loads sources there; this skill becomes a question-guided tutor while the user queries the tool. You don't read the sources directly; you direct the *user's* querying.
 2. **Local files via Pi `read`** — user places sources in a folder (e.g. `vault/learning/<subject>/`); the agent reads them as needed during the active-recall loop to verify the user's answers against the source material.
+3. **Web sources via `research` skill** — for sources only available online (landmark papers' preprint pages, lecture course pages, official docs, blog posts). Use `tff-search_web` to discover candidates, `tff-fetch_url` (markdown format) to pull readable text, then either save the pulled markdown into `vault/learning/<subject>/` (becomes flow 2) or quote directly during Phase 5 verification. Stealth fetch bypasses Cloudflare on most academic and tech-vendor pages.
 
-Confirm with the user which flow before proceeding.
+Mix freely — a real corpus often has all three (a textbook on the user's bookshelf, a few PDFs in `vault/`, plus current web pages for the cutting edge). Confirm with the user which mix before proceeding.
 
 ### Phase 2 — Mental model extraction (≈1 hour)
 

@@ -61,6 +61,7 @@ Profile content overrides defaults below where they conflict.
 - `news` — pull current developments in fast-moving fields
 - `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
 - `feynman` — verify understanding of any single concept by plain-language explanation. **Use as the verification style throughout corpus-learning Phase 5 and after any new concept.**
+- `research` — online research via stealth browser (`tff-fetch_url`, `tff-search_web`). Use during `corpus-learning` Phase 1 to assemble web sources (landmark papers, lecture pages, official docs), and during Phase 5 to verify a definition or example against an authoritative page
 - `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
 ## Isolated reviewer — spawned via `subagent`

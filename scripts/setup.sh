@@ -147,7 +147,48 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. .env scaffold (preserves existing .env)
+# 5. Pi project-local packages (restore from .pi/settings.json)
+#
+# Pi records project-local extension installs in .pi/settings.json. The
+# .pi/npm/ tree is gitignored (regenerable), so on a fresh clone we replay
+# each entry through `pi install -l`. Idempotent: pi skips packages that
+# are already on disk and at the requested version.
+# ---------------------------------------------------------------------------
+
+PI_SETTINGS="${REPO_ROOT}/.pi/settings.json"
+
+if [[ -f "$PI_SETTINGS" ]]; then
+	# Pull the package list out via node — guaranteed present at this point.
+	PI_PACKAGES=$(node -e '
+		try {
+			const s = require("'"$PI_SETTINGS"'");
+			const pkgs = Array.isArray(s.packages) ? s.packages : [];
+			console.log(pkgs.join("\n"));
+		} catch (e) { process.exit(0); }
+	' 2>/dev/null || true)
+
+	if [[ -n "${PI_PACKAGES:-}" ]]; then
+		while IFS= read -r pkg; do
+			[[ -z "$pkg" ]] && continue
+			info "ensuring Pi package: ${pkg}"
+			# `pi install -l` is idempotent. Camoufox (used by the `research`
+			# skill) lazily downloads its ~500 MB browser binary on first
+			# tool invocation, not here.
+			if pi install -l "$pkg" >/dev/null 2>&1; then
+				ok "${pkg}"
+			else
+				warn "failed to install ${pkg} — re-run \`pi install -l ${pkg}\` to retry"
+			fi
+		done <<< "$PI_PACKAGES"
+	else
+		ok "no Pi project-local packages declared"
+	fi
+else
+	ok "no .pi/settings.json — skipping Pi package restore"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. .env scaffold (preserves existing .env)
 # ---------------------------------------------------------------------------
 
 ENV_FILE="${REPO_ROOT}/.env"
@@ -165,7 +206,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Legacy frontend cleanup
+# 7. Legacy frontend cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
