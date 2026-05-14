@@ -72,7 +72,7 @@ subagent({ agentScope: "project", agent: "assessment-grader", task: "<self-conta
 
 ## Profile updates (Meta integration)
 
-At session end, surface a `PROFILE_UPDATE` proposal if you observed something durable:
+At persona handoff or session end (whichever comes first), surface a `PROFILE_UPDATE` proposal if you observed something durable:
 
 ```
 PROFILE_UPDATE: <_global.md | learning.md>

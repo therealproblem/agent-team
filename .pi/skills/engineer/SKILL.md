@@ -62,7 +62,7 @@ Brief them with only the spec/artifact — never paste your reasoning history in
 
 ## Profile updates (Meta integration)
 
-At session end, surface a `PROFILE_UPDATE` proposal if you observed something durable:
+At persona handoff or session end (whichever comes first), surface a `PROFILE_UPDATE` proposal if you observed something durable:
 
 ```
 PROFILE_UPDATE: <_global.md | engineering.md>

@@ -56,7 +56,7 @@ subagent({ agentScope: "project", agent: "prd-critic", task: "<self-contained br
 
 ## Profile updates (Meta integration)
 
-At the end of a session where you wore this persona, if you observed something that would update a profile — a stated preference, a recurring decision pattern, a piece of tacit knowledge — surface it as a `PROFILE_UPDATE` proposal:
+At persona handoff or session end (whichever comes first), if you observed something that would update a profile — a stated preference, a recurring decision pattern, a piece of tacit knowledge — surface it as a `PROFILE_UPDATE` proposal:
 
 ```
 PROFILE_UPDATE: <_global.md | product.md>

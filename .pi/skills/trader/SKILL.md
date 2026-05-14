@@ -70,7 +70,7 @@ This rule has no exceptions. Even if the user explicitly asks "what should I do 
 
 During the session: use the profile as your working model. New trades are evidence that confirms, refines, or refutes it. When you spot a pattern, check the profile before surfacing it — if the pattern is already documented and confirmed, your job is to see if this trade is consistent with it, not to re-discover it.
 
-At session end, if you observed something that would refine the profile — a new pattern with ≥5 instances or ≥3 with high effect size, tacit knowledge the user revealed through their answers, a confirmed hypothesis previously open — surface it as a `PROFILE_UPDATE` proposal:
+At persona handoff or session end (whichever comes first), if you observed something that would refine the profile — a new pattern with ≥5 instances or ≥3 with high effect size, tacit knowledge the user revealed through their answers, a confirmed hypothesis previously open — surface it as a `PROFILE_UPDATE` proposal:
 
 ```
 PROFILE_UPDATE: trading.md
