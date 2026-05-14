@@ -219,7 +219,7 @@ These apply to every agent:
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
 | ext | news-ingest | Stub (`realFetch` returns []) |
-| ext | reminders | Functional. Surfaces open items from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. |
+| ext | reminders | Functional. Surfaces a numbered list from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. Registers `/clear <N>` slash command — clears reminder by index directly from the extension, no agent turn. Tools: `reminder_add`, `reminder_resolve` (fallback for natural-language resolves), `reminder_list`. |
 
 ## Verification
 

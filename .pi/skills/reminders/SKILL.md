@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared service — persistent todos. Capture via the `reminder_add` tool when the user says "remind me X". Resolve via `reminder_resolve` only on explicit user say-so. List via `reminder_list`. The `reminders` extension owns the file (`.pi/state/reminders.md`) and surfaces open items at every session start. Do NOT use `read` or `edit` on the file — call the tools.
+description: Layer 3 shared service — persistent todos. Capture via the `reminder_add` tool when the user says "remind me X". Users typically resolve via the `/clear <N>` slash command (handled entirely by the extension, NO agent turn); the `reminder_resolve` tool is a fallback for natural-language resolution like "mark X done". List via `reminder_list`. The `reminders` extension owns the file (`.pi/state/reminders.md`) and surfaces open items at every session start as a numbered list. Do NOT use `read` or `edit` on the file — call the tools.
 ---
 
 # Reminders
@@ -28,12 +28,16 @@ Pass the user's verbatim wording as `text`. **No paraphrasing.** Their phrasing 
 
 ### `reminder_resolve(match)`
 
+**The primary user path for resolving a reminder is `/clear <N>`** — a slash command handled directly by the extension with no agent turn. Surface it once if the user describes finishing something but didn't use a number: *"You can clear #2 directly with `/clear 2`."*
+
+Use the `reminder_resolve` tool only when the user resolves *in natural language* (no number) and wants you to act:
+
 Trigger phrases:
 - "I did X" / "done with Y" / "finished Z"
 - "resolved <item>" / "mark <item> done"
 - "<item> is done" / "<item> is resolved"
 
-Pass a distinctive substring of the reminder as `match`. The reminder is **deleted** — no history is kept. If the tool reports multiple matches, ask the user which one (one question) and retry with a more specific substring.
+Pass a distinctive substring of the reminder as `match`. The reminder is **deleted** — no history is kept. If the tool reports multiple matches, ask the user which one (one question) and retry with a more specific substring. Or: point the user at `/clear <N>` and stop.
 
 ### `reminder_list()`
 
@@ -51,7 +55,9 @@ After any tool call, **say nothing or one short word.** The tool result is alrea
 | `Added: <item>` | (nothing, or just `ok.`) |
 | `Resolved: <item>` | (nothing, or just `ok.`) |
 | List output | (nothing — the list is already visible) |
-| Error (no match / multiple matches) | One question to disambiguate, then retry |
+| Error (no match / multiple matches) | One question to disambiguate, OR point at `/clear <N>` |
+
+`/clear <N>` produces its own TUI message via the extension — you never see it as a tool result and you should not react to it. The user runs that command; the extension handles it; the agent is not in the loop.
 
 ## Don't
 

@@ -163,25 +163,31 @@ function parseOpenItems(md: string): OpenItem[] {
 }
 
 /**
- * Format open items into a compact list with right-aligned ages.
+ * Format open items into a compact numbered list with right-aligned ages.
+ * The index shown here is also the argument to `/clear <N>`.
  *
  *   Open reminder (1):
- *     ☐ check cmem               today
+ *     1. check cmem               today
  *
  *   Open reminders (3):
- *     ☐ check cmem               today
- *     ☐ follow up with Tom       2d
- *     ☐ verify YAML parser       3w
+ *     1. check cmem               today
+ *     2. follow up with Tom       2d
+ *     3. verify YAML parser       3w
+ *
+ *   (≥ 10 items: index right-padded to 2 chars so the text column stays aligned)
+ *     10. ...
  */
 function formatOpenItems(items: OpenItem[]): string {
 	const word = items.length === 1 ? "reminder" : "reminders";
 	const header = `Open ${word} (${items.length}):`;
 	if (items.length === 0) return header;
+	const idxWidth = String(items.length).length;
 	const maxText = Math.max(...items.map((it) => it.text.length));
 	const gap = 4;
-	const lines = items.map((it) => {
+	const lines = items.map((it, i) => {
+		const idx = String(i + 1).padStart(idxWidth);
 		const padded = it.text.padEnd(maxText + gap);
-		return `  ☐ ${padded}${it.age}`;
+		return `  ${idx}. ${padded}${it.age}`;
 	});
 	return [header, ...lines].join("\n");
 }
@@ -348,11 +354,124 @@ const remindersRenderer: MessageRenderer = (message, _options, theme) => {
 	return container;
 };
 
+/**
+ * Surface a status message in the TUI without spending an agent turn.
+ * Reuses the `reminders` customType so it picks up our renderer.
+ */
+function surface(pi: ExtensionAPI, text: string, details?: object): void {
+	pi.sendMessage(
+		{
+			customType: "reminders",
+			content: text,
+			display: true,
+			details,
+		},
+		{ triggerTurn: false },
+	);
+}
+
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(reminderAdd);
 	pi.registerTool(reminderResolve);
 	pi.registerTool(reminderList);
 	pi.registerMessageRenderer("reminders", remindersRenderer);
+
+	/**
+	 * `/clear <N>` — delete reminder #N (1-indexed against the numbered list
+	 * shown at session start or by `reminder_list`).
+	 *
+	 * Runs entirely inside the extension. Does NOT trigger an agent turn,
+	 * does NOT invoke any LLM. The TUI confirmation is a custom message
+	 * surfaced via our renderer.
+	 */
+	pi.registerCommand("clear", {
+		description: "Clear reminder #N by index (e.g. /clear 2)",
+		async getArgumentCompletions(prefix: string) {
+			try {
+				if (!existsSync(REMINDERS_PATH)) return [];
+				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+				const items = parseOpenItems(md);
+				if (items.length === 0) return [];
+				const trimmed = prefix.trim();
+				return items
+					.map((it, i) => {
+						const n = String(i + 1);
+						return {
+							value: n,
+							label: n,
+							description: it.age ? `${it.text}  (${it.age})` : it.text,
+						};
+					})
+					.filter((c) => trimmed === "" || c.value.startsWith(trimmed));
+			} catch {
+				return [];
+			}
+		},
+
+		async handler(args, _ctx) {
+			const trimmed = args.trim();
+			if (trimmed === "") {
+				surface(pi, "Usage: /clear <N>  — N is the index shown in the list.");
+				return;
+			}
+			const n = Number(trimmed);
+			if (!Number.isInteger(n) || n <= 0) {
+				surface(pi, `Invalid index "${trimmed}". Pass a positive integer (e.g. /clear 2).`);
+				return;
+			}
+
+			try {
+				await ensureFile();
+				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+				const sections = parseSections(md);
+				const openLines = sections.open.filter(isItemLine);
+				if (openLines.length === 0) {
+					surface(pi, "No open reminders.");
+					return;
+				}
+				if (n > openLines.length) {
+					surface(
+						pi,
+						`No reminder #${n}. You have ${openLines.length} open ${
+							openLines.length === 1 ? "reminder" : "reminders"
+						}.`,
+					);
+					return;
+				}
+
+				const target = openLines[n - 1];
+				const itemText = target
+					.replace(/^\s*-\s*\[\s*\]\s*\d{4}-\d{2}-\d{2}\s*—\s*/, "")
+					.replace(/^\s*-\s*\[\s*\]\s*/, "")
+					.trim();
+
+				// Filter the matched line out of the open section.
+				let dropped = false;
+				sections.open = sections.open.filter((l) => {
+					if (!dropped && l === target) {
+						dropped = true;
+						return false;
+					}
+					return true;
+				});
+				await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
+
+				// Confirm + show updated list (or "No open reminders." if empty).
+				const remaining = parseOpenItems(await readFile(REMINDERS_PATH, { encoding: "utf8" }));
+				const updated =
+					remaining.length === 0
+						? "No open reminders."
+						: formatOpenItems(remaining);
+				surface(pi, `Cleared #${n}: ${itemText}\n\n${updated}`, {
+					cleared: { index: n, text: itemText },
+					remaining: remaining.length,
+				});
+			} catch (e) {
+				const message = (e as Error).message;
+				surface(pi, `Failed to clear: ${message}`);
+			}
+		},
+	});
 
 	pi.on("session_start", async (event, _ctx) => {
 		// Only surface on real launches and resumes — not internal reload
@@ -366,16 +485,7 @@ export default function (pi: ExtensionAPI): void {
 			if (items.length === 0) return;
 
 			const text = formatOpenItems(items);
-
-			pi.sendMessage(
-				{
-					customType: "reminders",
-					content: text,
-					display: true,
-					details: { count: items.length, items },
-				},
-				{ triggerTurn: false },
-			);
+			surface(pi, text, { count: items.length, items });
 		} catch {
 			// Read or parse failure must not crash session startup.
 		}
