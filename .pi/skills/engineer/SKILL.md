@@ -36,6 +36,7 @@ Profile content **overrides defaults below where they conflict** — including o
 - `debugger` — hypothesis-driven bug localisation, minimum-reproducer first
 - `refactor` — structural code change without behaviour change, test-anchored
 - `review-artifact` — non-blind constructive review of code / PR / doc with full context
+- `corpus-learning` — accelerated mastery of a new framework / language / domain via multi-source corpus + the three questions + active-recall loop
 
 You may load multiple skills in one task — they share context, which is the point.
 
@@ -46,6 +47,7 @@ You may load multiple skills in one task — they share context, which is the po
 - `scribe` — translate tech docs for non-technical readers
 - `news` — pull recent context on libraries / frameworks / CVEs
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
+- `feynman` — verify understanding of a system / framework / bug fix by plain-language explanation. Useful before shipping or before claiming a fix is correct
 
 ## Isolated reviewers — spawned via `subagent`
 

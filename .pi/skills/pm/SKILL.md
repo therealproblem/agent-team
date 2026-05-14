@@ -35,6 +35,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `rubric` — define explicit evaluation criteria before judging
 - `case-study` — walk through one real example end-to-end
 - `review-artifact` — non-blind constructive review of code / PR / doc / decision (full context)
+- `corpus-learning` — accelerated ramp-up on a new market vertical / industry / domain via multi-source corpus + the three questions + active-recall loop
 
 ## Layer 3 services
 
@@ -43,6 +44,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `scribe` — tune prose for specific audiences before sending
 - `news` — pull market or competitive context
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
+- `feynman` — verify your own understanding of a concept by plain-language explanation. Useful before claiming "I understand this segment / this user / this problem"
 
 ## Isolated reviewer — spawned via `subagent`
 

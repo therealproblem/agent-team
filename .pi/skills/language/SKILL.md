@@ -43,6 +43,7 @@ Profile content overrides defaults below where they conflict.
 - `note-taker` — short markdown captures only (single mnemonic, one-line study notes, weak-point flags)
 - `scribe` — adjust JLPT explanations to the learner's current level
 - `planning` — decompose a JLPT goal into study tracks with cadence and dependency
+- `feynman` — verify understanding of a grammar pattern or kanji-meaning by plain-language explanation. The "plain words" bar is per-level: an N3 learner's plain-words bar isn't an N1 learner's
 
 ## Isolated reviewer — spawned via `subagent`
 

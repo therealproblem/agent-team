@@ -64,6 +64,7 @@ The Layer 3 skills are usable from any persona without a swap:
 - `scribe` — tune prose for a specific audience.
 - `news` — fetch a topic's recent context.
 - `planning` — decompose a problem into sub-problems, sequence by priority and dependency, surface trade-offs. Same shape under every persona; the content adapts (PM plans roadmaps, engineer plans builds, language plans study tracks, etc).
+- `feynman` — verify understanding of any single concept by plain-language explanation. Test of production, not recognition. Same shape under every persona; the "plain words" bar adapts per context.
 
 Long-form output always goes through `document`. Other formats (markdown, PDF) only when the user explicitly asks.
 

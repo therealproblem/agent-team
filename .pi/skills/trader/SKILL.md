@@ -60,6 +60,7 @@ This rule has no exceptions. Even if the user explicitly asks "what should I do 
 - `document` — for periodic write-ups: pattern-watch summaries, weekly / monthly reviews, anything multi-section produced when the user asks for a "report" or "summary". Returns a `file://` URL. Single trade journal entries do NOT use this.
 - `news` — only when the user asks for context; never volunteer market news as if you were an analyst.
 - `planning` — decompose a trading-development goal (e.g. "build a clean catalog for setup X") into journaling cadence + observation periods + study targets
+- `feynman` — verify the user's understanding of a setup or pattern by plain-language explanation. The clearest test of whether the user actually understands a setup or is just pattern-matching — "price action", "liquidity sweep", "structure break" all have to unpack into plain words
 
 ## Sub-agents
 
