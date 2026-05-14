@@ -131,7 +131,9 @@ document.publish({
   body_md: "<markdown source — required when companion: true>",
   source_agent: "<agent name>",        // optional
   folder: "docs" | <free path>,        // default: "docs"
-  toc: "sidebar" | "top" | "none",     // default: "sidebar" for docs with ≥4 h2; "none" otherwise
+  toc: "sidebar" | "top" | "none",     // default: "none" for 0–3 h2 · "top" for 4–6 h2 · "sidebar" for 7+ h2.
+                                       // "top" is non-sticky and scrolls away. "sidebar" lives in its own grid
+                                       // column and never overlays the article. NEVER make the top TOC sticky.
   companion: true | false,             // default: false. When true, also write <slug>.md alongside <slug>.html.
                                        // Use for repo-resident artifacts that will be PR-reviewed (PRDs, ADRs,
                                        // RFCs, design docs, post-mortems, roadmaps). The HTML link in the chat
@@ -294,20 +296,32 @@ Use this as the scaffold — fill in `{{TITLE}}`, `{{BODY}}`, and (optionally) `
   .meta-row + .meta-row { margin-top: 0.25em; }
   footer.doc-footer { margin-top: 4em; padding-top: 1.5em; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
 
-  /* TOC — top variant */
-  .toc { background: var(--muted-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin: 1.5em 0 2em; font-size: 0.95em; }
+  /* TOC — top variant. NEVER position: sticky / fixed. Top TOC scrolls away with content. */
+  .toc { background: var(--muted-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin: 1.5em 0 2em; font-size: 0.95em; position: static; }
   .toc-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.5em; }
   .toc ul { margin: 0; padding-left: 1.2em; }
 
-  /* TOC — sidebar variant. Switch on with <body class="has-sidebar-toc"> */
-  body.has-sidebar-toc main { display: grid; grid-template-columns: 200px minmax(0, var(--maxw)); gap: 48px; max-width: calc(var(--maxw) + 248px); }
+  /* TOC — sidebar variant. The ONLY allowed sticky navigation. Lives in its own grid column,
+     never overlays the article. Switch on with <body class="has-sidebar-toc"> */
+  body.has-sidebar-toc main { display: grid; grid-template-columns: 220px minmax(0, var(--maxw)); gap: 48px; max-width: calc(var(--maxw) + 268px); align-items: start; }
   body.has-sidebar-toc .toc.sidebar { position: sticky; top: 24px; align-self: start; background: transparent; border: none; padding: 0; max-height: calc(100vh - 48px); overflow-y: auto; }
   body.has-sidebar-toc .toc.sidebar ul { list-style: none; padding-left: 0; }
   body.has-sidebar-toc .toc.sidebar li { margin: 2px 0; }
   body.has-sidebar-toc .toc.sidebar a { display: block; padding: 4px 10px; border-radius: var(--radius-sm); color: var(--muted); text-decoration: none; font-size: 0.9rem; }
   body.has-sidebar-toc .toc.sidebar a:hover { background: var(--muted-bg); color: var(--fg); }
   body.has-sidebar-toc .toc.sidebar a.active { background: var(--accent); color: var(--accent-fg); }
-  @media (max-width: 900px) { body.has-sidebar-toc main { grid-template-columns: 1fr; } body.has-sidebar-toc .toc.sidebar { position: static; max-height: none; } }
+  /* Narrow viewport: sidebar collapses to a non-sticky top block. Never let it remain sticky
+     when stacked over content — that's the overlay anti-pattern. */
+  @media (max-width: 900px) {
+    body.has-sidebar-toc main { grid-template-columns: 1fr; max-width: var(--maxw); }
+    body.has-sidebar-toc .toc.sidebar { position: static; max-height: none; overflow: visible; margin-bottom: 1.5em; padding: 14px 18px; background: var(--muted-bg); border: 1px solid var(--border); border-radius: var(--radius); }
+  }
+
+  /* Hard rule: nothing in a document is allowed to be position: fixed / sticky except
+     (a) the sidebar TOC (above), (b) the theme toggle button (top-right, small),
+     (c) the deck slide-number indicator. No floating top bars, no docked headers,
+     no "back to top" pills that hover over content. If you find yourself writing
+     `position: fixed` or `position: sticky` on anything else, stop. */
 
   /* badges / pills */
   .badge { display: inline-block; padding: 2px 8px; font-size: 0.78em; font-weight: 600; border-radius: 999px; line-height: 1.4; border: 1px solid var(--border); background: var(--muted-bg); color: var(--fg); }
@@ -585,8 +599,34 @@ Common icon names: `check`, `x`, `info`, `triangle-alert`, `circle-alert`, `copy
 
 - Lead with a single `<h1>{{title}}</h1>`.
 - Optional `<div class="meta">` block under the H1 with author / date / tags rows (`<div class="meta-row">…</div>`).
-- For sidebar TOC: add `<body class="has-sidebar-toc">`, then `<nav class="toc sidebar">…</nav>` as the first child of `<main>`, then the article inside `<article>` next to it. Give every `<h2>` an `id` so the TOC anchors work.
-- For top TOC: `<nav class="toc"><div class="toc-title">Contents</div><ul>…</ul></nav>`. Use when sections are few (4–6).
+
+### Navigation and layout — TOC, menus, floating elements
+
+Layout determines whether the document is readable. The single most common defect from this skill has been a TOC stuck to the top of the viewport that **overlays the prose underneath** — the reader literally can't see the content they're scrolling to. The rules below exist to make that impossible.
+
+**TOC placement — pick exactly one mode, by section count:**
+
+| Sections (h2) | Mode | Markup |
+|---|---|---|
+| 0–3 | **None** — don't add a TOC at all. The doc is short enough to scroll. | — |
+| 4–6 | **Top TOC** — a small, non-sticky `<nav class="toc">` block right under the meta. Scrolls away with content. | `<nav class="toc"><div class="toc-title">Contents</div><ul>…</ul></nav>` |
+| 7+ | **Sidebar TOC** — `<body class="has-sidebar-toc">`, then `<nav class="toc sidebar">…</nav>` as the first child of `<main>`, then the article in a sibling `<article>`. The grid keeps the sidebar in its own column — it never overlays content. | See template |
+
+Either way, every `<h2>` MUST have an `id` so anchor links resolve.
+
+**Hard layout rules — these are not stylistic preferences:**
+
+- **Any TOC, menu, or navigation list goes in the sidebar.** The top-TOC variant exists only for short docs (4–6 sections) and is **non-sticky** — it scrolls away as the user reads. Never make the top TOC `position: sticky` or `position: fixed`. Never put a TOC into a floating bar.
+- **The only sticky/fixed elements allowed** in a document are:
+  1. The sidebar TOC, which lives in its own grid column (never overlaps the article).
+  2. The theme-toggle button, small, top-right, ≤ 40px wide.
+  3. The deck-mode slide-number indicator, bottom-right, single line.
+- **Banned: every other use of `position: fixed` or `position: sticky`.** No docked top bar, no floating header, no "back to top" pill hovering over content, no sticky section sub-nav, no sticky table headers in a normal doc, no floating action button. If the agent reaches for `position: fixed` or `position: sticky`, it's almost certainly building the overlay anti-pattern — stop and pick one of the two TOC modes above.
+- **Never put a nav element on top of the article column.** "On top of" means: sharing the same horizontal real estate AND fixed in viewport space. The sidebar dodges this because it lives in a separate grid column. A fixed top bar does not, and is forbidden.
+- **Narrow viewports (< 900px):** the sidebar TOC collapses to a non-sticky block above the article (the template handles this). Do not re-introduce stickiness on mobile — overlay TOCs are even worse there.
+- **Don't invent new positioning.** Use the template's `body.has-sidebar-toc` grid as-is. Do not write `position: sticky` or `position: fixed` in inline styles or in a second `<style>` block; the template's allowlist is the complete set.
+
+
 - Section structure via `<h2>` for top-level sections, `<h3>` for sub-sections. Skip `<h4>` and below unless absolutely necessary.
 - Use semantic HTML AND the component classes from the template:
   - **Status / metadata** → `<span class="badge badge--ok|warn|error|info">…</span>`
@@ -629,5 +669,6 @@ Example:
 - **Don't reach for HTML when markdown is right** (see "When markdown IS still right"). Agent-to-agent output, files reviewed in git, terminal output, and quick replies stay markdown. For artifacts that *both* live in git AND need a rich reading experience, use **companion mode** — produce both files.
 - **Don't use ASCII diagrams.** Write Mermaid for named diagram types (flowchart, sequence, state, class, ER, gantt, mindmap, timeline) — it auto-lays-out from short text. Drop to hand-SVG when you need a layout Mermaid can't produce. Never ASCII.
 - **Don't ship the "default-AI aesthetic."** No linear/radial gradients, no glass morphism, no heavy shadows, no neon glow, no emoji-decorated headers, no purple-to-pink "AI brand" anything. Stick to the token palette. The document should look like a quiet, well-typeset reading page — not a SaaS landing page.
+- **Don't dock a TOC, menu, or nav to the viewport.** No `position: sticky` / `position: fixed` on a top TOC. No floating "Contents" pill. No docked top bar. No "back to top" button that hovers over text. If the doc has ≥7 sections, put the TOC in a **sidebar** (own grid column, never overlaps the article). If the doc has 4–6 sections, use the non-sticky top TOC. If 0–3, no TOC at all. See "Navigation and layout" in Style rules — the only sticky elements allowed in a document are the sidebar TOC, the theme toggle, and the deck slide-number indicator.
 - **Don't violate the inline-JS guardrails.** No `fetch`, no `eval`, no inline `onclick=`, no `innerHTML` of user data, no telemetry. See "Inline JS — security guardrails."
 - **Don't write to the vault directly.** Always go through `write_note`.
