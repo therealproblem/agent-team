@@ -1,32 +1,51 @@
 /**
  * obsidian-vault — write interface to the user's Obsidian vault and to the
- * adjacent `renders/` directory for HTML presentations.
+ * adjacent `renders/` and `exports/` directories for derivative artifacts.
  *
- * Two tools:
- *   - `write_note`   — markdown-only, into the Obsidian vault. Owns frontmatter,
- *                      tags, wiki-link footers. The vault is markdown-first so
- *                      the Obsidian graph view, backlinks, and tag search work.
- *                      Called by the `note-taker` skill (Layer 3).
- *   - `write_render` — HTML, into a separate `renders/` directory OUTSIDE the
- *                      vault. Used by the `render` skill (Layer 3) when a
- *                      caller wants the markdown presented as an interactive
- *                      HTML page. Keeping HTML out of the vault preserves the
- *                      graph (Obsidian does not index .html files).
+ * Three tools:
+ *   - `write_note`       — markdown-only, into the Obsidian vault. Owns
+ *                          frontmatter, tags, wiki-link footers. The vault is
+ *                          markdown-first so the Obsidian graph view,
+ *                          backlinks, and tag search work. Called by the
+ *                          `note-taker` skill (Layer 3).
+ *   - `write_render`     — HTML, into a separate `renders/` directory OUTSIDE
+ *                          the vault. Used by the `render` skill (Layer 3)
+ *                          when a caller wants the markdown presented as an
+ *                          interactive HTML page. Keeping HTML out of the
+ *                          vault preserves the graph (Obsidian does not index
+ *                          .html files).
+ *   - `write_export_pdf` — PDF, into a separate `exports/` directory. Used by
+ *                          the `export` skill (Layer 3) to produce print-ready
+ *                          deliverables (resumes, letters, reports, slides)
+ *                          styled by the Kami design system. The caller
+ *                          provides Kami-styled HTML; this tool writes the
+ *                          HTML, shells out to headless Chrome to render the
+ *                          PDF, and then deletes the intermediate HTML once
+ *                          Chrome confirms the PDF was produced. The HTML is
+ *                          retained only when Chrome fails (no binary, render
+ *                          error) so the caller has a recovery path.
  *
  * Configure paths via env vars:
  *   AGENTS_TEAM_VAULT_PATH    — default: <cwd>/vault
  *   AGENTS_TEAM_RENDERS_PATH  — default: <cwd>/renders
+ *   AGENTS_TEAM_EXPORTS_PATH  — default: <cwd>/exports
+ *   AGENTS_TEAM_CHROME_PATH   — default: platform auto-detect (macOS:
+ *                               /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
  *
- * Agents should NOT call these tools directly — they go through `note-taker`
- * and `render` skills so naming, folder, and frontmatter conventions stay
- * consistent.
+ * Agents should NOT call these tools directly — they go through `note-taker`,
+ * `render`, and `export` skills so naming, folder, and design conventions
+ * stay consistent.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const execFileP = promisify(execFile);
 
 const VAULT_ROOT = resolve(
 	process.env.AGENTS_TEAM_VAULT_PATH ?? join(process.cwd(), "vault"),
@@ -34,6 +53,27 @@ const VAULT_ROOT = resolve(
 const RENDERS_ROOT = resolve(
 	process.env.AGENTS_TEAM_RENDERS_PATH ?? join(process.cwd(), "renders"),
 );
+const EXPORTS_ROOT = resolve(
+	process.env.AGENTS_TEAM_EXPORTS_PATH ?? join(process.cwd(), "exports"),
+);
+
+function resolveChromeBinary(): string | null {
+	if (process.env.AGENTS_TEAM_CHROME_PATH) return process.env.AGENTS_TEAM_CHROME_PATH;
+	const candidates =
+		process.platform === "darwin"
+			? [
+					"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+					"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+					"/Applications/Chromium.app/Contents/MacOS/Chromium",
+				]
+			: process.platform === "win32"
+				? [
+						"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+						"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+					]
+				: ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
+	return candidates.find((p) => existsSync(p)) ?? null;
+}
 
 function slugify(s: string): string {
 	return s
@@ -217,7 +257,129 @@ const writeRender = defineTool({
 	},
 });
 
+const writeExportPdf = defineTool({
+	name: "write_export_pdf",
+	label: "Write PDF Export",
+	description:
+		"Render a complete HTML document to PDF (via headless Chrome) and write it to the `exports/` directory. Used by the `export` skill to produce print-ready Kami-styled deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. The PDF is the only artifact that survives. Returns the absolute path and `file://` URL of the PDF. If Chrome fails, the HTML is retained (in case the caller wants to recover it manually) and the tool returns isError with the HTML path.",
+	parameters: Type.Object({
+		title: Type.String({
+			description:
+				"Title used for slug + filename. Should match the source document's title.",
+		}),
+		html: Type.String({
+			description:
+				"Complete Kami-styled HTML document, written verbatim. Must start with <!doctype html>, embed all CSS inline, and avoid network-dependent assets (web fonts are fine via `@font-face` with local fallbacks; remote scripts are not used because PDF print does not need JS).",
+		}),
+		source_md_path: Type.Optional(
+			Type.String({
+				description:
+					"Vault-relative path of the markdown source, if the export was generated from a vault note. Recorded in the response so the caller can keep them paired. Omit for one-shot inline exports (e.g. resumes the user does not want archived).",
+			}),
+		),
+		subfolder: Type.Optional(
+			Type.String({
+				description:
+					"Optional sub-path under `exports/` (e.g. 'resume', 'letters/2026', 'reports/q2'). Default: flat — files land directly under `exports/`.",
+			}),
+		),
+		template: Type.Optional(
+			Type.String({
+				description:
+					"Kami template name used for this export (one-pager | long-doc | letter | portfolio | resume | slides | equity-report | changelog). Recorded in the response for telemetry; does not affect rendering.",
+			}),
+		),
+	}),
+
+	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		const subfolder = params.subfolder ?? "";
+		const slug = slugify(params.title);
+		const baseDir = subfolder ? join(EXPORTS_ROOT, subfolder) : EXPORTS_ROOT;
+		const htmlPath = join(baseDir, `${todayIso()}-${slug}.html`);
+		const pdfPath = join(baseDir, `${todayIso()}-${slug}.pdf`);
+
+		try {
+			if (!existsSync(baseDir)) {
+				await mkdir(baseDir, { recursive: true });
+			}
+			await writeFile(htmlPath, params.html, { encoding: "utf8" });
+
+			const chrome = resolveChromeBinary();
+			if (!chrome) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Wrote HTML to ${htmlPath} but no Chrome binary was found. Set AGENTS_TEAM_CHROME_PATH or install Google Chrome / Chromium to enable PDF rendering.`,
+						},
+					],
+					details: {
+						html_path: htmlPath,
+						html_url: `file://${htmlPath}`,
+						pdf_path: null,
+						pdf_url: null,
+						title: params.title,
+						source_md_path: params.source_md_path,
+						template: params.template,
+						error: "no_chrome_binary",
+					},
+					isError: true,
+				};
+			}
+
+			await execFileP(
+				chrome,
+				[
+					"--headless=new",
+					"--disable-gpu",
+					"--no-pdf-header-footer",
+					"--no-sandbox",
+					"--virtual-time-budget=5000",
+					`--print-to-pdf=${pdfPath}`,
+					`file://${htmlPath}`,
+				],
+				{ timeout: 30_000, maxBuffer: 8 * 1024 * 1024 },
+			);
+
+			if (!existsSync(pdfPath)) {
+				throw new Error(
+					"Chrome reported success but no PDF file appeared at the target path.",
+				);
+			}
+
+			// PDF is the deliverable; the intermediate HTML is no longer needed.
+			// Swallow unlink errors — the export still succeeded.
+			await unlink(htmlPath).catch(() => undefined);
+
+			return {
+				content: [{ type: "text", text: `Exported ${pdfPath}` }],
+				details: {
+					pdf_path: pdfPath,
+					pdf_url: `file://${pdfPath}`,
+					title: params.title,
+					source_md_path: params.source_md_path,
+					template: params.template,
+				},
+			};
+		} catch (e) {
+			const message = (e as Error).message;
+			return {
+				content: [
+					{ type: "text", text: `Failed to export PDF: ${message}` },
+				],
+				details: {
+					html_path: existsSync(htmlPath) ? htmlPath : null,
+					pdf_path: null,
+					error: message,
+				},
+				isError: true,
+			};
+		}
+	},
+});
+
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(writeNote);
 	pi.registerTool(writeRender);
+	pi.registerTool(writeExportPdf);
 }
