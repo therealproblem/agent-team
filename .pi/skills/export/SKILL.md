@@ -153,16 +153,177 @@ The renderer is headless Chrome. That means:
 
 The tool also supports swapping in WeasyPrint by changing one helper (`AGENTS_TEAM_CHROME_PATH` and the spawn call). The HTML we generate is engine-agnostic by design.
 
-## Inline SVG diagrams
+## Diagrams first — reach for an inline SVG before anything else
 
-When the document needs a diagram (an org chart, a flow, a sparkline, a simple plot), use **inline SVG**. Examples of patterns that work well in Kami:
+The Kami aesthetic is severe by design — parchment, serif, single hue, no decorative chrome. That severity makes diagrams **more** important, not less: in a document with no second color and no glass / glow / gradient, a single well-chosen diagram is the visual anchor.
 
-- **Sparkline** (one-line metric trend): `<svg viewBox="0 0 100 24"><polyline fill="none" stroke="#1B365D" stroke-width="1.5" points="…"/></svg>`
-- **Bar plot** (small data): rectangles in accent hex on parchment-soft background.
-- **Simple flow**: rounded rects + arrows, all in `var(--rule)` strokes with accent fills on highlighted nodes.
-- **Score badges**: SVG `<circle>` + centered text for radial-style indicators.
+A Kami PDF without a single diagram is almost always under-cooked. Before generating the HTML, scan the markdown for the patterns below and produce **at least one** inline SVG. WeasyPrint and Chrome both render inline SVG natively — no JS, no Mermaid (Mermaid renders late and is unsafe for the PDF snapshot), no external assets.
 
-Constraint: every SVG uses the Kami palette (`var(--paper)`, `var(--paper-soft)`, `var(--ink)`, `var(--ink-soft)`, `var(--rule)`, `var(--accent)`). No additional colors.
+### Content patterns that should be a diagram
+
+| If the markdown contains… | Reach for |
+|---|---|
+| Sequenced steps or a process | Horizontal flow — rounded rects + arrows in `var(--ink-mute)`, accent fill on the current/highlighted node |
+| Decisions / branching logic | Decision diamond + branch labels in serif |
+| State transitions | Nodes-and-edges with state labels; "active" state filled `var(--accent)`, others outlined |
+| Time-based progression (incident timeline, roadmap milestones, version history) | Vertical timeline with `var(--rule)` axis, accent dots for events |
+| Architecture / module relationships | Boxes-and-arrows with subgraph boundaries; `var(--paper-soft)` fill for boxes inside the same system |
+| Organizational hierarchy (org chart, taxonomy, file-tree) | Tree with ranked levels; serif text only, no icons |
+| Numbers over time (equity curve, score trend, growth) | Sparkline — single `<polyline>` SVG, accent stroke |
+| Distribution / proportion | Horizontal bar plot. **Preferred over pie** in Kami — same-hue bars read cleaner than pie slices that would tempt a second color |
+| Score / rating | Radial indicator (SVG circle with centered text), or a 5-dot scale with filled vs. outlined dots |
+| Side-by-side metrics with annotations | Small multiples — N tiny SVGs in a row, each a sparkline or bar |
+| Geographic / map content (rare, but happens) | Hand-SVG outline, accent fill for the regions being discussed |
+| Comparison of N independent options | **Not** a diagram — a `.grid-2` or `.grid-3` of bordered `.card`s with a callout for the recommendation is better |
+
+Pick at least one. If the markdown supports two, use two — Kami documents tolerate two diagrams gracefully per A4 page (figure-and-counter-figure is a print-design classic). Three on one page is usually too much.
+
+### When NOT to add a diagram
+
+- Single-paragraph `letter` template with no claim that has a visual shape.
+- Resume sections that are pure lists (Experience, Education) — diluting the dense-text rhythm. EXCEPT: a sparkline / radial in the Skills section showing proficiency is on-brand.
+- Cover pages — a single Kami cover with the title is more powerful undecorated.
+- A page where the table IS the diagram (e.g. the Numbers section of an equity report — the table is already structured).
+
+### Palette constraint
+
+Every SVG uses only Kami CSS vars: `var(--paper)`, `var(--paper-soft)`, `var(--ink)`, `var(--ink-soft)`, `var(--ink-mute)`, `var(--rule)`, `var(--accent)`. No additional colors. No `rgba()` (the same WeasyPrint discipline applies to SVG fills — solid hex / CSS var only).
+
+### Inline SVG patterns (drop in and adapt)
+
+#### Sparkline — numbers over time
+
+```html
+<svg viewBox="0 0 120 28" width="120" height="28" aria-hidden="true">
+  <polyline fill="none" stroke="var(--accent)" stroke-width="1.5"
+            points="0,20 12,18 24,15 36,17 48,12 60,9 72,11 84,7 96,8 108,5 120,4" />
+</svg>
+```
+
+Use inline next to a metric heading, or stacked in a "small multiples" row at the top of a report section.
+
+#### Horizontal bar plot — distribution / proportion
+
+```html
+<svg viewBox="0 0 320 100" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="10" fill="var(--ink-soft)">
+    <text x="0" y="14">Setup A</text>
+    <rect x="80" y="4" width="180" height="14" fill="var(--accent)" />
+    <text x="265" y="14">62%</text>
+
+    <text x="0" y="42">Setup B</text>
+    <rect x="80" y="32" width="120" height="14" fill="var(--accent)" />
+    <text x="205" y="42">41%</text>
+
+    <text x="0" y="70">Setup C</text>
+    <rect x="80" y="60" width="58" height="14" fill="var(--accent)" />
+    <text x="143" y="70">20%</text>
+  </g>
+</svg>
+```
+
+Prefer over pie — single-hue bars read cleaner than pie slices that tempt a second color.
+
+#### Process flow — sequenced steps
+
+```html
+<svg viewBox="0 0 480 80" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="11" fill="var(--ink)" text-anchor="middle">
+    <rect x="10"  y="20" width="100" height="40" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="60" y="44">Draft</text>
+
+    <rect x="190" y="20" width="100" height="40" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="240" y="44">Review</text>
+
+    <rect x="370" y="20" width="100" height="40" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
+    <text x="420" y="44" fill="var(--paper)">Shipped</text>
+
+    <line x1="115" y1="40" x2="185" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
+    <polygon points="180,36 188,40 180,44" fill="var(--ink-mute)"/>
+
+    <line x1="295" y1="40" x2="365" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
+    <polygon points="360,36 368,40 360,44" fill="var(--ink-mute)"/>
+  </g>
+</svg>
+```
+
+#### Vertical timeline — incident / roadmap / version history
+
+```html
+<svg viewBox="0 0 320 180" aria-hidden="true">
+  <line x1="14" y1="10" x2="14" y2="170" stroke="var(--rule)" stroke-width="1"/>
+  <g font-family="var(--serif)" font-size="10" fill="var(--ink-soft)">
+    <circle cx="14" cy="22"  r="5" fill="var(--accent)"/>
+    <text x="30" y="20">14:02 — Spike begins</text>
+    <text x="30" y="32" fill="var(--ink-mute)">Latency p99 ↑ 8×</text>
+
+    <circle cx="14" cy="64"  r="5" fill="var(--accent)"/>
+    <text x="30" y="62">14:11 — Alert paged</text>
+
+    <circle cx="14" cy="106" r="5" fill="var(--paper)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="30" y="104">14:24 — Roll back deploy</text>
+
+    <circle cx="14" cy="148" r="5" fill="var(--paper)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="30" y="146">14:38 — Recovered</text>
+  </g>
+</svg>
+```
+
+#### Radial score — 0–100 indicator
+
+```html
+<svg viewBox="0 0 60 60" aria-hidden="true">
+  <circle cx="30" cy="30" r="26" fill="none" stroke="var(--rule)" stroke-width="3"/>
+  <circle cx="30" cy="30" r="26" fill="none" stroke="var(--accent)" stroke-width="3"
+          stroke-dasharray="163" stroke-dashoffset="49"
+          transform="rotate(-90 30 30)"/>
+  <text x="30" y="34" font-family="var(--serif)" font-size="14" fill="var(--ink)" text-anchor="middle">70</text>
+</svg>
+```
+
+Math: circumference is `2π × 26 ≈ 163`. For score `s` out of 100, `stroke-dashoffset = 163 × (1 - s/100)`. The first `<circle>` is the track, the second is the filled arc.
+
+#### Architecture sketch — modules + edges
+
+```html
+<svg viewBox="0 0 480 160" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="11" fill="var(--ink)" text-anchor="middle">
+    <!-- subgraph: client tier -->
+    <rect x="10" y="10" width="140" height="60" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="80" y="40">Client</text>
+
+    <!-- subgraph: api tier -->
+    <rect x="190" y="10" width="140" height="140" rx="6" fill="none" stroke="var(--rule)" stroke-dasharray="3,3"/>
+    <rect x="200" y="20" width="120" height="36" rx="4" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="260" y="42">Auth API</text>
+    <rect x="200" y="64" width="120" height="36" rx="4" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="260" y="86">Data API</text>
+    <rect x="200" y="108" width="120" height="36" rx="4" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="260" y="130">Cache</text>
+
+    <!-- store -->
+    <rect x="370" y="60" width="100" height="40" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
+    <text x="420" y="84" fill="var(--paper)">Postgres</text>
+
+    <!-- edges -->
+    <line x1="150" y1="40" x2="195" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
+    <line x1="320" y1="82" x2="365" y2="82" stroke="var(--ink-mute)" stroke-width="1"/>
+  </g>
+</svg>
+```
+
+### Per-template diagram fit
+
+| Template | Where the diagram naturally lives |
+|---|---|
+| **one-pager** | One mid-page SVG as the visual anchor — a sparkline next to the headline metric, or a 3-node flow showing the proposed process. |
+| **long-doc** | One diagram per major section — flow per stage, sparkline per metric, timeline if the doc has any chronological dimension. |
+| **letter** | None. A formal letter doesn't carry diagrams. |
+| **portfolio** | Each project gets a hero diagram — architecture sketch, before/after, or a small chart of impact. |
+| **resume** | Skills sparklines (proficiency over years), or a single timeline of career milestones. Keep them small. |
+| **slides** | Each slide that's a *claim with a shape* should BE a diagram, not a bullet list. Trim text aggressively; reach for SVG first. |
+| **equity-report** | Sparklines next to every metric in the Numbers section; bar plot if you have setup-frequency data; timeline in the Catalysts section. |
+| **changelog** | Optional — usually unnecessary, but a sparkline per version showing scope (lines changed, features added) can be tasteful. |
 
 ## Optional brand config
 
@@ -174,10 +335,11 @@ If `~/.config/kami/brand.md` exists (YAML frontmatter + markdown body), apply it
 2. **Parse frontmatter.** Extract title, date, tags, author, source_agent — anything that informs the header/footer.
 3. **Decide the template.** Use the caller's `template` if provided; otherwise infer from frontmatter `type` or folder (`pm/reports/` → equity-report or long-doc; `learning/cover-letter/` → letter; `engineering/changelog/` → changelog; `<vault>/resume/` → resume).
 4. **Decide the language.** Default `en`. Switch font stack accordingly.
-5. **Assemble the HTML** using the template scaffold below as the base, filling in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}}`, `{{BODY}}`, `{{META_FOOTER}}`. Embed all CSS inline. No remote scripts.
-6. **Call `write_export_pdf`** with the assembled HTML, the title, the template name, and (if applicable) `source_md_path` + `subfolder`.
-7. **Return** `{ pdf_path, pdf_url, title, template }` to the caller. (The intermediate HTML was deleted by the tool after Chrome rendered the PDF.)
-8. **The agent's user-facing reply** is then:
+5. **Scan for diagrammable shapes.** Before assembling the HTML, run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one inline SVG to include (two if the content supports it and the template tolerates two). Compose the SVG using the snippets in the diagrams section as a base. For `letter` and pure-list `resume` sections, skipping is fine — see "When NOT to add a diagram".
+6. **Assemble the HTML** using the template scaffold below as the base, filling in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}}`, `{{BODY}}`, `{{META_FOOTER}}`. **Place the diagram(s) near the section they illustrate** — not at the end as decoration. Embed all CSS inline. No remote scripts. No Mermaid.
+7. **Call `write_export_pdf`** with the assembled HTML, the title, the template name, and (if applicable) `source_md_path` + `subfolder`.
+8. **Return** `{ pdf_path, pdf_url, title, template }` to the caller. (The intermediate HTML was deleted by the tool after Chrome rendered the PDF.)
+9. **The agent's user-facing reply** is then:
    > Exported: `file:///…/file.pdf`
    > Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-export)
 
@@ -500,6 +662,8 @@ For `letter`, omit the footer entirely (a letter doesn't carry meta about its pr
 - **Don't add emoji.** Kami documents are formal.
 - **Don't include `position: fixed` / `position: sticky`.** PDFs don't scroll.
 - **Don't ship JavaScript.** No interactivity in a PDF.
+- **Don't use Mermaid.** Mermaid renders late (after DOMContentLoaded) and is unreliable in the PDF snapshot — Chrome's print path can capture before Mermaid finishes, and WeasyPrint doesn't run JS at all. Use **inline SVG** for every diagram.
+- **Don't ship a PDF with zero diagrams** unless the template is `letter`, the resume sections are pure lists, or your honest scan against "Content patterns that should be a diagram" found nothing. A Kami document without a single visual anchor is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape AND the template isn't letter/resume-list, the artifact may not warrant an export — say so to the caller.
 - **Don't use `rgba()` for tag/badge backgrounds.** Solid hex only.
 - **Don't fetch from external CDNs at render time** beyond a single woff2 font URL if local fonts are unavailable. The PDF must reproduce identically offline.
 - **Don't paste the rendered body inline** in the chat reply. The PDF path is the deliverable.

@@ -116,6 +116,61 @@ The reason to render is that markdown literally cannot represent these. If the r
 | **Sidebar TOC with active-section highlight** | A flat `<nav>` at the top | Long docs with 7+ sections |
 | **Decks** (arrow-key slides) | A bulleted list called "Slides" | Anything presented; a 5-section briefing is a deck |
 
+## Diagrams first — reach for one before anything else
+
+The default-AI failure mode is markdown-as-prose: paragraphs, bullets, code blocks, and **no diagram** even when the content is screaming for one. A render without a single diagram is almost always under-cooked. Before assembling the HTML, scan the markdown for the patterns below and convert at least one — usually two — into a diagram.
+
+### Content patterns that should be a diagram
+
+| If the markdown contains… | Reach for |
+|---|---|
+| Sequenced steps ("first X, then Y, finally Z"), numbered lists of >3 procedural steps | **`sequenceDiagram`** (when actors hand off) or **`flowchart LR`** (when the path branches) |
+| Decisions / branching logic ("if X then A, else B") | **`flowchart TD`** with diamond decision nodes |
+| State transitions ("draft → review → approved → published") | **`stateDiagram-v2`** |
+| Time-based progression (dates, phases, milestones) | **`gantt`** or **`timeline`** |
+| Hierarchical relationships (taxonomy, org chart, "this contains these, each of which contains…") | **`mindmap`** or **`classDiagram`** |
+| Architecture / module relationships ("the auth service talks to the database via the cache layer") | **`flowchart`** with subgraphs per system |
+| User journey / funnel | **`journey`** or **`flowchart LR`** |
+| Database / data-model entities and relationships | **`erDiagram`** |
+| Distribution / proportion (numeric breakdown of a whole) | **`pie`** or inline-SVG bar plot |
+| Numbers over time (metrics, scores, trends) | Inline-SVG sparkline |
+| Comparison of N independent options (no edges between them) | **Not** a diagram — use a `.grid-N` of `.card`s with a callout for the recommendation. Forcing a diagram on independent options is worse than the grid. |
+
+The same markdown often has more than one diagrammable shape — pick the most informative, or include two if they show different facets. **A render with two well-chosen diagrams usually beats a render with five prose sections.**
+
+### When NOT to add a diagram
+
+- The markdown is < 200 words and entirely linear — no branches, no states, no entities, no time.
+- It's a code explainer where the code IS the artifact — don't paraphrase the code as a diagram.
+- It's a config / settings page where the value is the literal table — keep the table.
+- It's a single decision with no alternatives weighed (a one-line ADR draft).
+
+If your honest scan against the table above finds zero diagrammable shapes, that's a signal the content may not need a render at all — markdown is enough.
+
+### Mermaid first, hand-SVG second
+
+For any of the named types above, write **Mermaid**, not hand-SVG. The named-type advantage:
+- Self-laying-out — you don't fight `<svg viewBox>` coordinates.
+- Theme-coherent automatically — the `mermaid` init snippet picks up `data-theme`.
+- Cheap to revise — change one node, the layout reflows.
+
+Use hand-SVG only when:
+- The diagram type isn't in Mermaid's set (annotated illustrations, custom topology, pixel-precise overlays).
+- You need a sparkline — Mermaid can't draw one; inline SVG is trivial (single `<polyline>`).
+- You need a small inline indicator (a badge with a tiny chart, a score circle).
+
+### Diagram pairings that work well
+
+| Doc type | Primary | Secondary |
+|---|---|---|
+| Architecture proposal | `flowchart` (modules + edges) | `sequenceDiagram` (the key call-path) |
+| Post-mortem | `timeline` (incident events) | `flowchart` (contributing-factor chain) |
+| Roadmap | `gantt` (workstreams over weeks) | Sparkline per workstream (progress) |
+| Lesson plan | `mindmap` (concept hierarchy) | `journey` (the learner's path) |
+| PRD | `flowchart LR` (user flow) | `stateDiagram-v2` (object lifecycle) |
+| Trade pattern-watch | Sparkline (equity curve) | `timeline` (trade events) |
+| Concept explainer | `mindmap` (concept + connected ideas) | Annotated SVG (the thing in the world) |
+
 ## Navigation and layout — TOC rules
 
 **Single most common failure mode:** a TOC sticky at the top of the viewport, overlaying the article content underneath. **This is forbidden.** TOC placement is determined by section count, period:
@@ -167,19 +222,21 @@ If the type isn't above, scan the *capabilities* table and pick 2–3 that match
 ## Steps
 
 1. **Read the markdown.** Use the core `read` tool on `md_path` (resolved against the vault root). Parse out the frontmatter (title, tags, source_agent, etc.) and the body.
-2. **Decide the pattern set.** Look at the note's type (folder or frontmatter `type:`). From the picker above, pick 2–3 patterns that fit. If none would meaningfully improve the read, **stop and tell the caller**: *"The markdown is fine as-is — no render needed."*
-3. **Decide the TOC mode.** Count `##` headings in the body. 0–3 → none. 4–6 → top. 7+ → sidebar. Override only if the caller passed an explicit `toc`.
-4. **Generate the body HTML** by converting the markdown to semantic HTML, then enriching with the chosen patterns:
-   - Mermaid blocks for any diagram references (`flowchart`, `sequenceDiagram`, etc.) — write them as `<pre class="mermaid">…</pre>`.
+2. **Scan for diagrammable shapes FIRST.** Run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one — ideally two — diagrams to include (one primary, one secondary from the pairings table when it fits). If your honest scan finds zero diagrammable shapes, the render may not be worth the work — markdown is enough; tell the caller so.
+3. **Decide the rest of the pattern set.** Look at the note's type (folder or frontmatter `type:`). From the pattern picker above, pick 2–3 *other* patterns that fit alongside the diagram(s). If, after adding the diagrams, no further patterns are warranted, that's fine — diagrams alone can carry a render.
+4. **Decide the TOC mode.** Count `##` headings in the body. 0–3 → none. 4–6 → top. 7+ → sidebar. Override only if the caller passed an explicit `toc`.
+5. **Generate the body HTML** by converting the markdown to semantic HTML, then enriching with the chosen patterns. **Lead with the diagrams** — emit them near the section they illustrate, not buried at the end:
+   - Mermaid blocks for any named diagram type (`flowchart`, `sequenceDiagram`, `stateDiagram-v2`, `classDiagram`, `erDiagram`, `gantt`, `mindmap`, `timeline`, `journey`, `pie`) — write them as `<pre class="mermaid">…</pre>`.
+   - Hand-SVG for sparklines, score indicators, custom topologies.
    - `<details>` for sections marked "FAQ", "Appendix", "Alternatives considered", "Deep dive".
    - Status pills for inline markers like `[P0]`, `[shipped]`, `[blocked]`.
-   - Timelines for date-prefixed bullet lists.
+   - Vertical timelines (HTML `.timeline` class) for date-prefixed bullet lists that aren't already a Mermaid `timeline` diagram.
    - Tabs for parallel code blocks (multi-language, before/after).
    - Callouts for `> [!note]`, `> [!warning]`, `> [!danger]` blockquotes from the Obsidian source.
-5. **Wrap in the template** below. Inline the CSS, then drop in only the CDN scripts that are used. Add only the inline JS snippets the chosen patterns require.
-6. **Call `write_render`** with the assembled HTML, the original `title`, and the `md_path` (so the response records both paths together).
-7. **Return** `{ html_path, html_url, md_path, title }` to the caller.
-8. **The agent's user-facing reply** is then:
+6. **Wrap in the template** below. Inline the CSS, then drop in only the CDN scripts that are used (Mermaid is required when any diagram is named). Add only the inline JS snippets the chosen patterns require.
+7. **Call `write_render`** with the assembled HTML, the original `title`, and the `md_path` (so the response records both paths together).
+8. **Return** `{ html_path, html_url, md_path, title }` to the caller.
+9. **The agent's user-facing reply** is then:
    > Open: `file:///…/file.html`
    > Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-render)
 
@@ -554,6 +611,7 @@ Example:
 - **Don't auto-render.** Personas (or the user) explicitly trigger render. There is no global "save and render" hook.
 - **Don't synthesize content.** Render reads the markdown source. If you find yourself inventing sections that weren't in the md, stop — edit the markdown via `note-taker` first, then re-render.
 - **Don't produce styled markdown.** If the output is just "h1 + paragraphs + tables + code blocks" with no diagrams, callouts, badges, collapsibles, or grids — you built the wrong artifact. Pick 2–3 patterns from the picker or tell the caller the markdown is sufficient.
+- **Don't ship a render with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A render whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need a render — say so.
 - **Don't pull from CDNs outside the trusted four.** Tailwind, Google Fonts, Lucide, Mermaid. Anything else is forbidden.
 - **Don't depend on the network for content.** CDNs render the page; they don't fetch the page's data. If the file is unreadable when offline, you've put content behind a network request — fix it.
 - **Don't dock a TOC to the viewport.** No `position: sticky` / `position: fixed` on a top TOC. No floating "Contents" pill. No "back to top" button hovering over text. See "Navigation and layout — TOC rules" above. The only sticky/fixed elements in any render are the sidebar TOC, the theme toggle, and the deck slide-number indicator.
