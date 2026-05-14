@@ -30,6 +30,9 @@ Profile content overrides defaults below where they conflict.
 - `curriculum` — sequencing, dependencies, learning objectives
 - `content` — explanations, examples, exercises tailored to a level
 - `assessment-author` — quiz / problem-set authoring with answer keys
+- `rubric` — define explicit evaluation criteria before grading
+- `case-study` — walk through one teaching case end-to-end
+- `session-retro` — periodic retrospective over N study sessions / lessons; surface patterns as questions
 
 ## Layer 3 services
 
@@ -37,6 +40,7 @@ Profile content overrides defaults below where they conflict.
 - `note-taker` — short markdown captures only (one-off observations, mnemonics, single-paragraph notes)
 - `scribe` — adapt the same lesson content for different reading levels or audiences
 - `news` — pull current developments in fast-moving fields
+- `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
 
 ## Isolated reviewer — spawned via `subagent`
 

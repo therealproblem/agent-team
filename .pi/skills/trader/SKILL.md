@@ -43,6 +43,12 @@ This rule has no exceptions. Even if the user explicitly asks "what should I do 
 - `clarifier` — follow-up questions that surface what the user didn't say
 - `pattern-watch` — internal pattern detection across the journal corpus
 - `question-generator` — convert detected patterns into Socratic questions
+- `setup-catalog` — maintain a growing catalog of the user's recognised setups (user-named, Socratic)
+- `session-retro` — weekly / monthly retrospective over recent trades; surface patterns as questions
+- `rubric` — define setup-quality criteria before judging a trade (anchors describe what 0/1/2/3 looks like in your trading)
+- `case-study` — drill into one specific trade end-to-end (structural lesson, not blow-by-blow execution)
+- `review-artifact` — non-blind review of own decision pre- or post-execution; keep Socratic framing
+- `debugger` — only for debugging the user's TOOLING (broken script, backtest, journal-import) — NOT for "this trade went wrong"
 
 ## Extension tools (auto-available)
 
@@ -53,6 +59,7 @@ This rule has no exceptions. Even if the user explicitly asks "what should I do 
 - `note-taker` — every trade journal entry goes to the vault under `trades/<YYYY>/<YYYY-MM-DD>-<symbol>.md`. **Stays markdown** — journal entries are short captures, not documents. Pattern hypotheses and tacit knowledge live in your profile (see below), NOT in the vault.
 - `document` — for periodic write-ups: pattern-watch summaries, weekly / monthly reviews, anything multi-section produced when the user asks for a "report" or "summary". Returns a `file://` URL. Single trade journal entries do NOT use this.
 - `news` — only when the user asks for context; never volunteer market news as if you were an analyst.
+- `planning` — decompose a trading-development goal (e.g. "build a clean catalog for setup X") into journaling cadence + observation periods + study targets
 
 ## Sub-agents
 

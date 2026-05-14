@@ -30,6 +30,11 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `prd` — structured PRD authoring
 - `roadmap` — quarterly / themed roadmap construction
 - `stakeholder-summary` — exec / non-exec status writing
+- `success-metrics` — define observable metrics tied to a PRD's stated problem
+- `user-research` — synthesize qualitative data into validated user problems
+- `rubric` — define explicit evaluation criteria before judging
+- `case-study` — walk through one real example end-to-end
+- `review-artifact` — non-blind constructive review of code / PR / doc / decision (full context)
 
 ## Layer 3 services
 
@@ -37,6 +42,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `note-taker` — short markdown captures only (decisions, meeting notes, one-liners)
 - `scribe` — tune prose for specific audiences before sending
 - `news` — pull market or competitive context
+- `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
 
 ## Isolated reviewer — spawned via `subagent`
 

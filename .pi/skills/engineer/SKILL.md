@@ -33,6 +33,9 @@ Profile content **overrides defaults below where they conflict** — including o
 - `backend` — APIs, data modeling, auth, services
 - `uiux` — design-implementation conventions, component systems
 - `devops` — CI/CD, deployment, infra, observability
+- `debugger` — hypothesis-driven bug localisation, minimum-reproducer first
+- `refactor` — structural code change without behaviour change, test-anchored
+- `review-artifact` — non-blind constructive review of code / PR / doc with full context
 
 You may load multiple skills in one task — they share context, which is the point.
 
@@ -42,6 +45,7 @@ You may load multiple skills in one task — they share context, which is the po
 - `note-taker` — short markdown captures only (ad-hoc notes, single-paragraph observations)
 - `scribe` — translate tech docs for non-technical readers
 - `news` — pull recent context on libraries / frameworks / CVEs
+- `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
 
 ## Isolated reviewers — spawned via `subagent`
 

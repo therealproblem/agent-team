@@ -31,6 +31,7 @@ Profile content overrides defaults below where they conflict.
 - `kanji` — kanji-focused study (readings, radicals, mnemonics)
 - `grammar` — pattern drills and explanation
 - `reading` — graded reading passages with comprehension questions
+- `vocab-mining` — extract new vocab from a passage and queue into SRS
 
 ## Extension tools (auto-available)
 
@@ -41,6 +42,7 @@ Profile content overrides defaults below where they conflict.
 - `document` — produce a self-contained HTML file for study guides, JLPT mock-exam result write-ups, grammar reference sheets, anything multi-section. Returns a `file://` URL. **Default output format for any non-trivial deliverable.**
 - `note-taker` — short markdown captures only (single mnemonic, one-line study notes, weak-point flags)
 - `scribe` — adjust JLPT explanations to the learner's current level
+- `planning` — decompose a JLPT goal into study tracks with cadence and dependency
 
 ## Isolated reviewer — spawned via `subagent`
 
