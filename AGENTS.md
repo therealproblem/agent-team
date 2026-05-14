@@ -6,39 +6,39 @@ A personal agent system built on the Pi coding agent harness (`@earendil-works/p
 
 ```
 Layer 0   META                observes & optimizes the system
-Layer 1   ROOT SESSION        single Pi session — adopts hats inline
+Layer 1   ROOT SESSION        single Pi session — adopts personas inline
           │
-          ├── Hats (skills, inline)   pm, engineer, educator, language, trader
-          │   no extra model loop per turn; the root IS the hat while it's on
+          ├── Personas (skills, inline)   pm, engineer, educator, language, trader
+          │   no extra model loop per turn; the root IS the persona while it's on
           │
           └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
                                       assessment-grader · jlpt-examiner
-              blind by isolation — spawned via `subagent` when the active hat
+              blind by isolation — spawned via `subagent` when the active persona
               needs adversarial review
-Layer 3   SHARED SERVICES     skills any hat can call inline
+Layer 3   SHARED SERVICES     skills any persona can call inline
                               document · note-taker · news · scribe
 ```
 
-The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as hats: the root session reads a hat's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
+The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
 
 ## Pi mapping
 
 | Architectural concept | Pi artifact |
 |---|---|
-| Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the hat model and routes to the right hat. `meta-logger` extension subscribes to `session_shutdown`. |
-| Hats (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
+| Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. `meta-logger` extension subscribes to `session_shutdown`. |
+| Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
-| Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active hat. |
-| Layer 3 services (document, note-taker, news, scribe) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every hat. |
+| Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
+| Layer 3 services (document, note-taker, news, scribe) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 
 ## Specialization rule
 
-> **Sub-session when contamination would corrupt the output. Inline (hat or skill) when shared context aids the work.**
+> **Sub-session when contamination would corrupt the output. Inline (persona or skill) when shared context aids the work.**
 
 A UAT tester or red-team reviewer *must* be blind to the implementer's reasoning. Same loop = same context = bias. Inline cannot enforce this; sub-sessions can.
 
-Domain work *benefits* from continuity — keeping PM and engineer in the same session means an engineer hat can read the PRD draft directly from earlier in the conversation. Don't pay for isolation that hurts collaboration.
+Domain work *benefits* from continuity — keeping PM and engineer in the same session means an engineer persona can read the PRD draft directly from earlier in the conversation. Don't pay for isolation that hurts collaboration.
 
 See `~/.claude/plans/what-is-pi-code-steady-gray.md` for the full design rationale.
 
@@ -50,19 +50,19 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 
 ```
 .pi/
-├── SYSTEM.md                  Root agent — hat-adoption rules
+├── SYSTEM.md                  Root agent — persona-adoption rules
 ├── agents/                    Reviewers only (spawned as sub-Pi processes)
-│   ├── prd-critic.md          spawned by pm hat
-│   ├── uat-tester.md          spawned by engineer hat
-│   ├── red-team.md            spawned by engineer hat
-│   ├── assessment-grader.md   spawned by educator hat
-│   └── jlpt-examiner.md       spawned by language hat
-├── skills/                    Hats + inner skills + Layer 3 services
-│   ├── pm/SKILL.md            HAT
-│   ├── engineer/SKILL.md      HAT
-│   ├── educator/SKILL.md      HAT
-│   ├── language/SKILL.md      HAT
-│   ├── trader/SKILL.md        HAT
+│   ├── prd-critic.md          spawned by pm persona
+│   ├── uat-tester.md          spawned by engineer persona
+│   ├── red-team.md            spawned by engineer persona
+│   ├── assessment-grader.md   spawned by educator persona
+│   └── jlpt-examiner.md       spawned by language persona
+├── skills/                    Personas + inner skills + Layer 3 services
+│   ├── pm/SKILL.md            PERSONA
+│   ├── engineer/SKILL.md      PERSONA
+│   ├── educator/SKILL.md      PERSONA
+│   ├── language/SKILL.md      PERSONA
+│   ├── trader/SKILL.md        PERSONA
 │   │
 │   ├── document/SKILL.md      Layer 3 (default for any long-form output)
 │   ├── note-taker/SKILL.md    Layer 3
@@ -104,20 +104,20 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 
 ## Layer 0 — Meta (per-domain user model)
 
-`.pi/state/profiles/` contains markdown files that build the system's understanding of *who you are* in each domain. Loaded on demand by hats (when adopted) or by reviewers (via the subagent extension's profile pre-load).
+`.pi/state/profiles/` contains markdown files that build the system's understanding of *who you are* in each domain. Loaded on demand by personas (when adopted) or by reviewers (via the subagent extension's profile pre-load).
 
 | File | Loaded by |
 |---|---|
-| `_global.md` | every hat + every reviewer — interaction-style preferences |
-| `product.md` | pm hat |
-| `engineering.md` | engineer hat |
-| `learning.md` | educator hat |
-| `language.md` | language hat |
-| `trading.md` | trader hat |
+| `_global.md` | every persona + every reviewer — interaction-style preferences |
+| `product.md` | pm persona |
+| `engineering.md` | engineer persona |
+| `learning.md` | educator persona |
+| `language.md` | language persona |
+| `trading.md` | trader persona |
 
-**Hats** read their profiles via the `read` tool at adoption time (instructed by their SKILL.md). The cost is one read per hat-swap, not per turn — cheap.
+**Personas** read their profiles via the `read` tool at adoption time (instructed by their SKILL.md). The cost is one read per persona-swap, not per turn — cheap.
 
-**Reviewers** load only `_global.md` — domain profiles would compromise blind isolation. The `subagent` extension pre-injects this so the reviewer doesn't waste a turn reading files. Reviewers do NOT propose profile updates; that's the active hat's responsibility.
+**Reviewers** load only `_global.md` — domain profiles would compromise blind isolation. The `subagent` extension pre-injects this so the reviewer doesn't waste a turn reading files. Reviewers do NOT propose profile updates; that's the active persona's responsibility.
 
 **Update flow.** At session end, the agent surfaces a `PROFILE_UPDATE` proposal:
 
@@ -202,8 +202,8 @@ These apply to every agent:
 | Layer | Component | Status |
 |---|---|---|
 | 0 | meta-logger extension (`session_shutdown` hook) | Functional stub |
-| 1 | Root session (`.pi/SYSTEM.md`) | Hat-adoption model (Path B) |
-| Hats | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
+| 1 | Root session (`.pi/SYSTEM.md`) | Persona-adoption model (Path B) |
+| Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
 | 3 | document, note-taker, news, scribe | Skills present; `fetch_topic` still returns empty (TODO: pick source) |
@@ -228,6 +228,6 @@ pi --no-session -p "List your tools, skills, and agents."
 # Subagent spawn works (reviewers only — pick any of the five)
 pi --no-session -p "Use subagent with agentScope:'project', agent:'prd-critic', task:'Reply with PI-OK only.'"
 
-# Hat adoption (inline, no subagent)
-pi --no-session -p "Adopt the engineer hat and reply PI-OK."
+# Persona adoption (inline, no subagent)
+pi --no-session -p "Adopt the engineer persona and reply PI-OK."
 ```
