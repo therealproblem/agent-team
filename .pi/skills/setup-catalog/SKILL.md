@@ -1,5 +1,5 @@
 ---
-description: Trader inner skill. Maintain a growing catalog of the USER'S recognised trade setups — discovered through journaling, not prescribed. Each setup is named, defined by entry conditions, and tied to the trades that evidenced it. Updates `trading.md` profile via PROFILE_UPDATE. Socratic-mode: surface candidate setups as questions, never declare "you trade X setup."
+description: Trader inner skill. Maintain a growing catalog of the USER'S recognised trade setups — discovered through journaling, not prescribed. Each setup is named, defined by entry conditions, and tied to the trades that evidenced it. Updates `trading.md` profile via PROFILE_UPDATE. Socratic-mode — surface candidate setups as questions, never declare "you trade X setup."
 ---
 
 # Setup catalog

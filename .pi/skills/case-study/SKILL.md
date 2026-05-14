@@ -1,5 +1,5 @@
 ---
-description: Cross-persona inner skill (pm, educator, trader). Walk through ONE real example end-to-end with structure: context → decision → outcome → lesson. Distinct from `session-retro` (multiple items, periodic) and `news` / `research` (current/external). Invoke when the user wants to extract teachable structure from a single specific instance — a feature launch, a trade, a lesson that worked or failed.
+description: Cross-persona inner skill (pm, educator, trader). Walk through ONE real example end-to-end with structure — context → decision → outcome → lesson. Distinct from `session-retro` (multiple items, periodic) and `news` / `research` (current/external). Invoke when the user wants to extract teachable structure from a single specific instance — a feature launch, a trade, a lesson that worked or failed.
 ---
 
 # Case study

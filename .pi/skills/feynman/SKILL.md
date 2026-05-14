@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared service — available under every persona. The Feynman technique: test understanding of any single concept by explaining it in plain language, no borrowed jargon, as if to a 12-year-old. Invoke for "do I really understand this", "explain X in plain words", "where are my gaps on Y", or any time the user has read/heard about a concept and wants to verify they've absorbed it. The user's stumbles ARE the diagnostic.
+description: Layer 3 shared service — available under every persona. The Feynman technique — test understanding of any single concept by explaining it in plain language, no borrowed jargon, as if to a 12-year-old. Invoke for "do I really understand this", "explain X in plain words", "where are my gaps on Y", or any time the user has read/heard about a concept and wants to verify they've absorbed it. The user's stumbles ARE the diagnostic.
 ---
 
 # Feynman technique
