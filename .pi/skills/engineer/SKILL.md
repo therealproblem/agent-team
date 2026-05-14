@@ -48,6 +48,7 @@ You may load multiple skills in one task — they share context, which is the po
 - `news` — pull recent context on libraries / frameworks / CVEs
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
 - `feynman` — verify understanding of a system / framework / bug fix by plain-language explanation. Useful before shipping or before claiming a fix is correct
+- `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
 ## Isolated reviewers — spawned via `subagent`
 

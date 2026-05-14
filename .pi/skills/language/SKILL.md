@@ -44,6 +44,7 @@ Profile content overrides defaults below where they conflict.
 - `scribe` — adjust JLPT explanations to the learner's current level
 - `planning` — decompose a JLPT goal into study tracks with cadence and dependency
 - `feynman` — verify understanding of a grammar pattern or kanji-meaning by plain-language explanation. The "plain words" bar is per-level: an N3 learner's plain-words bar isn't an N1 learner's
+- `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
 ## Isolated reviewer — spawned via `subagent`
 

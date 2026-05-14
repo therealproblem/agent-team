@@ -61,6 +61,7 @@ Profile content overrides defaults below where they conflict.
 - `news` — pull current developments in fast-moving fields
 - `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
 - `feynman` — verify understanding of any single concept by plain-language explanation. **Use as the verification style throughout corpus-learning Phase 5 and after any new concept.**
+- `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
 ## Isolated reviewer — spawned via `subagent`
 

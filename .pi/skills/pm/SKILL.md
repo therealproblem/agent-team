@@ -45,6 +45,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `news` — pull market or competitive context
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
 - `feynman` — verify your own understanding of a concept by plain-language explanation. Useful before claiming "I understand this segment / this user / this problem"
+- `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
 ## Isolated reviewer — spawned via `subagent`
 

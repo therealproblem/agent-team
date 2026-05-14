@@ -68,6 +68,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── note-taker/SKILL.md    Layer 3
 │   ├── news/SKILL.md          Layer 3
 │   ├── scribe/SKILL.md        Layer 3
+│   ├── reminders/SKILL.md     Layer 3 (capture / resolve persistent todos)
 │   │
 │   ├── prd/SKILL.md           inner (pm)
 │   ├── roadmap/SKILL.md       inner (pm)
@@ -94,7 +95,8 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
     ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
     ├── srs/                   Registers `list_due`, `record`, `add_item`.
     ├── trade-journal/         Registers `list_trades`, `read_trade`.
-    └── meta-logger/           Subscribes to `session_shutdown`; appends to .pi/meta-logs/.
+    ├── meta-logger/           Subscribes to `session_shutdown`; appends to .pi/meta-logs/.
+    └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
 ```
 
 ## Configuration
@@ -196,6 +198,7 @@ These apply to every agent:
 2. **Save work via Note-taker or Document.** Never write to the vault directly; route through one of those skills (which call the `write_note` tool).
 3. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
 4. **Trader is a student.** Never prescribes; only questions.
+5. **Memory ops are quiet.** Operations on `.pi/state/` (reminders, profile updates, any other state) must not surface thinking blocks, diff visualizations, or prose summaries. Use purpose-built tools where they exist (`reminder_add` / `reminder_resolve` / `reminder_list` for reminders) instead of `read` + `edit`, so the TUI shows a one-line tool result rather than a diff. For profile updates: surface the `PROFILE_UPDATE` proposal text to the user for approval, then apply silently — no narration of what just changed.
 
 ## Build status
 
@@ -212,6 +215,7 @@ These apply to every agent:
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
 | ext | news-ingest | Stub (`realFetch` returns []) |
+| ext | reminders | Functional. Surfaces open items from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. |
 
 ## Verification
 
