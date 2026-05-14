@@ -16,7 +16,7 @@ Layer 1   ROOT SESSION        single Pi session — adopts personas inline
               blind by isolation — spawned via `subagent` when the active persona
               needs adversarial review
 Layer 3   SHARED SERVICES     skills any persona can call inline
-                              document · note-taker · news · scribe · research · reminders
+                              note-taker · render · news · scribe · research · reminders
 ```
 
 The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
@@ -29,7 +29,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 | Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
-| Layer 3 services (document, note-taker, news, scribe, research, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
+| Layer 3 services (note-taker, render, news, scribe, research, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 
 ## Specialization rule
@@ -64,8 +64,8 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── language/SKILL.md      PERSONA
 │   ├── trader/SKILL.md        PERSONA
 │   │
-│   ├── document/SKILL.md      Layer 3 (default for any long-form output)
-│   ├── note-taker/SKILL.md    Layer 3
+│   ├── note-taker/SKILL.md    Layer 3 (DEFAULT vault writer — markdown only, Obsidian-strict)
+│   ├── render/SKILL.md        Layer 3 (md → interactive HTML in renders/ outside vault)
 │   ├── news/SKILL.md          Layer 3
 │   ├── scribe/SKILL.md        Layer 3
 │   ├── research/SKILL.md      Layer 3 (online research via camoufox-pi)
@@ -92,7 +92,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   └── meta-review/SKILL.md   Layer 0 — cross-profile synthesis
 └── extensions/                TypeScript extensions (auto-loaded by Pi)
     ├── subagent/              Official Pi example — spawns reviewer sub-sessions
-    ├── obsidian-vault/        Registers `write_note` (markdown + HTML).
+    ├── obsidian-vault/        Registers `write_note` (markdown to vault) and `write_render` (HTML to `renders/`).
     ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
     ├── srs/                   Registers `list_due`, `record`, `add_item`.
     ├── trade-journal/         Registers `list_trades`, `read_trade`.
@@ -197,8 +197,8 @@ The pause is the point. Do not skip it for "small" extensions — small custom c
 
 These apply to every agent:
 
-1. **Documents are HTML by default.** Any long-form artifact — PRDs, reports, lesson plans, summaries, exec briefs, anything multi-section or longer than ~400 words — goes through the `document` skill. It produces a self-contained HTML file (minimalist shadcn-style template, embedded CSS, no external assets, dark/light auto) and returns a `file://` URL. The agent's reply to the user is the URL plus a one-sentence summary — **not** the rendered body inline. Other formats (markdown, PDF) only when the user asks explicitly. Short captures (< 200 words, no structure) stay markdown via `note-taker`.
-2. **Save work via Note-taker or Document.** Never write to the vault directly; route through one of those skills (which call the `write_note` tool).
+1. **Vault is markdown. HTML is on-demand presentation.** Everything that needs to persist — PRDs, ADRs, reports, lesson plans, summaries, exec briefs, captures, journal entries — goes through `note-taker` and lands in the Obsidian vault as markdown with proper YAML frontmatter, inline `#tags`, and `[[wiki-links]]`. The vault is an Obsidian vault: graph view, backlinks, and tag search depend on it staying markdown-first. **HTML is a separate, opt-in derivative**: after saving the markdown, a persona may call `render` to produce a self-contained interactive HTML file (shadcn-style template, opt-in CDN assets, Mermaid diagrams) in `renders/` *outside* the vault. The agent's reply for a rendered artifact is the `file://` URL plus the markdown source path — **never** the rendered body inline. Render only when the artifact would meaningfully benefit from diagrams, tabs, callouts, timelines, decks; short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
+2. **Never write to the vault directly.** All vault writes go through `note-taker` (which calls `write_note`). All HTML renders go through `render` (which calls `write_render`). These two skills are the only sanctioned writers.
 3. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
 4. **Trader is a student.** Never prescribes; only questions.
 5. **Memory ops are quiet.** Operations on `.pi/state/` (reminders, profile updates, any other state) must not surface thinking blocks, diff visualizations, or prose summaries. Use purpose-built tools where they exist (`reminder_add` / `reminder_resolve` / `reminder_list` for reminders) instead of `read` + `edit`, so the TUI shows a one-line tool result rather than a diff. For profile updates: surface the `PROFILE_UPDATE` proposal text to the user for approval, then apply silently — no narration of what just changed.
@@ -212,10 +212,10 @@ These apply to every agent:
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
-| 3 | document, note-taker, news, scribe | Skills present; `fetch_topic` still returns empty (TODO: pick source or delegate to `research`) |
+| 3 | note-taker, render, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render` reads vault markdown and produces HTML in `renders/` outside the vault. `fetch_topic` still returns empty (TODO: pick source or delegate to `research`). |
 | 3 | research | Skill present. Backed by installed npm package `@the-forge-flow/camoufox-pi` (tools: `tff-fetch_url`, `tff-search_web`). |
 | ext | subagent | Pi's example, with profile pre-load + `--system-prompt` patch |
-| ext | obsidian-vault | Writes markdown and HTML via `write_note` (`format` param) |
+| ext | obsidian-vault | Two tools: `write_note` (markdown → vault) and `write_render` (HTML → `renders/` outside vault). |
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
 | ext | news-ingest | Stub (`realFetch` returns []) |

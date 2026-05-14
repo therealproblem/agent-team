@@ -93,7 +93,7 @@ The bar for "done" is: **user could hold a 20-minute unscripted conversation wit
 
 ## Output
 
-A knowledge-map document via `document` skill, lands at `vault/docs/<date>-corpus-learning-<subject>.html`. Contents:
+A knowledge-map document, saved to the vault as markdown via `note-taker` at `learning/corpus-maps/<date>-<subject>.md`. If the map would benefit from an interactive read (Mermaid graph of the field, tabs per mental model, timeline of intellectual history, sidebar TOC for many sections), follow up with `render` to publish HTML in `renders/`. Contents:
 
 ```
 # <Subject> — corpus-learning map

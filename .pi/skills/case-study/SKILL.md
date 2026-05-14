@@ -50,7 +50,7 @@ ARTIFACT TYPE: <feature launch | trade | lesson | architecture decision | …>
 
 ## Save
 
-Case studies are long-form by definition — produce via `document` skill (HTML, lands at `vault/docs/`). The chat reply is the URL + one-line summary. The HTML file IS the artifact.
+Case studies are long-form by definition. Save the markdown via `note-taker` at `case-studies/<date>-<slug>.md` (or under the persona's folder — `pm/case-studies/`, `engineering/case-studies/`). The markdown is the canonical artifact. If the case study would benefit from a timeline, side-by-side "what we expected vs. what happened" grid, or annotated diff blocks, follow up with `render` to publish HTML in `renders/`. Chat reply: the vault path; plus the `file://` URL only if you rendered.
 
 ## Don't
 

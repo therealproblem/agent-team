@@ -51,7 +51,7 @@ Exact parameter names follow whatever `@the-forge-flow/camoufox-pi` exposes; con
 2. **Pick before fetching.** Look at the snippets. Don't fetch every result — pick the 1–3 most relevant URLs.
 3. **Prefer markdown.** Use `format: "markdown"` for reading; only use `"html"` when you need structure (tables, specific elements, anchors).
 4. **Cite as you reason.** Anything the caller surfaces to the user should be attributable to a fetched URL — keep the URL alongside any claim.
-5. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` or `document`.
+5. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` — and, if the caller wants an interactive presentation of the saved synthesis, a follow-up call to `render`.
 
 ## Caller patterns
 
@@ -69,7 +69,7 @@ Exact parameter names follow whatever `@the-forge-flow/camoufox-pi` exposes; con
 
 - After a fetch, hand back: `{ url, title, content_excerpt }` — not the entire page body. Trim to what matters.
 - After a search, hand back: ranked `{ title, url, snippet }` list. Let the caller pick.
-- Long-form synthesis built ON TOP of fetched sources goes through `document`; one-off captures go through `note-taker`. Research itself never writes.
+- Synthesis built on top of fetched sources goes through `note-taker` (markdown, into the vault). If the caller wants the synthesis presented as an interactive HTML page, they call `render` after saving. Research itself never writes — it only returns excerpts + URLs.
 
 ## Don't
 

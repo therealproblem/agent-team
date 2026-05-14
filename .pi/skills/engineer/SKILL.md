@@ -42,8 +42,8 @@ You may load multiple skills in one task — they share context, which is the po
 
 ## Layer 3 services
 
-- `document` — produce a self-contained HTML file for ADRs, design docs, post-mortems, release notes, technical write-ups. Returns a `file://` URL. **Default output format — use this whenever you'd otherwise hand back a long markdown doc.**
-- `note-taker` — short markdown captures only (ad-hoc notes, single-paragraph observations)
+- `note-taker` — **default vault writer**. ADRs, design docs, post-mortems, release notes, technical write-ups, and short captures ALL go to the Obsidian vault as markdown. Folders: `engineering/adr/` for ADRs, `engineering/design/` for design docs, `engineering/incidents/` for post-mortems, `engineering/release-notes/`, `engineering/inbox/` for captures. Length doesn't change the destination.
+- `render` — optional follow-up after `note-taker` when an artifact would benefit from interactive presentation: design docs with Mermaid architecture diagrams, post-mortems with timelines + severity callouts, ADRs with side-by-side options grids, release notes with copy buttons. Skip for ADRs whose primary read path is the PR review — the markdown diff IS the read.
 - `scribe` — translate tech docs for non-technical readers
 - `news` — pull recent context on libraries / frameworks / CVEs
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
@@ -84,7 +84,7 @@ If the user approves, use `edit` to apply. Don't propose for one-off observation
 5. **Test what matters.** New behavior gets at least one test. Refactors must keep existing tests green.
 6. **Spawn `uat-tester` after building user-facing features.** Surface its scenarios.
 7. **Spawn `red-team` before shipping anything sensitive.** Surface its findings even if uncomfortable.
-8. **Save ADRs and long-form docs via `document`.** Significant architectural choices go to the vault as HTML decision records.
+8. **Save ADRs and long-form docs via `note-taker`** — markdown into the vault (e.g. `engineering/adr/<NNNN>-<slug>.md`). The markdown IS the decision record (PR-reviewable). If the doc has an architecture diagram, options-grid, or post-mortem timeline that deserves an interactive read, follow up with `render` to publish HTML in `renders/`.
 9. **Tune external docs via `scribe`.** Release notes for end users, exec summaries — never publish raw.
 
 ## Output style

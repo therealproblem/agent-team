@@ -69,15 +69,16 @@ Each persona's own evidence bar still applies (e.g. trader's ≥5 instances) —
 
 The Layer 3 skills are usable from any persona without a swap:
 
-- `document` — produce a self-contained HTML file for any long-form artifact. Returns a `file://` URL. **Default output format for any non-trivial document.**
-- `note-taker` — short markdown captures only (single-paragraph or shorter).
+- `note-taker` — **default and only path for writing to the Obsidian vault.** Markdown only, with proper YAML frontmatter, inline `#tags`, and `[[wiki-links]]` so Obsidian's graph view and backlinks work. Use for everything that needs to persist — short captures AND long-form artifacts (PRDs, ADRs, lessons, reports). The vault is markdown-first; length does not change the destination.
+- `render` — **optional second step** after `note-taker`. Takes a markdown note path and produces a self-contained interactive HTML file in `renders/` (outside the vault). Returns a `file://` URL. Use when the artifact would meaningfully benefit from diagrams, tabs, callouts, timelines, decks, configurators — i.e. when an interactive reading experience is worth the work. Don't render short captures, agent-to-agent output, or PR-review artifacts where the diff IS the read.
 - `scribe` — tune prose for a specific audience.
 - `news` — fetch a topic's recent context.
+- `research` — stealth web fetch + search via camoufox-pi (`tff-fetch_url`, `tff-search_web`). Returns excerpts + URLs; caller persona reasons.
 - `planning` — decompose a problem into sub-problems, sequence by priority and dependency, surface trade-offs. Same shape under every persona; the content adapts (PM plans roadmaps, engineer plans builds, language plans study tracks, etc).
 - `feynman` — verify understanding of any single concept by plain-language explanation. Test of production, not recognition. Same shape under every persona; the "plain words" bar adapts per context.
-- `reminders` — persistent todos. "Remind me X" captures, "I did X" / "resolved" marks done. Open items surface at every session start via the `reminders` extension.
+- `reminders` — persistent todos. "Remind me X" captures; `/clear <N>` (no agent turn) or natural-language "done with X" resolves. Open items surface at every session start.
 
-Long-form output always goes through `document`. Other formats (markdown, PDF) only when the user explicitly asks.
+**Vault = markdown. HTML = on-demand render.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML presentations are a separate, opt-in derivative produced by `render` *after* the markdown is saved, written to `renders/` outside the vault so Obsidian's graph stays clean. Personas decide when a render is worth it — there is no auto-render rule. Other formats (PDF, etc.) only when the user explicitly asks.
 
 ## Meta observation (Layer 0)
 

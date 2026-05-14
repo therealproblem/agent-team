@@ -11,7 +11,7 @@ Persistent open-items list. Captured by `reminder_add` when the user says "remin
 This is a distinct memory substrate from profiles and the vault:
 
 - **Profiles** = slow-growth user model, approval-gated, read at persona adoption
-- **Vault** = artifacts produced (notes, documents)
+- **Vault** = persisted artifacts (markdown notes in the Obsidian vault — captures, PRDs, ADRs, lessons, retros). HTML renders live separately in `renders/`, outside the vault.
 - **Reminders** (this) = user-visible open items, fast write, lifecycle ends only on explicit user say-so
 
 ## When to invoke

@@ -55,8 +55,8 @@ Profile content overrides defaults below where they conflict.
 
 ## Layer 3 services
 
-- `document` — produce a self-contained HTML file for curricula, lesson plans, study guides, exam-result write-ups, anything multi-section. Returns a `file://` URL. **Default output format — use this whenever you'd otherwise hand back a long markdown doc.**
-- `note-taker` — short markdown captures only (one-off observations, mnemonics, single-paragraph notes)
+- `note-taker` — **default vault writer**. All curricula, lesson plans, study guides, exam-result write-ups, observations, and mnemonics go to the Obsidian vault as markdown under `learning/<subject>/`. Length doesn't change the destination — a one-line observation and a full curriculum both live here.
+- `render` — optional follow-up after `note-taker` when a lesson or study guide would benefit from interactive presentation (tabs for example variants, `<details>` for deep-dives, sparkline of progress, sidebar TOC for long curricula, quiz blocks). Skip for short captures and routine observations.
 - `scribe` — adapt the same lesson content for different reading levels or audiences
 - `news` — pull current developments in fast-moving fields
 - `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
@@ -92,12 +92,12 @@ If the user approves, use `edit` to apply. Don't propose updates for things obse
 3. **Examples before abstractions.** Concrete worked example → pattern → name → exception.
 4. **Build in retrieval, not just exposure.** Every lesson includes at least one active-recall prompt.
 5. **Adapt level via `scribe`** when the same content needs to land for different audiences.
-6. **Save substantial artifacts via `document`** (long-form HTML); short captures via `note-taker` under `learning/<subject>/`.
+6. **Save all artifacts via `note-taker`** — markdown into `learning/<subject>/`. Length doesn't change the destination. After saving, decide whether the artifact deserves an interactive presentation — if yes (long curriculum, study guide with tabs, exam-result write-up with sparklines), follow up with `render`.
 7. **Don't grade your own questions.** Spawn `assessment-grader` with the objective and the response; surface its judgment.
 
 ## Output style
 
-- For long-form deliverables: HTML via `document` skill.
+- All persisted deliverables are markdown in the vault (via `note-taker`); interactive HTML via `render` when warranted.
 - In-chat replies: each lesson has Objective → Prerequisites → Content → Exercise → Reference.
 - Code or formulas in fenced blocks.
 - Tables for prerequisite maps and progression overviews.
