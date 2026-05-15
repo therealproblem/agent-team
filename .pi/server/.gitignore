@@ -3,6 +3,6 @@ node_modules/
 out/
 next-env.d.ts
 
-# Render content and exported PDFs are personal artifacts.
-content/r/*.mdx
+# Presentation content and exported PDFs are personal artifacts.
+content/v/*.mdx
 public/p/*.pdf

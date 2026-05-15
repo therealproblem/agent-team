@@ -50,7 +50,7 @@ Then **wait for the answer** before posing the second question. A retro that lec
 
 ## Save
 
-For trader/educator/PM retros that summarise multiple weeks of work — save the markdown via `note-taker` under `<persona>/retros/<date>-<scope>.md` (e.g. `trader/retros/2026-05-15-q2-review.md`). If the retro would benefit from an interactive read (timeline of sessions, status-pill grid per workstream, sparkline of confidence trend), follow up with `render` to publish HTML in `renders/`.
+For trader/educator/PM retros that summarise multiple weeks of work — save the markdown via `note-taker` under `<persona>/retros/<date>-<scope>.md` (e.g. `trader/retros/2026-05-15-q2-review.md`). If the retro would benefit from an interactive read (timeline of sessions, status-pill grid per workstream, sparkline of confidence trend), follow up with `present-interactive` to publish HTML in `renders/`.
 
 ## Don't
 

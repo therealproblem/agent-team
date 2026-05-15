@@ -15,8 +15,8 @@ exports/
 .pi/server/node_modules/
 .pi/server/.next/
 .pi/server/next-env.d.ts
-# Runtime-generated render and export artifacts (URL-secret nanoid paths).
-.pi/server/content/r/*.mdx
+# Runtime-generated presentation and export artifacts (URL date-slug paths).
+.pi/server/content/v/*.mdx
 .pi/server/public/p/*.pdf
 .pi/server/.export-tmp/
 

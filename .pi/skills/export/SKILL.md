@@ -1,12 +1,12 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `present-interactive` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
 ---
 
 # Export
 
 `export` is the **markdown → Kami-styled PDF** skill. It produces print-ready deliverables — the kind of artifact you attach to an email, hand to a printer, or archive as the canonical formal version of a document.
 
-> If a user asks you to "make a PDF", "export this", "produce a resume", "send a letter", "deliver a report" — and the output should look polished and printed — this is the skill. If they want an *interactive* document to read on screen, that's `render`, not `export`.
+> If a user asks you to "make a PDF", "export this", "produce a resume", "send a letter", "deliver a report" — and the output should look polished and printed — this is the skill. If they want an *interactive* document to read on screen, that's `present-interactive`, not `export`.
 
 ## Why this skill exists
 
@@ -15,7 +15,7 @@ Three different read paths, three different skills:
 | Read path | Owner | Format | Location |
 |---|---|---|---|
 | **Knowledge graph / archival** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
-| **On-screen exploration** | `render` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/r/<YYYY-MM-DD>-<slug>` |
+| **On-screen exploration** | `present-interactive` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 | **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
 
 The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `.pi/server/public/p/`. (If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.)
@@ -38,10 +38,10 @@ The local server hides discovery vectors (`/`, `/p`, sitemap, search index, 404 
 **Don't call `export` for:**
 
 - Anything the user will read in the terminal — PDFs aren't terminal-readable.
-- On-screen exploration of a long document — use `render` (the PDF is static; the HTML is interactive).
+- On-screen exploration of a long document — use `present-interactive` (the PDF is static; the HTML is interactive).
 - Quick captures, inbox notes, journal entries — markdown is the right artifact.
 - Sub-session output, agent-to-agent hand-offs, prompt context — markdown is leaner.
-- Anything that needs live JS interactivity (configurators, decks with arrow-key nav, copy buttons) — that's `render`, not `export`.
+- Anything that needs live JS interactivity (configurators, decks with arrow-key nav, copy buttons) — that's `present-interactive`, not `export`.
 - A draft that the user is still editing — let them stabilize the markdown via `note-taker` first.
 
 **Call `export` after** the markdown is stable. If the markdown is from the vault, do not edit it inline in this skill — fix the source via `note-taker` and re-export.
@@ -128,7 +128,7 @@ These are not stylistic suggestions. They define what a Kami PDF looks like. Vio
 7. **Tags: solid hex backgrounds ONLY.** Never `rgba()` for tag backgrounds (a WeasyPrint bug produces a double-rectangle if you do; Chrome doesn't have the bug but the discipline is kept for cross-engine portability). Use `#ebe9e0` for neutral tags, the accent hex for emphasized tags.
 8. **No emoji.** No emoji glyphs in headings, body, or decorative places. Kami documents are formal artifacts.
 9. **No `position: fixed` / `position: sticky`.** It's a print document; nothing scrolls. Pagination is handled by `@page` rules.
-10. **No JavaScript.** Headless Chrome runs it once, but the artifact is print. If you need interactivity, you picked the wrong skill — use `render`.
+10. **No JavaScript.** Headless Chrome runs it once, but the artifact is print. If you need interactivity, you picked the wrong skill — use `present-interactive`.
 
 ## The eight templates
 
@@ -246,10 +246,10 @@ Prefer over pie — single-hue bars read cleaner than pie slices that tempt a se
     <rect x="370" y="20" width="100" height="40" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
     <text x="420" y="44" fill="var(--paper)">Shipped</text>
 
-    <line x1="115" y1="40" x2="185" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
+    <line x1="115" y1="40" x2="180" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
     <polygon points="180,36 188,40 180,44" fill="var(--ink-mute)"/>
 
-    <line x1="295" y1="40" x2="365" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
+    <line x1="295" y1="40" x2="360" y2="40" stroke="var(--ink-mute)" stroke-width="1"/>
     <polygon points="360,36 368,40 360,44" fill="var(--ink-mute)"/>
   </g>
 </svg>
@@ -331,21 +331,21 @@ Use when the source markdown shows a top-to-bottom pipeline (numbered steps, "fi
     <text x="130" y="32">1. User Input</text>
     <text x="130" y="48" font-size="9" fill="var(--ink-mute)">"Tell me about my project"</text>
 
-    <line x1="130" y1="60" x2="130" y2="82" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <line x1="130" y1="60" x2="130" y2="78" stroke="var(--ink-mute)" stroke-width="1.25"/>
     <polygon points="124,78 136,78 130,88" fill="var(--ink-mute)"/>
 
     <rect x="40" y="92"  width="180" height="50" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
     <text x="130" y="114">2. Query Episodic Memory</text>
     <text x="130" y="130" font-size="9" fill="var(--ink-mute)">Past sessions mentioning "project"</text>
 
-    <line x1="130" y1="142" x2="130" y2="164" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <line x1="130" y1="142" x2="130" y2="160" stroke="var(--ink-mute)" stroke-width="1.25"/>
     <polygon points="124,160 136,160 130,170" fill="var(--ink-mute)"/>
 
     <rect x="40" y="174" width="180" height="50" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
     <text x="130" y="196" fill="var(--paper)">3. Construct Prompt</text>
     <text x="130" y="212" font-size="9" fill="var(--paper)">System + Memory + Input</text>
 
-    <line x1="130" y1="224" x2="130" y2="246" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <line x1="130" y1="224" x2="130" y2="242" stroke="var(--ink-mute)" stroke-width="1.25"/>
     <polygon points="124,242 136,242 130,252" fill="var(--ink-mute)"/>
 
     <rect x="40" y="256" width="180" height="50" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
@@ -354,7 +354,7 @@ Use when the source markdown shows a top-to-bottom pipeline (numbered steps, "fi
 </svg>
 ```
 
-Arrowhead geometry (memorize this): for a **down-pointing** triangle whose tip sits at `(X, Y)`, the polygon is `points="X-6,Y-10 X+6,Y-10 X,Y"` — 12px wide, 10px tall. That's the minimum size that reads as an arrow at print scale; smaller and it looks like a stray dot. The line that feeds the arrow should stop ~6px short of the tip so the triangle doesn't have a stem sticking out the top.
+Arrowhead geometry (memorize this): for a **down-pointing** triangle whose tip sits at `(X, Y)`, the polygon is `points="X-6,Y-10 X+6,Y-10 X,Y"` — 12px wide, 10px tall. That's the minimum size that reads as an arrow at print scale; smaller and it looks like a stray dot. **The line that feeds the arrow must end exactly at the polygon's top edge — i.e. at `Y-10`, which is 10px short of the tip, matching the polygon's height.** A common mistake is to stop the line "a few pixels short of the tip" (e.g. `Y-6`), which lands *inside* the triangle and leaves a visible stem poking out the top in print. Same-colour fill does not reliably mask the stem — anti-aliasing makes it show. Always: line ends at the top edge, never inside the triangle.
 
 #### Fan-out — one parent connecting to N children (comb routing)
 
@@ -372,10 +372,10 @@ Use whenever a single box has edges down to multiple boxes below it (the most co
     <line x1="240" y1="66" x2="240" y2="96" stroke="var(--ink-mute)" stroke-width="1"/>
     <!-- Horizontal bus -->
     <line x1="100" y1="96" x2="380" y2="96" stroke="var(--ink-mute)" stroke-width="1"/>
-    <!-- Drop into each child, with arrowhead overlapping the child's top edge -->
-    <line x1="100" y1="96" x2="100" y2="128" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <!-- Drop into each child: line ends at polygon top edge (y=124), tip overlaps child's top edge (y=134 ≈ child y=134) -->
+    <line x1="100" y1="96" x2="100" y2="124" stroke="var(--ink-mute)" stroke-width="1.25"/>
     <polygon points="94,124 106,124 100,134" fill="var(--ink-mute)"/>
-    <line x1="380" y1="96" x2="380" y2="128" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <line x1="380" y1="96" x2="380" y2="124" stroke="var(--ink-mute)" stroke-width="1.25"/>
     <polygon points="374,124 386,124 380,134" fill="var(--ink-mute)"/>
 
     <!-- Children -->
@@ -398,6 +398,7 @@ For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`)
 - **Floating arrowhead.** An arrow whose tip sits in empty space, not overlapping any child's top edge. The tip must land on (or just inside) the target box's border.
 - **Phantom edge.** A connector that points to no target at all. If the source markdown describes a path that has nowhere to go in your current diagram, drop the path or add the target box — don't ship a dangling arrow.
 - **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration. Use the 12×10 polygon from the snippet above.
+- **Stem poking through the arrowhead.** The line's `y2` (or `x2` for horizontal arrows) must equal the polygon's top edge coordinate, not "a few px short of the tip." If the polygon is `points="X-6,82 X+6,82 X,92"`, the feeding line must end at `y=82`, never at `y=86` or `y=88` — the latter puts the line inside the triangle, where anti-aliasing exposes the stem in print.
 
 #### Gantt — schedule across parallel workstreams
 

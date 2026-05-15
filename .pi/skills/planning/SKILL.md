@@ -65,9 +65,9 @@ NEXT STEP: <one specific action — verb + object + (when)>
 
 ## Save
 
-Long-form plans live in the vault as markdown via `note-taker` (e.g. `pm/plans/<date>-<topic>.md` or `engineering/plans/<date>-<topic>.md`). If the plan would benefit from a visual presentation (Mermaid dependency graph, timeline, status grid), follow up with `render` to produce an HTML version in `renders/`. Chat reply: the vault path; plus the `file://` URL only if you rendered.
+Long-form plans live in the vault as markdown via `note-taker` (e.g. `pm/plans/<date>-<topic>.md` or `engineering/plans/<date>-<topic>.md`). If the plan would benefit from a visual presentation (Mermaid dependency graph, timeline, status grid), follow up with `present-interactive` to produce an HTML version in `renders/`. Chat reply: the vault path; plus the `file://` URL only if you rendered.
 
-For short plans (2–3 clusters, 5–10 sub-problems), inline in the chat reply is fine — no `note-taker` or `render` needed.
+For short plans (2–3 clusters, 5–10 sub-problems), inline in the chat reply is fine — no `note-taker` or `present-interactive` needed.
 
 ## Don't
 

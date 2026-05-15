@@ -60,7 +60,7 @@ HYPOTHESES TO VALIDATE NEXT:
 
 ## Save
 
-Save the full synthesis as markdown via `note-taker` at `pm/user-research/<date>-<slug>.md` — Obsidian's graph will surface backlinks from the PRD that cites it. If the synthesis would benefit from a presentation read (per-participant tabs, problem-frequency sparklines, side-by-side quote grids), follow up with `render` to publish HTML in `renders/`. The chat reply is the vault path + a one-line summary of the top problem identified.
+Save the full synthesis as markdown via `note-taker` at `pm/user-research/<date>-<slug>.md` — Obsidian's graph will surface backlinks from the PRD that cites it. If the synthesis would benefit from a presentation read (per-participant tabs, problem-frequency sparklines, side-by-side quote grids), follow up with `present-interactive` to publish HTML in `renders/`. The chat reply is the vault path + a one-line summary of the top problem identified.
 
 The artifact feeds directly into a PRD — the `PROBLEM` section of a PRD should cite this synthesis doc.
 

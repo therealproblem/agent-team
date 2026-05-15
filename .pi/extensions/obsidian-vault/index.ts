@@ -8,12 +8,13 @@
  *                          markdown-first so the Obsidian graph view,
  *                          backlinks, and tag search work. Called by the
  *                          `note-taker` skill (Layer 3).
- *   - `write_render`     — markdown body, written as `.mdx` into the Next.js
- *                          server's `content/r/` directory. Nextra serves it
- *                          at `/r/<YYYY-MM-DD>-<slug>`. Re-rendering the
- *                          same title on the same day overwrites the file;
- *                          the URL stays stable. Used by the `render` skill
- *                          (Layer 3).
+ *   - `write_presentation` — markdown body, written as `.mdx` into the
+ *                            Next.js server's `content/v/` directory.
+ *                            Nextra serves it at `/v/<YYYY-MM-DD>-<slug>`.
+ *                            Re-running the same title on the same day
+ *                            overwrites the file; the URL stays stable.
+ *                            Used by the `present-interactive` skill
+ *                            (Layer 3).
  *   - `write_export_pdf` — PDF, written into the Next.js server's
  *                          `public/p/` directory so it's served at
  *                          `/p/<YYYY-MM-DD>-<slug>.pdf`. Re-exporting the
@@ -39,8 +40,8 @@
  *                                   /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
  *
  * Agents should NOT call these tools directly — they go through `note-taker`,
- * `render`, and `export` skills so naming, folder, and design conventions
- * stay consistent.
+ * `present-interactive`, and `export` skills so naming, folder, and design
+ * conventions stay consistent.
  */
 
 import { execFile } from "node:child_process";
@@ -100,7 +101,7 @@ const writeNote = defineTool({
 	name: "write_note",
 	label: "Write Note",
 	description:
-		"Write a markdown note to the Obsidian vault. Owns YAML frontmatter, inline tags, wiki-link footers. Called by the `note-taker` skill. Markdown only — HTML output goes through the `write_render` tool (via the `render` skill).",
+		"Write a markdown note to the Obsidian vault. Owns YAML frontmatter, inline tags, wiki-link footers. Called by the `note-taker` skill. Markdown only — HTML output goes through the `write_presentation` tool (via the `present-interactive` skill).",
 	parameters: Type.Object({
 		title: Type.String({
 			description: "Short noun-phrase title for the note.",
@@ -200,11 +201,11 @@ const writeNote = defineTool({
 	},
 });
 
-const writeRender = defineTool({
-	name: "write_render",
-	label: "Write Render",
+const writePresentation = defineTool({
+	name: "write_presentation",
+	label: "Write Presentation",
 	description:
-		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/r/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/r/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-rendering the same title on the same day overwrites the file; the URL stays stable. Used by the `render` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome.",
+		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-running on the same title on the same day overwrites the file; the URL stays stable. Used by the `present-interactive` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -217,16 +218,16 @@ const writeRender = defineTool({
 		source_md_path: Type.Optional(
 			Type.String({
 				description:
-					"Vault-relative path of the markdown source this render was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
+					"Vault-relative path of the markdown source this presentation was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
 			}),
 		),
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 		const slug = `${todayIso()}-${slugify(params.title)}`;
-		const dir = join(SERVER_ROOT, "content", "r");
+		const dir = join(SERVER_ROOT, "content", "v");
 		const path = join(dir, `${slug}.mdx`);
-		const url = `${SERVER_PUBLIC_URL}/r/${slug}`;
+		const url = `${SERVER_PUBLIC_URL}/v/${slug}`;
 
 		try {
 			if (!existsSync(dir)) {
@@ -236,7 +237,7 @@ const writeRender = defineTool({
 			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
 			await writeFile(path, frontmatter + params.markdown, { encoding: "utf8" });
 			return {
-				content: [{ type: "text", text: `Rendered ${url}` }],
+				content: [{ type: "text", text: `Presented ${url}` }],
 				details: {
 					slug,
 					path,
@@ -249,7 +250,7 @@ const writeRender = defineTool({
 			const message = (e as Error).message;
 			return {
 				content: [
-					{ type: "text", text: `Failed to write render: ${message}` },
+					{ type: "text", text: `Failed to write presentation: ${message}` },
 				],
 				details: { error: message },
 				isError: true,
@@ -375,6 +376,6 @@ const writeExportPdf = defineTool({
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(writeNote);
-	pi.registerTool(writeRender);
+	pi.registerTool(writePresentation);
 	pi.registerTool(writeExportPdf);
 }
