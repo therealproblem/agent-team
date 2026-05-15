@@ -173,7 +173,8 @@ A Kami PDF without a single diagram is almost always under-cooked. Before genera
 | Sequenced steps or a process | Horizontal flow — rounded rects + arrows in `var(--ink-mute)`, accent fill on the current/highlighted node |
 | Decisions / branching logic | Decision diamond + branch labels in serif |
 | State transitions | Nodes-and-edges with state labels; "active" state filled `var(--accent)`, others outlined |
-| Time-based progression (incident timeline, roadmap milestones, version history) | Vertical timeline with `var(--rule)` axis, accent dots for events |
+| Time-based progression — single thread (incident timeline, version history, one-track roadmap) | Vertical timeline with `var(--rule)` axis, accent dots for events |
+| Schedule across multiple parallel workstreams (quarterly roadmap, sprint plan, project plan) | Gantt — rows per workstream, time axis on top, status encoded by fill (filled / outlined / dashed) not by hue |
 | Architecture / module relationships | Boxes-and-arrows with subgraph boundaries; `var(--paper-soft)` fill for boxes inside the same system |
 | Organizational hierarchy (org chart, taxonomy, file-tree) | Tree with ranked levels; serif text only, no icons |
 | Numbers over time (equity curve, score trend, growth) | Sparkline — single `<polyline>` SVG, accent stroke |
@@ -397,6 +398,66 @@ For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`)
 - **Floating arrowhead.** An arrow whose tip sits in empty space, not overlapping any child's top edge. The tip must land on (or just inside) the target box's border.
 - **Phantom edge.** A connector that points to no target at all. If the source markdown describes a path that has nowhere to go in your current diagram, drop the path or add the target box — don't ship a dangling arrow.
 - **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration. Use the 12×10 polygon from the snippet above.
+
+#### Gantt — schedule across parallel workstreams
+
+Use when the source markdown describes a multi-workstream schedule (quarterly roadmap, sprint plan, project plan with overlapping tracks). **Mermaid `gantt` is banned** (renders late, doesn't match Kami) so the chart is hand-rolled inline SVG: one row per workstream, time axis on top, status encoded by *fill style* — not by hue, because Kami's single-chromatic-hue rule forbids the usual green / orange / red palette.
+
+```html
+<svg viewBox="0 0 520 240" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="10" fill="var(--ink)">
+
+    <!-- Time axis labels (Q1..Q4, months, sprints — match the source) -->
+    <g font-size="9" fill="var(--ink-mute)" text-anchor="middle">
+      <text x="170" y="14">Q1</text>
+      <text x="270" y="14">Q2</text>
+      <text x="370" y="14">Q3</text>
+      <text x="470" y="14">Q4</text>
+    </g>
+    <line x1="120" y1="22" x2="520" y2="22" stroke="var(--rule)"/>
+
+    <!-- Vertical grid at period boundaries (parchment-soft, recessive) -->
+    <g stroke="var(--paper-soft)" stroke-width="1">
+      <line x1="220" y1="22" x2="220" y2="220"/>
+      <line x1="320" y1="22" x2="320" y2="220"/>
+      <line x1="420" y1="22" x2="420" y2="220"/>
+    </g>
+
+    <!-- Today marker — dashed accent vertical with caption -->
+    <line x1="250" y1="22" x2="250" y2="220" stroke="var(--accent)" stroke-width="1" stroke-dasharray="2,2"/>
+    <text x="250" y="234" font-size="8.5" fill="var(--accent)" text-anchor="middle" font-style="italic">Today</text>
+
+    <!-- Row 1 — Done (filled accent bar) -->
+    <text x="0" y="46">Discovery</text>
+    <rect x="120" y="36" width="100" height="14" fill="var(--accent)"/>
+
+    <!-- Row 2 — Active (filled accent bar crossing today) -->
+    <text x="0" y="76">Spec &amp; architecture</text>
+    <rect x="200" y="66" width="120" height="14" fill="var(--accent)"/>
+
+    <!-- Row 3 — Planned (outlined only, transparent fill) -->
+    <text x="0" y="106">Build · core</text>
+    <rect x="270" y="96" width="140" height="14" fill="none" stroke="var(--accent)" stroke-width="1.25"/>
+
+    <!-- Row 4 — At-risk (dashed outline) -->
+    <text x="0" y="136">Beta launch</text>
+    <rect x="410" y="126" width="80" height="14" fill="none" stroke="var(--accent)" stroke-width="1.25" stroke-dasharray="3,2"/>
+
+    <!-- Row 5 — Milestone (filled diamond, NOT a zero-width bar) -->
+    <text x="0" y="166">GA milestone</text>
+    <polygon points="490,160 498,168 490,176 482,168" fill="var(--accent)"/>
+  </g>
+</svg>
+```
+
+Pair the chart with a small legend strip above or below — three or four `.swatch` chips that name the fill styles (filled = done/active, outlined = planned, dashed = at-risk). The reader has to learn the convention once per document; the legend earns its keep.
+
+**Anti-patterns specific to gantt:**
+
+- **Second chromatic hue.** Resist the impulse to colour at-risk bars red, done bars green, in-flight bars orange. Kami is single-hue; status is fill *style*, not fill *colour*.
+- **Zero-width milestone.** A `<rect width="0">` disappears in print. Use a filled diamond `<polygon>` (8px square, rotated 45°) for any single-day event.
+- **In-bar labels.** Text painted on top of an accent bar collides with the single-hue discipline (the text either fights the bar or vanishes into it). The row label on the left says what the bar is; the bar's left edge says when it starts. That's sufficient.
+- **Dependency arrows draped across the chart.** If tasks are genuinely dependent, draw a separate Process-flow diagram for the dependency graph. A gantt is for *when*, not *because-of*.
 
 ### Per-template diagram fit
 
