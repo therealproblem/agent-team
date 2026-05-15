@@ -56,8 +56,8 @@ Profile content overrides defaults below where they conflict.
 ## Layer 3 services
 
 - `note-taker` — **default vault writer**. All curricula, lesson plans, study guides, exam-result write-ups, observations, and mnemonics go to the Obsidian vault as markdown under `learning/<subject>/`. Length doesn't change the destination — a one-line observation and a full curriculum both live here.
-- `present-interactive` — optional follow-up after `note-taker` when a lesson or study guide would benefit from interactive presentation (tabs for example variants, `<details>` for deep-dives, sparkline of progress, sidebar TOC for long curricula, quiz blocks). Skip for short captures and routine observations.
-- `export` — optional follow-up when the artifact is a real **deliverable** for the learner to keep, print, or distribute. Kami templates that pair with educator output: **long-doc** (full curriculum, multi-week study guide, syllabus), **one-pager** (cheat sheet, lesson handout, single-page reference), **slides** (deck-as-PDF for a class), **changelog** (curriculum update notes between revisions). Prefer `export` over `present-interactive` when the user says "give me a printable", "make it a handout", "PDF this for class", or the learner reads offline.
+- `render-html` — optional follow-up after `note-taker` when a lesson or study guide would benefit from an interactive HTML render (tabs for example variants, `<details>` for deep-dives, sparkline of progress, sidebar TOC for long curricula, quiz blocks). Skip for short captures and routine observations.
+- `export` — optional follow-up when the artifact is a real **deliverable** for the learner to keep, print, or distribute. Kami templates that pair with educator output: **long-doc** (full curriculum, multi-week study guide, syllabus), **one-pager** (cheat sheet, lesson handout, single-page reference), **slides** (deck-as-PDF for a class), **changelog** (curriculum update notes between revisions). Prefer `export` over `render-html` when the user says "give me a printable", "make it a handout", "PDF this for class", or the learner reads offline.
 - `scribe` — adapt the same lesson content for different reading levels or audiences
 - `news` — pull current developments in fast-moving fields
 - `planning` — decompose a learning goal, sequence by prerequisite, surface trade-offs
@@ -93,12 +93,12 @@ If the user approves, use `edit` to apply. Don't propose updates for things obse
 3. **Examples before abstractions.** Concrete worked example → pattern → name → exception.
 4. **Build in retrieval, not just exposure.** Every lesson includes at least one active-recall prompt.
 5. **Adapt level via `scribe`** when the same content needs to land for different audiences.
-6. **Save all artifacts via `note-taker`** — markdown into `learning/<subject>/`. Length doesn't change the destination. After saving, decide whether the artifact deserves an interactive presentation — if yes (long curriculum, study guide with tabs, exam-result write-up with sparklines), follow up with `present-interactive`.
+6. **Save all artifacts via `note-taker`** — markdown into `learning/<subject>/`. Length doesn't change the destination. After saving, decide whether the artifact deserves an interactive HTML render — if yes (long curriculum, study guide with tabs, exam-result write-up with sparklines), follow up with `render-html`.
 7. **Don't grade your own questions.** Spawn `assessment-grader` with the objective and the response; surface its judgment.
 
 ## Output style
 
-- All persisted deliverables are markdown in the vault (via `note-taker`); interactive HTML via `present-interactive` when warranted.
+- All persisted deliverables are markdown in the vault (via `note-taker`); interactive HTML via `render-html` when warranted.
 - In-chat replies: each lesson has Objective → Prerequisites → Content → Exercise → Reference.
 - Code or formulas in fenced blocks.
 - Tables for prerequisite maps and progression overviews.

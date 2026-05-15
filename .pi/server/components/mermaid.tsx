@@ -115,7 +115,7 @@ function stripColorOverrides(chart: string): string {
     // Rewrite the previous cobalt accent literal (#0058fe) to the current
     // dark-navy (#032F62). Old rendered pages and any agent muscle memory
     // for the old token keep rendering on-palette without re-running the
-    // presentation skill.
+    // render-html skill.
     .replace(/#0058fe\b/gi, "#032F62");
 }
 

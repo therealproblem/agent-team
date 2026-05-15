@@ -43,8 +43,8 @@ You may load multiple skills in one task — they share context, which is the po
 ## Layer 3 services
 
 - `note-taker` — **default vault writer**. ADRs, design docs, post-mortems, release notes, technical write-ups, and short captures ALL go to the Obsidian vault as markdown. Folders: `engineering/adr/` for ADRs, `engineering/design/` for design docs, `engineering/incidents/` for post-mortems, `engineering/release-notes/`, `engineering/inbox/` for captures. Length doesn't change the destination.
-- `present-interactive` — optional follow-up after `note-taker` when an artifact would benefit from interactive presentation: design docs with Mermaid architecture diagrams, post-mortems with timelines + severity callouts, ADRs with side-by-side options grids, release notes with copy buttons. Skip for ADRs whose primary read path is the PR review — the markdown diff IS the read.
-- `export` — optional follow-up when the artifact is a real **deliverable** to send or archive. Kami templates that pair with engineering output: **changelog** (release notes for users / customers), **long-doc** (design doc for stakeholder review, post-mortem for distribution), **one-pager** (architecture briefing, on-call runbook handout). Skip for ADRs — those live in git and read via PR diff. Prefer `export` over `present-interactive` when the user says "send this to the team", "make a PDF", "I want to email this", or the audience is non-engineering.
+- `render-html` — optional follow-up after `note-taker` when an artifact would benefit from an interactive HTML render: design docs with Mermaid architecture diagrams, post-mortems with timelines + severity callouts, ADRs with side-by-side options grids, release notes with copy buttons. Skip for ADRs whose primary read path is the PR review — the markdown diff IS the read.
+- `export` — optional follow-up when the artifact is a real **deliverable** to send or archive. Kami templates that pair with engineering output: **changelog** (release notes for users / customers), **long-doc** (design doc for stakeholder review, post-mortem for distribution), **one-pager** (architecture briefing, on-call runbook handout). Skip for ADRs — those live in git and read via PR diff. Prefer `export` over `render-html` when the user says "send this to the team", "make a PDF", "I want to email this", or the audience is non-engineering.
 - `scribe` — translate tech docs for non-technical readers
 - `news` — pull recent context on libraries / frameworks / CVEs
 - `planning` — decompose a problem, sequence by priority and dependency, surface trade-offs
@@ -85,7 +85,7 @@ If the user approves, use `edit` to apply. Don't propose for one-off observation
 5. **Test what matters.** New behavior gets at least one test. Refactors must keep existing tests green.
 6. **Spawn `uat-tester` after building user-facing features.** Surface its scenarios.
 7. **Spawn `red-team` before shipping anything sensitive.** Surface its findings even if uncomfortable.
-8. **Save ADRs and long-form docs via `note-taker`** — markdown into the vault (e.g. `engineering/adr/<NNNN>-<slug>.md`). The markdown IS the decision record (PR-reviewable). If the doc has an architecture diagram, options-grid, or post-mortem timeline that deserves an interactive read, follow up with `present-interactive` to publish HTML in `renders/`.
+8. **Save ADRs and long-form docs via `note-taker`** — markdown into the vault (e.g. `engineering/adr/<NNNN>-<slug>.md`). The markdown IS the decision record (PR-reviewable). If the doc has an architecture diagram, options-grid, or post-mortem timeline that deserves an interactive read, follow up with `render-html` to publish HTML in `renders/`.
 9. **Tune external docs via `scribe`.** Release notes for end users, exec summaries — never publish raw.
 
 ## Output style

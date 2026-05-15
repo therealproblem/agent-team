@@ -1,5 +1,5 @@
 ---
-description: Default Layer 3 skill for writing to the Obsidian vault. ALL vault writes go through this skill — it is the only path. Produces well-formed markdown with YAML frontmatter, inline `#tags`, and `[[wiki-links]]` so Obsidian's graph view, backlinks, and search work correctly. Use for both short captures (one-liners, journal entries) and long-form artifacts (PRDs, design docs, lessons, reports, exec briefs) — the vault is markdown-first; length does not change the destination. If the user (or persona) wants the same content rendered as an interactive HTML page, call the `present-interactive` skill AFTER saving the markdown; render reads the saved note and produces an HTML file outside the vault. Agents must not call `write_note` directly.
+description: Default Layer 3 skill for writing to the Obsidian vault. ALL vault writes go through this skill — it is the only path. Produces well-formed markdown with YAML frontmatter, inline `#tags`, and `[[wiki-links]]` so Obsidian's graph view, backlinks, and search work correctly. Use for both short captures (one-liners, journal entries) and long-form artifacts (PRDs, design docs, lessons, reports, exec briefs) — the vault is markdown-first; length does not change the destination. If the user (or persona) wants the same content rendered as an interactive HTML page, call the `render-html` skill AFTER saving the markdown; render reads the saved note and produces an HTML file outside the vault. Agents must not call `write_note` directly.
 ---
 
 # Note-taker
@@ -49,16 +49,16 @@ If `folder` is omitted, default to `inbox` and surface a follow-up: *"Saved to i
 
 ## What to do AFTER saving — optional HTML render
 
-The vault is markdown. If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona can follow up with the `present-interactive` skill. **Render reads the saved markdown and writes an HTML file outside the vault** (in `renders/`) so the vault stays graph-clean.
+The vault is markdown. If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona can follow up with the `render-html` skill. **Render reads the saved markdown and writes an HTML file outside the vault** (in `renders/`) so the vault stays graph-clean.
 
 ```
 1. note-taker.save({...})                →  vault/pm/prd/2026-05-15-foo.md         (canonical)
-2. present-interactive({md_path: "..."})  →  http://localhost:8080/v/<slug>         (presentation only)
+2. render-html({md_path: "..."})         →  http://localhost:8080/v/<slug>         (HTML render only)
 ```
 
-The markdown is always the source of truth. The HTML presentation is a one-way derivative, regeneratable from the markdown. Personas decide whether to present — there is no global "always present" rule.
+The markdown is always the source of truth. The HTML render is a one-way derivative, regeneratable from the markdown. Personas decide whether to render — there is no global "always render" rule.
 
-Cases where a presentation is worth it:
+Cases where a render is worth it:
 - PRDs, design docs, ADRs that the team will *read* (not just review the diff)
 - Lesson plans / study guides that benefit from tabs, collapsibles, interactive examples
 - Exec briefs, retros, reports with charts / timelines / status grids
@@ -127,7 +127,7 @@ Notes on the format:
 5. **Body — pass through verbatim.** Do not summarize, do not paraphrase, do not "improve" the user's wording. If the body was given to you as a long-form draft, write it as-is.
 6. **Append a wiki-link footer** ONLY if `links` was provided: `\n\n---\nRelated: [[Note A]] · [[Note B]]`. Don't synthesize wiki-links the caller didn't ask for.
 7. **Call `write_note`** (the `obsidian-vault` extension tool) with the assembled markdown and the target path.
-8. **Return** `{ path, title, vault_relative_path }` to the caller. The vault path is what `present-interactive` needs if a follow-up render is wanted.
+8. **Return** `{ path, title, vault_relative_path }` to the caller. The vault path is what `render-html` needs if a follow-up render is wanted.
 
 ## Output to the user
 
@@ -135,11 +135,11 @@ After saving, the reply is one line:
 
 > Saved as **{title}** at `<folder>/<filename>.md`.
 
-If the caller (persona) wants to also render to HTML, they call `present-interactive` next. They do not bundle the render URL into the same reply unless render has actually run.
+If the caller (persona) wants to also render to HTML, they call `render-html` next. They do not bundle the render URL into the same reply unless render has actually run.
 
 ## Don't
 
-- **Don't write HTML to the vault.** Obsidian's graph doesn't index it; it breaks the conventions. HTML output is the `present-interactive` skill's job, and it writes outside the vault.
+- **Don't write HTML to the vault.** Obsidian's graph doesn't index it; it breaks the conventions. HTML output is the `render-html` skill's job, and it writes outside the vault.
 - **Don't dedupe automatically.** Two similar captures is the user's choice.
 - **Don't summarize the body.** Write what you were given, verbatim. Length is fine.
 - **Don't infer tags or folder.** If unclear, default to `inbox` and surface a follow-up question.
@@ -147,4 +147,4 @@ If the caller (persona) wants to also render to HTML, they call `present-interac
 - **Don't call `write_note` from a persona directly.** Always go through this skill so frontmatter, slugging, folder conventions, and link footers stay consistent.
 - **Don't write a body H1.** The title is in frontmatter. Body sections start at `##`.
 - **Don't fake wiki-links.** Only emit `[[…]]` for explicit `links` input, or where the caller's body text already used wiki-syntax. Don't auto-generate them.
-- **Don't combine save + render in one call.** They are separate skills — save first, render second (if needed). The markdown is canonical; the HTML is optional presentation.
+- **Don't combine save + render in one call.** They are separate skills — save first, render second (if needed). The markdown is canonical; the HTML render is optional.
