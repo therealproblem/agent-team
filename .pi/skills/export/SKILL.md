@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `present-interactive` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is written to the canonical export root at `<repo>/exports/` and served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `present-interactive` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
 ---
 
 # Export
@@ -18,7 +18,7 @@ Three different read paths, three different skills:
 | **On-screen exploration** | `present-interactive` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 | **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
 
-The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `.pi/server/public/p/`. (If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.)
+The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, exposed to Nextra via a `.pi/server/public/p` → `exports/` symlink so the served URL stays stable). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
 
 ## URL access model
 
@@ -74,7 +74,7 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `.pi/server/public/p/<YYYY-MM-DD>-<slug>.pdf`, served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — set this to your cloudflared tunnel hostname for share-ready URLs across sessions).
+A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — set this to your cloudflared tunnel hostname for share-ready URLs across sessions).
 
 The intermediate HTML is written transiently to `.pi/server/.export-tmp/`, fed to Chrome, then deleted once Chrome confirms the PDF was produced. The only case where an HTML file survives is when Chrome itself failed (no binary found, render error), in which case the tool returns `isError: true` plus the path of the HTML it could not convert.
 
@@ -166,12 +166,26 @@ The Kami aesthetic is severe by design — parchment, serif, single hue, no deco
 
 A Kami PDF without a single diagram is almost always under-cooked. Before generating the HTML, scan the markdown for the patterns below and produce **at least one** inline SVG. WeasyPrint and Chrome both render inline SVG natively — no JS, no Mermaid (Mermaid renders late and is unsafe for the PDF snapshot), no external assets.
 
+### Exit conditions — check these BEFORE scanning the patterns table
+
+The patterns table below tells you *what* to draw once you've decided a diagram is right. This table tells you when an SVG is the wrong tool entirely. Run through these first; if any row matches the source markdown, do **not** draw an SVG — use the listed alternative.
+
+| If the content is… | Use this instead, and do NOT draw a diagram |
+|---|---|
+| A **comparison of N independent options** (cloud vs. self-host, plan A vs. plan B, "when to pick X over Y") | `.grid-2` or `.grid-3` of bordered `.card`s — one card per option, criteria as a bulleted list inside. A callout above the grid carries the recommendation (if any). |
+| A **single binary decision** ("should I do A or B?", "when to choose each") | Prose lede stating the question + 2-card grid for the answers. Do NOT use a decision diamond. The diamond is too small to hold a readable question at print scale, and the choice of which branch to fill with `--accent` injects editorial bias into the *geometry* before the reader has read a word — a chart should never argue for one branch by drawing it more vividly than the other. |
+| An **absence, negation, or "this thing is gone"** state | Prose caption in `var(--ink-mute)`, or a struck-through label, or an empty bracketed slot `[ — ]`. Do NOT invent a glyph (`✕`, `?`, `!`, `∅`) and place it on an edge or between nodes without an adjacent caption — readers cannot decode an uncaptioned symbol. If you need to express "memory wiped between sessions", write the words "memory wiped" next to the gap; don't draw an X and hope. |
+| **Pure enumeration without flow** ("here are 5 features", "the four pillars") | Numbered list or `.grid-N` of cards. Boxes-and-arrows imply causation or sequence; if neither exists in the source, the diagram lies. |
+| The **table IS already the diagram** | Leave it as a table. An equity-report Numbers section, a feature comparison matrix, a pricing grid — the structure is the visual. Wrapping it in SVG adds nothing. |
+
+If none of the above fires, continue to the patterns table.
+
 ### Content patterns that should be a diagram
 
 | If the markdown contains… | Reach for |
 |---|---|
 | Sequenced steps or a process | Horizontal flow — rounded rects + arrows in `var(--ink-mute)`, accent fill on the current/highlighted node |
-| Decisions / branching logic | Decision diamond + branch labels in serif |
+| Decisions with **≥3 outcomes** that genuinely branch | Horizontal tree — parent node with comb-routed drops to each outcome (see fan-out snippet). For 2 outcomes use the binary-decision exit above. |
 | State transitions | Nodes-and-edges with state labels; "active" state filled `var(--accent)`, others outlined |
 | Time-based progression — single thread (incident timeline, version history, one-track roadmap) | Vertical timeline with `var(--rule)` axis, accent dots for events |
 | Schedule across multiple parallel workstreams (quarterly roadmap, sprint plan, project plan) | Gantt — rows per workstream, time axis on top, status encoded by fill (filled / outlined / dashed) not by hue |
@@ -179,23 +193,35 @@ A Kami PDF without a single diagram is almost always under-cooked. Before genera
 | Organizational hierarchy (org chart, taxonomy, file-tree) | Tree with ranked levels; serif text only, no icons |
 | Numbers over time (equity curve, score trend, growth) | Sparkline — single `<polyline>` SVG, accent stroke |
 | Distribution / proportion | Horizontal bar plot. **Preferred over pie** in Kami — same-hue bars read cleaner than pie slices that would tempt a second color |
+| Ranked bar plot (top-N with the rest as context) | Horizontal bar plot with the top-N bars in `var(--accent)` and the remainder in `var(--ink-mute)`. **Never** use `var(--ink)` or `var(--ink-soft)` for the de-emphasized bars — those are body-text shades and read as nearly-black, which destroys the rank cue. |
 | Score / rating | Radial indicator (SVG circle with centered text), or a 5-dot scale with filled vs. outlined dots |
 | Side-by-side metrics with annotations | Small multiples — N tiny SVGs in a row, each a sparkline or bar |
 | Geographic / map content (rare, but happens) | Hand-SVG outline, accent fill for the regions being discussed |
-| Comparison of N independent options | **Not** a diagram — a `.grid-2` or `.grid-3` of bordered `.card`s with a callout for the recommendation is better |
 
 Pick at least one. If the markdown supports two, use two — Kami documents tolerate two diagrams gracefully per A4 page (figure-and-counter-figure is a print-design classic). Three on one page is usually too much.
 
-### When NOT to add a diagram
+### When NOT to add a diagram at all
 
 - Single-paragraph `letter` template with no claim that has a visual shape.
 - Resume sections that are pure lists (Experience, Education) — diluting the dense-text rhythm. EXCEPT: a sparkline / radial in the Skills section showing proficiency is on-brand.
 - Cover pages — a single Kami cover with the title is more powerful undecorated.
-- A page where the table IS the diagram (e.g. the Numbers section of an equity report — the table is already structured).
 
 ### Palette constraint
 
 Every SVG uses only Kami CSS vars: `var(--paper)`, `var(--paper-soft)`, `var(--ink)`, `var(--ink-soft)`, `var(--ink-mute)`, `var(--rule)`, `var(--accent)`. No additional colors. No `rgba()` (the same WeasyPrint discipline applies to SVG fills — solid hex / CSS var only).
+
+**Each var has one role. Do not improvise — pick by role:**
+
+| Var | Role | Use for |
+|---|---|---|
+| `--paper` / `--paper-soft` | Surface | Box fills, page background, "the diagram sits on parchment" |
+| `--accent` | Emphasis (one thing) | The *one* element being argued for in the diagram — the highlighted node, the top-ranked bar, the focal box. Used sparingly: if 5 of 6 boxes are accent, accent has stopped emphasizing anything. |
+| `--ink` | Primary body text | Node labels, axis labels. **Never** for chart bars, fills, or connector strokes — `--ink` is body-text-dark and reads as almost black when used as a fill. |
+| `--ink-soft` | Secondary text | Captions, sub-labels under a node. |
+| `--ink-mute` | Supporting structure | Connector strokes, arrowheads, de-emphasized bars in a ranked chart, sub-labels at small sizes. The de facto "diagram default" stroke. |
+| `--rule` | Thin separators | 1px dividers, the spine of a vertical timeline, dashed subgraph boundaries. Stroke only — never as a fill. |
+
+**Connector-palette consistency (hard rule).** Within a single diagram, all connector strokes — lines, arrows, dashed edges — must share one palette. Pick either *all-`--ink-mute`* (default) or *all-`--accent`* (rare, only when the diagram's entire point is to show one accented flow). Do **not** mix: a blue arrow into one node + gray arrows into the rest reads as "this arrow is special" with no caption telling the reader why. If one connector deserves emphasis, label the emphasis in text, do not encode it in the stroke colour.
 
 ### Inline SVG patterns (drop in and adapt)
 
@@ -392,13 +418,38 @@ Use whenever a single box has edges down to multiple boxes below it (the most co
 
 For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`). For 4+ children, keep them evenly spaced along the bus; if the bus would be wider than the canvas, switch to a two-level tree (parent → 2 group nodes → leaves) instead of cramming.
 
-**Anti-patterns to avoid in fan-out / pipeline diagrams:**
+**Named anti-patterns — never ship these:**
+
+*Structural (fan-out / pipeline):*
 
 - **Starburst origin.** Multiple connectors sharing one origin point and fanning out diagonally to children. Always use a trunk + bus (comb) instead.
 - **Floating arrowhead.** An arrow whose tip sits in empty space, not overlapping any child's top edge. The tip must land on (or just inside) the target box's border.
 - **Phantom edge.** A connector that points to no target at all. If the source markdown describes a path that has nowhere to go in your current diagram, drop the path or add the target box — don't ship a dangling arrow.
-- **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration. Use the 12×10 polygon from the snippet above.
-- **Stem poking through the arrowhead.** The line's `y2` (or `x2` for horizontal arrows) must equal the polygon's top edge coordinate, not "a few px short of the tip." If the polygon is `points="X-6,82 X+6,82 X,92"`, the feeding line must end at `y=82`, never at `y=86` or `y=88` — the latter puts the line inside the triangle, where anti-aliasing exposes the stem in print.
+- **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration, not as arrows. Use the 12×10 polygon from the snippets above.
+
+*Glyph / typography:*
+
+- **Uncaptioned glyph edge.** A symbol (`✕`, `?`, `!`, `∅`, dot, slash) placed between or on nodes with no adjacent caption telling the reader what it means. Readers cannot decode unlabelled symbols; either caption it within 4px or replace it with words. The classic offender is "session ✕ session ✕ session" to mean "memory wiped" — write the words.
+- **Decision diamond for a binary choice.** A small rotated square with a question crammed into two cramped lines, two lines drooping out of its lower vertices toward two outcome boxes. At print scale the diamond is too small to hold a readable question, the lines tend to terminate mid-air short of the boxes, and any colour asymmetry between the two branches editorialises in geometry. For 2 outcomes use a prose lede + 2-card grid; see the exit-conditions table above.
+
+*Colour / palette:*
+
+- **Mixed-palette connectors.** Some connectors in `--accent`, others in `--ink-mute`, within one diagram, with no caption explaining why one is special. Pick one stroke palette per diagram. See the connector-palette consistency rule above.
+- **Dark-gray de-emphasis.** Using `--ink` or `--ink-soft` (body-text shades) to colour bars, fills, or boxes that are meant to *recede*. They read as near-black at print scale and out-shout the accented elements they're meant to defer to. The correct "recede" shade is `--ink-mute`. Same rule for any "ranked top-N" chart: top in `--accent`, rest in `--ink-mute`, never in `--ink`.
+- **Asymmetric branch styling.** In a comparison or decision diagram, drawing one branch / box / arm in full accent and the other in `--ink-mute`. This *visually* argues for the accented branch before the reader has read the labels. Either accent both (and let text carry the recommendation) or accent neither.
+
+### Pre-ship checklist for every SVG
+
+Before embedding any inline SVG in the HTML, walk this list. If any item fails, fix or replace the SVG; do not ship and hope.
+
+1. **Exit conditions cleared.** The content isn't a comparison, binary decision, absence/negation, or pure enumeration. (If it is, the SVG shouldn't exist — go back to the exit-conditions table.)
+2. **One stroke palette.** Every connector / arrow / dashed edge in this SVG uses the same Kami var. No mixed `--accent` + `--ink-mute` strokes within one diagram.
+3. **Every glyph is captioned.** No `✕`, `?`, `!`, `∅`, lone dots, or invented symbols sitting between nodes without an adjacent label.
+4. **Arrowhead geometry.** Each polygon arrowhead is 12px×10px (or proportional), the feeding line ends exactly at the polygon's top edge (not inside it), and the tip overlaps the target box's border.
+5. **No dangling lines.** Every line begins at a source box's edge and ends at either (a) a target box's border, or (b) the base of a polygon arrowhead that lands on a target. Nothing floats.
+6. **`--ink` is text-only.** Search the SVG for `fill="var(--ink)"` and `stroke="var(--ink)"`. If either appears on a `<rect>`, `<line>`, `<polygon>`, or `<polyline>` that's meant to recede, replace with `--ink-mute`.
+7. **No decision diamonds.** Search for `transform="rotate(45"` or four-point polygons that look diamond-shaped. If found, the content is almost certainly a binary decision — re-route to the 2-card grid.
+8. **Symmetry where the content is symmetric.** In any comparison or fork-shaped diagram, both arms have the same fill treatment, the same stroke treatment, the same arrowhead treatment. The text labels carry any argument; the geometry stays neutral.
 
 #### Gantt — schedule across parallel workstreams
 
@@ -781,27 +832,19 @@ Apply these on top of the base scaffold.
 
 ## Footer
 
-Append a `<footer class="doc-footer">` with:
-
-- Source markdown path (so the user knows where to edit).
-- Generating agent (`source_agent` from frontmatter, or the persona that triggered the export).
-- Export timestamp (ISO date).
-- Template name.
+Append a minimal `<footer class="doc-footer">` containing **only the export date** (ISO format). No source path, no template name, no generating agent, no "Exported from …" prefix — the recipient of a Kami PDF doesn't need the production metadata, and the file URL already carries the date in its slug.
 
 Example:
 
 ```html
-<footer class="doc-footer">
-  Exported from <code>vault/pm/reports/2026-05-15-q1-review.md</code> · 2026-05-15 ·
-  template <strong>long-doc</strong> · generated by <strong>pm</strong>
-</footer>
+<footer class="doc-footer">2026-05-15</footer>
 ```
 
 For `letter`, omit the footer entirely (a letter doesn't carry meta about its production).
 
 ## Don't
 
-- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets `.pi/server/public/p/` (served by Nextra) outside the vault. Vault stays markdown-only.
+- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets the canonical export root at `<repo>/exports/` (served by Nextra via a symlink). Vault stays markdown-only — PDFs are derivatives and don't belong next to source notes.
 - **Don't proactively list URLs.** Each PDF URL is shared deliberately by the user. Never volunteer "here are your recent exports".
 - **Don't synthesize content.** Export reads the markdown source (or the inline markdown passed in). If you find yourself inventing sections that weren't in the source, stop — edit the markdown via `note-taker` first, then re-export.
 - **Don't auto-export.** The user explicitly triggers this skill. No "save and export" hook.

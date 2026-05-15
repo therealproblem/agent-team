@@ -15,8 +15,10 @@
  *                            overwrites the file; the URL stays stable.
  *                            Used by the `present-interactive` skill
  *                            (Layer 3).
- *   - `write_export_pdf` — PDF, written into the Next.js server's
- *                          `public/p/` directory so it's served at
+ *   - `write_export_pdf` — PDF, written into the canonical export root
+ *                          at `<repo>/exports/`. The Next.js server's
+ *                          `public/p/` is a symlink into this directory so
+ *                          the PDF is served at
  *                          `/p/<YYYY-MM-DD>-<slug>.pdf`. Re-exporting the
  *                          same title on the same day overwrites the file;
  *                          the URL stays stable. Used by the `export` skill
@@ -33,6 +35,7 @@
  * Configure paths via env vars:
  *   AGENTS_TEAM_VAULT_PATH        — default: <cwd>/vault
  *   AGENTS_TEAM_SERVER_PATH       — default: <cwd>/.pi/server
+ *   AGENTS_TEAM_EXPORT_PATH       — default: <cwd>/exports
  *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080
  *                                   Set to your cloudflared tunnel hostname
  *                                   so returned URLs are share-ready.
@@ -59,6 +62,9 @@ const VAULT_ROOT = resolve(
 );
 const SERVER_ROOT = resolve(
 	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),
+);
+const EXPORT_ROOT = resolve(
+	process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
 );
 const SERVER_PUBLIC_URL =
 	process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "http://localhost:8080";
@@ -263,7 +269,7 @@ const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
 	description:
-		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the local Nextra server's `public/p/` directory. The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError.",
+		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (the local Nextra server's `public/p/` is a symlink into the export root). Override the host with `AGENTS_TEAM_SERVER_PUBLIC_URL` — typically a cloudflared tunnel hostname for share-ready URLs. Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -289,7 +295,7 @@ const writeExportPdf = defineTool({
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 		const slug = `${todayIso()}-${slugify(params.title)}`;
-		const pdfDir = join(SERVER_ROOT, "public", "p");
+		const pdfDir = EXPORT_ROOT;
 		const tmpDir = join(SERVER_ROOT, ".export-tmp");
 		const htmlPath = join(tmpDir, `${slug}.html`);
 		const pdfPath = join(pdfDir, `${slug}.pdf`);

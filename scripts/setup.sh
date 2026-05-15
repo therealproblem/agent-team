@@ -222,7 +222,40 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Legacy frontend cleanup
+# 8. exports/ root + Nextra-served symlink
+#
+# `write_export_pdf` writes PDFs to <repo>/exports/. Nextra serves them at
+# /p/<slug>.pdf via a .pi/server/public/p → exports/ symlink. Both the
+# directory and the symlink are gitignored / not tracked, so fresh clones
+# need them recreated. Idempotent: skips when already correct, warns when
+# the symlink points somewhere unexpected.
+# ---------------------------------------------------------------------------
+
+EXPORT_ROOT="${REPO_ROOT}/exports"
+SERVED_LINK="${REPO_ROOT}/.pi/server/public/p"
+SERVED_LINK_PARENT="${REPO_ROOT}/.pi/server/public"
+SERVED_LINK_TARGET="../../../exports"
+
+mkdir -p "$EXPORT_ROOT"
+mkdir -p "$SERVED_LINK_PARENT"
+
+if [[ -L "$SERVED_LINK" ]]; then
+	current_target="$(readlink "$SERVED_LINK")"
+	if [[ "$current_target" == "$SERVED_LINK_TARGET" ]]; then
+		ok ".pi/server/public/p → exports/ symlink already in place"
+	else
+		warn ".pi/server/public/p exists but points to '${current_target}' (expected '${SERVED_LINK_TARGET}'). Leaving as-is; remove it manually if you want setup to recreate it."
+	fi
+elif [[ -e "$SERVED_LINK" ]]; then
+	warn ".pi/server/public/p exists as a regular file/directory, not a symlink. Setup will not overwrite it. Move or delete it, then re-run setup to create the exports/ symlink."
+else
+	info "creating .pi/server/public/p → ../../../exports symlink…"
+	ln -s "$SERVED_LINK_TARGET" "$SERVED_LINK"
+	ok ".pi/server/public/p → exports/ symlink created"
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Legacy frontend cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
