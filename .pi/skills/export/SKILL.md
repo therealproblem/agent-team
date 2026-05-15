@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is written to the canonical export root at `<repo>/exports/` and served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render-html` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout). Takes a vault markdown path or inline markdown, generates Kami-styled HTML, and calls `write_export_pdf` to produce the PDF via headless Chrome. The PDF lands in `<repo>/exports/` and is served at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` — each regeneration appends a fresh epoch suffix to defeat Cloudflare edge caching, so older PDFs are NOT overwritten (the user prunes manually). Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates: one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render-html` (interactive page) and `note-taker` (markdown source); the PDF is a one-way deliverable, markdown is the source of truth.
 ---
 
 # Export
@@ -16,13 +16,13 @@ Three different read paths, three different skills:
 |---|---|---|---|
 | **Knowledge graph / archival** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
 | **On-screen exploration** | `render-html` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
-| **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
+| **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` |
 
-The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, exposed to Nextra via a `.pi/server/public/p` → `exports/` symlink so the served URL stays stable). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
+The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export, and a NEW file lands at a NEW URL: slug = `<YYYY-MM-DD>-<title>-<epoch>` where `<epoch>` is the Unix-seconds timestamp of the export. The prior PDF is left untouched on disk — same title, same date, different epoch suffix, two files. This is deliberate: a stable URL would be served stale by Cloudflare's edge cache when you regenerate, so each export gets its own URL and the cache simply never sees the old one again. **The user prunes old PDFs manually** — there is no auto-cleanup. Within one title, the higher epoch = newer file. The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, exposed to Nextra via a `.pi/server/public/p` → `exports/` symlink). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
 
 ## URL access model
 
-Each PDF lives at `http://…/p/<YYYY-MM-DD>-<slug>.pdf` where `<slug>` is the slugified title. The URL is the access control. There is no auth — the user shares the URL deliberately with whoever should receive the deliverable.
+Each PDF lives at `http://…/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` where `<slug>` is the slugified title and `<epoch>` is Unix-seconds at export time (appended so regenerations don't hit a stale CDN cache). The URL is the access control. There is no auth — the user shares the URL deliberately with whoever should receive the deliverable. Note: because every regeneration is a new URL, do NOT promise the recipient a "stable link" — if they need the latest version, send the latest URL.
 
 The local server hides discovery vectors (`/`, `/p`, sitemap, search index, 404 page) so listing what exists is not possible from outside. Slugs are predictable from the title, though, so don't treat the URL as a secret — share each URL only in direct response to the user who asked for it.
 
@@ -74,7 +74,7 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
+A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). The `<epoch>` is Unix-seconds at export time — every regeneration produces a new filename, so the prior PDF is preserved and the CDN cache can't return a stale copy under the same URL. Old PDFs accumulate; the user prunes them manually. Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
 
 **Returning the URL to the user.** The URL is the entire response. Do NOT:
 
@@ -90,7 +90,7 @@ Returned to the caller (success case):
 
 ```
 {
-  slug:      "<YYYY-MM-DD>-<title-slug>",
+  slug:      "<YYYY-MM-DD>-<title-slug>-<epoch>",
   pdf_path:  "<absolute path to PDF>",
   pdf_url:   "http://localhost:8080/p/<slug>.pdf",
   title:     "<title>",

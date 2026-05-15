@@ -20,8 +20,11 @@ exports/
 .pi/server/next-env.d.ts
 # Runtime-generated presentation artifacts (URL date-slug paths).
 .pi/server/content/v/*.mdx
-# Served-PDF symlink → exports/ (the link itself is committed; the PDFs it
-# points to are ignored via the exports/ rule above).
+# Served-PDF symlink → exports/ (created locally; not source-controlled).
+# The PDFs it points to are ignored via the exports/ rule above.
+.pi/server/public/p
+# Transient export-HTML staging — written, rendered to PDF, then deleted.
+# Retained on Chrome failure for manual recovery.
 .pi/server/.export-tmp/
 
 # Local secrets — copy .env.example to .env and fill in. Never commit .env.
