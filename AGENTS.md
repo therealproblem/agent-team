@@ -96,7 +96,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
 │   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_html_render` (md → Nextra content/v/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → <repo>/exports/<date>-<slug>-<epoch>.pdf, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time; each regeneration appends a fresh Unix-epoch suffix so the URL is never reused).
 │   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `npm run build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
-│   ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
+│   ├── news-ingest/           Registers `fetch_topic`, `query_today`, `get_item`, `refresh_all_topics`. Fetches RSS/Atom feeds (plain Node `fetch`, no Camoufox) and persists into a daily-rolling SQLite store at `.pi/state/news.db` (auto-purged on day rollover). Source registry: `.pi/state/news-sources.json` (topic → [feed URLs]). Topics absent from the registry return `fallback_hint: "no_rss_source"` so the `news` skill delegates to `research`. Cron-driven by `scripts/news-cron.sh`. Surfaces a `news: last refresh …` line on `session_start` (flags `stale` when the last refresh predates today's local-calendar day). Registers `/news-refresh` slash command — manual full sweep, runs entirely in-extension, no agent turn. Used by `news` skill.
 │   ├── srs/                   Registers `list_due`, `record`, `add_item`.
 │   ├── trade-journal/         Registers `list_trades`, `read_trade`.
 │   └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
@@ -115,6 +115,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 - **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
 - **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
   - `@the-forge-flow/camoufox-pi` — stealth web fetcher + DuckDuckGo search via Camoufox (fingerprint-resistant Firefox fork). Backs the `research` skill. First call downloads the Camoufox binary (~500 MB). Install: `pi install -l npm:@the-forge-flow/camoufox-pi`.
+  - `better-sqlite3` — synchronous SQLite binding. Backs `news-ingest`'s daily-rolling news store at `.pi/state/news.db`. Install: `pi install -l npm:better-sqlite3`.
 
 ## Local artifact server
 
@@ -202,6 +203,22 @@ Vars worth setting:
 - `AGENTS_TEAM_SERVER_PUBLIC_URL` — base URL the tools return. Set to your named cloudflared tunnel hostname so HTML render / PDF URLs are share-ready.
 - `AGENTS_TEAM_CHROME_PATH` — override Chrome binary used for PDF export (auto-detected on macOS / Linux / Windows by default).
 
+## News brief cron
+
+The `news` skill is backed by a daily-rolling SQLite store at `.pi/state/news.db`. To populate it before you start your day (so `query_today` returns content without hitting the network), schedule [scripts/news-cron.sh](scripts/news-cron.sh) via `cron`:
+
+```bash
+# Once per morning at 07:00
+crontab -l 2>/dev/null | { cat; echo "0 7 * * * $(pwd)/scripts/news-cron.sh"; } | crontab -
+
+# Or hourly between 06:00 and 21:00
+crontab -l 2>/dev/null | { cat; echo "0 6-21 * * * $(pwd)/scripts/news-cron.sh"; } | crontab -
+```
+
+The script runs `pi --no-session` against `news-ingest.refresh_all_topics`, which fetches every topic in `.pi/state/news-sources.json` and writes into the DB. Logs to `/tmp/agents-team-news-cron.log`. Requires `pi` on PATH and the laptop awake at trigger time (cron does **not** wake a sleeping Mac — use `launchd` if you need wake-on-fire).
+
+If the cron is skipped (laptop closed, machine off, …), the `news-ingest` extension surfaces a `news: … — stale (cron skipped?). Run /news-refresh to refresh now.` line on the next Pi session start. `/news-refresh` runs the same full sweep manually, entirely inside the extension — no agent turn, no LLM cost. The DB is the day's working set; bookmarking is opt-in (the skill calls `note-taker` to copy an item into the vault on user request) — items are never auto-saved.
+
 ## Implementation workflow rule
 
 **Build custom only when necessary.** Default is to find and reuse, not write.
@@ -252,14 +269,14 @@ These apply to every agent:
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
-| 3 | note-taker, render-html, export, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render-html` reads vault markdown and emits a markdown body that Nextra serves at `/v/<YYYY-MM-DD>-<slug>`. `export` produces Kami-styled PDFs served at `/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (via headless Chrome) for deliverables — resume, letter, portfolio, report, slides, etc. The `-<epoch>` suffix is appended per export to defeat CDN caching; prior PDFs for the same title — across all dates — are unlinked automatically once the new one is on disk. `fetch_topic` still returns empty (TODO: pick source or delegate to `research`). |
+| 3 | note-taker, render-html, export, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render-html` reads vault markdown and emits a markdown body that Nextra serves at `/v/<YYYY-MM-DD>-<slug>`. `export` produces Kami-styled PDFs served at `/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (via headless Chrome) for deliverables — resume, letter, portfolio, report, slides, etc. The `-<epoch>` suffix is appended per export to defeat CDN caching; prior PDFs for the same title — across all dates — are unlinked automatically once the new one is on disk. `fetch_topic` is live — RSS-backed via `.pi/state/news-sources.json`; topics without a registry entry fall back to `research` (search-back). |
 | 3 | research | Skill present. Backed by installed npm package `@the-forge-flow/camoufox-pi` (tools: `tff-fetch_url`, `tff-search_web`). |
 | ext | subagent | Pi's example, with profile pre-load + `--system-prompt` patch |
 | ext | obsidian-vault | Three tools: `write_note` (markdown → vault), `write_html_render` (md → `.pi/server/content/v/<date>-<slug>.mdx`), `write_export_pdf` (PDF → `<repo>/exports/<date>-<slug>-<epoch>.pdf` via headless Chrome, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time). |
 | ext | server | Lifecycles the Next.js / Nextra server (port 8080). Spawns on session_start; kills on Pi exit. Detects an already-bound port and skips spawn. |
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
-| ext | news-ingest | Stub (`realFetch` returns []) |
+| ext | news-ingest | Functional. Plain-fetch RSS/Atom from feeds listed per topic in `.pi/state/news-sources.json`. Hand-rolled RSS 2.0 + Atom 1.0 parser. Persists into `.pi/state/news.db` (SQLite via `better-sqlite3`), `UNIQUE(topic, url)` dedup, daily-purge on next write past local-day rollover. Four tools: `fetch_topic` (single topic, live fetch + DB write, 1h DB-backed freshness cache), `query_today` (DB-only read, no network), `get_item` (lookup by row id, used by bookmark flow), `refresh_all_topics` (cron-driven full sweep). Topics with no registry entry return `fallback_hint: "no_rss_source"` so the `news` skill can delegate to `research`. On `session_start` surfaces `news: last refresh <date> (<relative>), <N> items in store` — appends `— stale (cron skipped?). Run /news-refresh to refresh now.` when the last fetch predates today's local-calendar day. Slash command `/news-refresh` runs the same sweep manually, entirely in-extension (no agent turn). |
 | ext | reminders | Functional. Surfaces a numbered list from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. Registers `/clear <N>` slash command — clears reminder by index directly from the extension, no agent turn. Tools: `reminder_add`, `reminder_resolve` (fallback for natural-language resolves), `reminder_list`. |
 
 ## Verification
