@@ -130,6 +130,40 @@ blockquote * {
 }
 .markdown-alert > p:last-child { margin-bottom: 0 !important; }
 
+/* Mermaid edge labels — force a solid parchment background so the arrow line
+ * beneath doesn't paint through the label text. The renderer sets
+ * `edgeLabelBackground` in themeVariables, but Mermaid's foreignObject
+ * children carry their own inline transparent background in some versions;
+ * this overrides those cases. Multiple selectors because the DOM shape
+ * differs between Mermaid v10 (HTML labels via .edgeLabel span) and v11
+ * (foreignObject > div). Padding gives the mask a few pixels of margin so
+ * thick navy strokes don't bleed through letter-tops/bottoms. */
+.mermaid .edgeLabel,
+.mermaid .edgeLabel rect,
+.mermaid foreignObject > div,
+.mermaid foreignObject span.edgeLabel,
+.mermaid .labelBkg {
+  background-color: #f1e9e7 !important;
+  fill: #f1e9e7 !important;
+}
+.mermaid .edgeLabel,
+.mermaid foreignObject > div {
+  padding: 2px 6px !important;
+  border-radius: 2px;
+}
+
+/* Mermaid SVG — don't clip content that overflows the computed viewBox.
+ * Mermaid occasionally under-computes the SVG height for diagrams with
+ * captioned dotted edges or subgraph annotations rendered below the main
+ * flow; allow that content to spill rather than getting cut off at the
+ * SVG's bottom edge. */
+.mermaid svg,
+div[data-mermaid] svg {
+  overflow: visible !important;
+  max-width: 100%;
+  height: auto;
+}
+
 /* NOTE — dark-navy (theme accent) */
 .markdown-alert.markdown-alert-note {
   background: rgba(3, 47, 98, 0.06) !important;
