@@ -82,6 +82,26 @@ async function ensureFile(): Promise<void> {
 	await writeFile(REMINDERS_PATH, INITIAL_TEMPLATE, "utf8");
 }
 
+/**
+ * Serialize all reads and writes against REMINDERS_PATH.
+ *
+ * Without this, parallel tool calls (e.g. two `reminder_add` invocations
+ * issued in the same agent message) race on the read-modify-write cycle:
+ * both read the same starting state, both append one item to their own
+ * in-memory copy, both write back — last writer wins, first item is lost.
+ *
+ * The mutex is in-process; that's sufficient because a single Pi runtime
+ * owns the file. The chain swallows errors so one failure doesn't stall
+ * subsequent operations.
+ */
+let fileOpChain: Promise<unknown> = Promise.resolve();
+
+function withFileLock<T>(fn: () => Promise<T>): Promise<T> {
+	const next = fileOpChain.then(fn, fn);
+	fileOpChain = next.catch(() => undefined);
+	return next;
+}
+
 type Sections = {
 	preamble: string[];
 	open: string[];
@@ -167,12 +187,12 @@ function parseOpenItems(md: string): OpenItem[] {
  * The index shown here is also the argument to `/clear <N>`.
  *
  *   Open reminder (1):
- *     1. check cmem               today
+ *     1. check cmem               [today]
  *
  *   Open reminders (3):
- *     1. check cmem               today
- *     2. follow up with Tom       2d
- *     3. verify YAML parser       3w
+ *     1. check cmem               [today]
+ *     2. follow up with Tom       [2d]
+ *     3. verify YAML parser       [3w]
  *
  *   (≥ 10 items: index right-padded to 2 chars so the text column stays aligned)
  *     10. ...
@@ -187,7 +207,8 @@ function formatOpenItems(items: OpenItem[]): string {
 	const lines = items.map((it, i) => {
 		const idx = String(i + 1).padStart(idxWidth);
 		const padded = it.text.padEnd(maxText + gap);
-		return `  ${idx}. ${padded}${it.age}`;
+		const age = it.age ? `[${it.age}]` : "";
+		return `  ${idx}. ${padded}${age}`;
 	});
 	return [header, ...lines].join("\n");
 }
@@ -205,24 +226,26 @@ const reminderAdd = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		try {
-			await ensureFile();
-			const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
-			const sections = parseSections(md);
-			sections.open.push(`- [ ] ${today()} — ${params.text}`);
-			await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
-			return {
-				content: [{ type: "text", text: `Added: ${params.text}` }],
-				details: { text: params.text, date: today() },
-			};
-		} catch (e) {
-			const message = (e as Error).message;
-			return {
-				content: [{ type: "text", text: `Failed to add reminder: ${message}` }],
-				details: { error: message },
-				isError: true,
-			};
-		}
+		return withFileLock(async () => {
+			try {
+				await ensureFile();
+				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+				const sections = parseSections(md);
+				sections.open.push(`- [ ] ${today()} — ${params.text}`);
+				await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
+				return {
+					content: [{ type: "text", text: `Added: ${params.text}` }],
+					details: { text: params.text, date: today() },
+				};
+			} catch (e) {
+				const message = (e as Error).message;
+				return {
+					content: [{ type: "text", text: `Failed to add reminder: ${message}` }],
+					details: { error: message },
+					isError: true,
+				};
+			}
+		});
 	},
 });
 
@@ -239,60 +262,62 @@ const reminderResolve = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		try {
-			await ensureFile();
-			const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
-			const sections = parseSections(md);
-			const openLines = sections.open.filter((l) =>
-				/^\s*-\s*\[\s*\]/.test(l),
-			);
-			const needle = params.match.toLowerCase();
-			const matches = openLines.filter((l) =>
-				l.toLowerCase().includes(needle),
-			);
-			if (matches.length === 0) {
+		return withFileLock(async () => {
+			try {
+				await ensureFile();
+				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+				const sections = parseSections(md);
+				const openLines = sections.open.filter((l) =>
+					/^\s*-\s*\[\s*\]/.test(l),
+				);
+				const needle = params.match.toLowerCase();
+				const matches = openLines.filter((l) =>
+					l.toLowerCase().includes(needle),
+				);
+				if (matches.length === 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `No open reminder matches "${params.match}".`,
+							},
+						],
+						details: { match: params.match, matchCount: 0 },
+						isError: true,
+					};
+				}
+				if (matches.length > 1) {
+					const summary = matches.map((l) => "  " + l).join("\n");
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Multiple open reminders match "${params.match}":\n${summary}\nRetry with a more specific substring.`,
+							},
+						],
+						details: { match: params.match, matchCount: matches.length, matches },
+						isError: true,
+					};
+				}
+				const matched = matches[0];
+				sections.open = sections.open.filter((l) => l !== matched);
+				await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
+				const itemText = matched
+					.replace(/^\s*-\s*\[\s*\]\s*\d{4}-\d{2}-\d{2}\s*—\s*/, "")
+					.trim();
 				return {
-					content: [
-						{
-							type: "text",
-							text: `No open reminder matches "${params.match}".`,
-						},
-					],
-					details: { match: params.match, matchCount: 0 },
+					content: [{ type: "text", text: `Resolved: ${itemText}` }],
+					details: { resolved: itemText, date: today() },
+				};
+			} catch (e) {
+				const message = (e as Error).message;
+				return {
+					content: [{ type: "text", text: `Failed to resolve: ${message}` }],
+					details: { error: message },
 					isError: true,
 				};
 			}
-			if (matches.length > 1) {
-				const summary = matches.map((l) => "  " + l).join("\n");
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Multiple open reminders match "${params.match}":\n${summary}\nRetry with a more specific substring.`,
-						},
-					],
-					details: { match: params.match, matchCount: matches.length, matches },
-					isError: true,
-				};
-			}
-			const matched = matches[0];
-			sections.open = sections.open.filter((l) => l !== matched);
-			await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
-			const itemText = matched
-				.replace(/^\s*-\s*\[\s*\]\s*\d{4}-\d{2}-\d{2}\s*—\s*/, "")
-				.trim();
-			return {
-				content: [{ type: "text", text: `Resolved: ${itemText}` }],
-				details: { resolved: itemText, date: today() },
-			};
-		} catch (e) {
-			const message = (e as Error).message;
-			return {
-				content: [{ type: "text", text: `Failed to resolve: ${message}` }],
-				details: { error: message },
-				isError: true,
-			};
-		}
+		});
 	},
 });
 
@@ -304,28 +329,30 @@ const reminderList = defineTool({
 	parameters: Type.Object({}),
 
 	async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
-		try {
-			if (!existsSync(REMINDERS_PATH)) {
-				return { content: [{ type: "text", text: "No open reminders." }] };
+		return withFileLock(async () => {
+			try {
+				if (!existsSync(REMINDERS_PATH)) {
+					return { content: [{ type: "text", text: "No open reminders." }] };
+				}
+				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+				const items = parseOpenItems(md);
+				if (items.length === 0) {
+					return { content: [{ type: "text", text: "No open reminders." }] };
+				}
+				const text = formatOpenItems(items);
+				return {
+					content: [{ type: "text", text }],
+					details: { count: items.length, items },
+				};
+			} catch (e) {
+				const message = (e as Error).message;
+				return {
+					content: [{ type: "text", text: `Failed to list: ${message}` }],
+					details: { error: message },
+					isError: true,
+				};
 			}
-			const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
-			const items = parseOpenItems(md);
-			if (items.length === 0) {
-				return { content: [{ type: "text", text: "No open reminders." }] };
-			}
-			const text = formatOpenItems(items);
-			return {
-				content: [{ type: "text", text }],
-				details: { count: items.length, items },
-			};
-		} catch (e) {
-			const message = (e as Error).message;
-			return {
-				content: [{ type: "text", text: `Failed to list: ${message}` }],
-				details: { error: message },
-				isError: true,
-			};
-		}
+		});
 	},
 });
 
@@ -420,56 +447,58 @@ export default function (pi: ExtensionAPI): void {
 				return;
 			}
 
-			try {
-				await ensureFile();
-				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
-				const sections = parseSections(md);
-				const openLines = sections.open.filter(isItemLine);
-				if (openLines.length === 0) {
-					surface(pi, "No open reminders.");
-					return;
-				}
-				if (n > openLines.length) {
-					surface(
-						pi,
-						`No reminder #${n}. You have ${openLines.length} open ${
-							openLines.length === 1 ? "reminder" : "reminders"
-						}.`,
-					);
-					return;
-				}
-
-				const target = openLines[n - 1];
-				const itemText = target
-					.replace(/^\s*-\s*\[\s*\]\s*\d{4}-\d{2}-\d{2}\s*—\s*/, "")
-					.replace(/^\s*-\s*\[\s*\]\s*/, "")
-					.trim();
-
-				// Filter the matched line out of the open section.
-				let dropped = false;
-				sections.open = sections.open.filter((l) => {
-					if (!dropped && l === target) {
-						dropped = true;
-						return false;
+			await withFileLock(async () => {
+				try {
+					await ensureFile();
+					const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+					const sections = parseSections(md);
+					const openLines = sections.open.filter(isItemLine);
+					if (openLines.length === 0) {
+						surface(pi, "No open reminders.");
+						return;
 					}
-					return true;
-				});
-				await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
+					if (n > openLines.length) {
+						surface(
+							pi,
+							`No reminder #${n}. You have ${openLines.length} open ${
+								openLines.length === 1 ? "reminder" : "reminders"
+							}.`,
+						);
+						return;
+					}
 
-				// Confirm + show updated list (or "No open reminders." if empty).
-				const remaining = parseOpenItems(await readFile(REMINDERS_PATH, { encoding: "utf8" }));
-				const updated =
-					remaining.length === 0
-						? "No open reminders."
-						: formatOpenItems(remaining);
-				surface(pi, `Cleared #${n}: ${itemText}\n\n${updated}`, {
-					cleared: { index: n, text: itemText },
-					remaining: remaining.length,
-				});
-			} catch (e) {
-				const message = (e as Error).message;
-				surface(pi, `Failed to clear: ${message}`);
-			}
+					const target = openLines[n - 1];
+					const itemText = target
+						.replace(/^\s*-\s*\[\s*\]\s*\d{4}-\d{2}-\d{2}\s*—\s*/, "")
+						.replace(/^\s*-\s*\[\s*\]\s*/, "")
+						.trim();
+
+					// Filter the matched line out of the open section.
+					let dropped = false;
+					sections.open = sections.open.filter((l) => {
+						if (!dropped && l === target) {
+							dropped = true;
+							return false;
+						}
+						return true;
+					});
+					await writeFile(REMINDERS_PATH, serialize(sections), { encoding: "utf8" });
+
+					// Confirm + show updated list (or "No open reminders." if empty).
+					const remaining = parseOpenItems(await readFile(REMINDERS_PATH, { encoding: "utf8" }));
+					const updated =
+						remaining.length === 0
+							? "No open reminders."
+							: formatOpenItems(remaining);
+					surface(pi, `Cleared #${n}: ${itemText}\n\n${updated}`, {
+						cleared: { index: n, text: itemText },
+						remaining: remaining.length,
+					});
+				} catch (e) {
+					const message = (e as Error).message;
+					surface(pi, `Failed to clear: ${message}`);
+				}
+			});
 		},
 	});
 
