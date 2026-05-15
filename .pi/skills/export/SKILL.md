@@ -185,7 +185,8 @@ If none of the above fires, continue to the patterns table.
 | If the markdown contains… | Reach for |
 |---|---|
 | Sequenced steps or a process | Horizontal flow — rounded rects + arrows in `var(--ink-mute)`, accent fill on the current/highlighted node |
-| Decisions with **≥3 outcomes** that genuinely branch | Horizontal tree — parent node with comb-routed drops to each outcome (see fan-out snippet). For 2 outcomes use the binary-decision exit above. |
+| Decisions with **≥3 outcomes** at ONE level (single fork) | Horizontal tree — parent node with comb-routed drops to each outcome (see fan-out snippet). For 2 outcomes use the binary-decision exit above. |
+| **Multi-level** decision tree (sequence of forks → N outcomes) | Left-to-right tree with labelled branches — see "Decision tree" snippet. Top-down layout overflows A4 portrait once leaves ≥ 4; sideways layout flows down the page instead of off the right edge. |
 | State transitions | Nodes-and-edges with state labels; "active" state filled `var(--accent)`, others outlined |
 | Time-based progression — single thread (incident timeline, version history, one-track roadmap) | Vertical timeline with `var(--rule)` axis, accent dots for events |
 | Schedule across multiple parallel workstreams (quarterly roadmap, sprint plan, project plan) | Gantt — rows per workstream, time axis on top, status encoded by fill (filled / outlined / dashed) not by hue |
@@ -418,6 +419,90 @@ Use whenever a single box has edges down to multiple boxes below it (the most co
 
 For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`). For 4+ children, keep them evenly spaced along the bus; if the bus would be wider than the canvas, switch to a two-level tree (parent → 2 group nodes → leaves) instead of cramming.
 
+#### Decision tree — multi-level branching with labelled edges
+
+Use when the source markdown describes a *sequence* of forks that leads to N outcomes — a "which pattern do I pick?" flowchart, a triage tree, an `if-elif-else` cascade. Fan-out (above) covers ONE level; this snippet covers TWO OR MORE.
+
+**Lay the tree LEFT-TO-RIGHT, not top-down, on A4 portrait.** A top-down tree with ≥4 leaves is the single most common cause of right-edge clipping in this skill: leaves spread horizontally faster than the page is wide, and the rightmost leaf gets silently truncated in the PDF (the text extractor still sees the full label, but the reader does not). Sideways trees grow downward instead, and A4 portrait has 245mm of content height vs. 170mm of width.
+
+**Edge labels** (Yes / No, condition names) sit **perpendicular to the connector**, offset 6-10px above the line — never sharing the line's own coordinate. A `<text>` placed on the same y-axis as a `<line>` collides with it at print scale; readers cannot tell which branch the label names.
+
+```html
+<svg viewBox="0 0 520 280" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="11" fill="var(--ink)">
+
+    <!-- Root (left) -->
+    <rect x="10" y="120" width="100" height="40" rx="6"
+          fill="var(--accent)" stroke="var(--accent)"/>
+    <text x="60" y="144" fill="var(--paper)" text-anchor="middle">Start</text>
+
+    <!-- Level-1 decision node -->
+    <rect x="160" y="120" width="120" height="40" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="220" y="144" text-anchor="middle">Condition A?</text>
+
+    <!-- Root → Level-1 (single edge, no label needed before the first fork) -->
+    <line x1="110" y1="140" x2="150" y2="140" stroke="var(--ink-mute)" stroke-width="1"/>
+    <polygon points="150,136 158,140 150,144" fill="var(--ink-mute)"/>
+
+    <!-- Level-1 fork: upper branch to Decision B, lower branch to Decision C -->
+    <!-- Branch lines start at Decision A's right edge -->
+    <line x1="280" y1="140" x2="320" y2="60"  stroke="var(--ink-mute)" stroke-width="1"/>
+    <line x1="280" y1="140" x2="320" y2="220" stroke="var(--ink-mute)" stroke-width="1"/>
+
+    <!-- Branch labels: positioned ABOVE the midpoint of each line, in --ink-mute -->
+    <text x="298" y="92"  fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">Yes</text>
+    <text x="298" y="188" fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">No</text>
+
+    <!-- Level-2 decision (upper) -->
+    <rect x="320" y="40" width="120" height="40" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="380" y="64" text-anchor="middle">Condition B?</text>
+
+    <!-- Level-2 decision (lower) -->
+    <rect x="320" y="200" width="120" height="40" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="380" y="224" text-anchor="middle">Condition C?</text>
+
+    <!-- Leaves: 4 outcomes stacked vertically on the right -->
+    <!-- Upper-Yes leaf -->
+    <line x1="440" y1="60" x2="478" y2="20" stroke="var(--ink-mute)" stroke-width="1"/>
+    <text x="460" y="36" fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">Yes</text>
+    <rect x="480" y="0" width="40" height="32" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="500" y="20" text-anchor="middle" font-size="10">Alpha</text>
+
+    <!-- Upper-No leaf -->
+    <line x1="440" y1="60" x2="478" y2="100" stroke="var(--ink-mute)" stroke-width="1"/>
+    <text x="460" y="86" fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">No</text>
+    <rect x="480" y="80" width="40" height="32" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="500" y="100" text-anchor="middle" font-size="10">Beta</text>
+
+    <!-- Lower-Yes leaf -->
+    <line x1="440" y1="220" x2="478" y2="180" stroke="var(--ink-mute)" stroke-width="1"/>
+    <text x="460" y="196" fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">Yes</text>
+    <rect x="480" y="160" width="40" height="32" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="500" y="180" text-anchor="middle" font-size="10">Gamma</text>
+
+    <!-- Lower-No leaf -->
+    <line x1="440" y1="220" x2="478" y2="260" stroke="var(--ink-mute)" stroke-width="1"/>
+    <text x="460" y="246" fill="var(--ink-mute)" font-size="9.5" text-anchor="middle">No</text>
+    <rect x="480" y="240" width="40" height="32" rx="6"
+          fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="500" y="260" text-anchor="middle" font-size="10">Delta</text>
+  </g>
+</svg>
+```
+
+**Scaling rules:**
+
+- For **3 leaves**: drop one of the four leaf rows; center the remaining three vertically.
+- For **5–6 leaves**: keep the same width (520) but expand height to ~360-400 and add intermediate decision nodes. Do not widen the viewBox past 520 on portrait — the page can't render it.
+- For **7+ leaves**: a single A4 SVG cannot hold this at readable type. Split into two trees grouped by the first decision, or restructure the source markdown so the tree is shallower.
+- For **asymmetric trees** (some branches end early as leaves, others continue forking): leaf boxes can appear at any column, not just the rightmost. Keep the LR direction; just place each leaf at the column where its branch terminates. Align all leaf right-edges to a consistent x-coordinate only if it doesn't force overflow.
+
 **Named anti-patterns — never ship these:**
 
 *Structural (fan-out / pipeline):*
@@ -426,6 +511,8 @@ For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`)
 - **Floating arrowhead.** An arrow whose tip sits in empty space, not overlapping any child's top edge. The tip must land on (or just inside) the target box's border.
 - **Phantom edge.** A connector that points to no target at all. If the source markdown describes a path that has nowhere to go in your current diagram, drop the path or add the target box — don't ship a dangling arrow.
 - **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration, not as arrows. Use the 12×10 polygon from the snippets above.
+- **Tree overflow.** A top-down decision tree whose leaf row spreads wider than the viewBox / page width. The rightmost leaves get silently clipped in the PDF — the text extractor still sees the full string ("Hierarchical"), but the reader sees "Hierarc". Cause: stacking ≥4 leaves horizontally on A4 portrait. Fix: rotate to LR layout (see the multi-level decision tree snippet), where leaves stack vertically and the tree grows down the page rather than off the right edge.
+- **Label-on-line collision.** A branch label (`Yes` / `No` / a condition name) positioned at the same y-coordinate as the connector it names. The text and the line overlap and both become unreadable at print scale. Fix: offset the label 6-10px perpendicular to the line (above for horizontal connectors, beside for vertical), using `text-anchor="middle"` at the line's midpoint X.
 
 *Glyph / typography:*
 
@@ -450,6 +537,8 @@ Before embedding any inline SVG in the HTML, walk this list. If any item fails, 
 6. **`--ink` is text-only.** Search the SVG for `fill="var(--ink)"` and `stroke="var(--ink)"`. If either appears on a `<rect>`, `<line>`, `<polygon>`, or `<polyline>` that's meant to recede, replace with `--ink-mute`.
 7. **No decision diamonds.** Search for `transform="rotate(45"` or four-point polygons that look diamond-shaped. If found, the content is almost certainly a binary decision — re-route to the 2-card grid.
 8. **Symmetry where the content is symmetric.** In any comparison or fork-shaped diagram, both arms have the same fill treatment, the same stroke treatment, the same arrowhead treatment. The text labels carry any argument; the geometry stays neutral.
+9. **viewBox width within page budget.** Width ≤ 520 on A4 portrait (or ≤ 800 on landscape, e.g. slides). If a tree, flow, or architecture sketch exceeds the budget, restructure — rotate top-down trees to LR layout (see the multi-level decision tree snippet), split into two diagrams, or move that single section to landscape. Right-edge overflow is invisible in the source markdown but silently clips text in the PDF.
+10. **Edge labels off the line.** Any `<text>` that names a branch sits 6-10px perpendicular to the connector it names, never at the connector's own coordinate. Search the SVG for `<text>` and `<line>` elements that share a y-value (horizontal connector) or x-value (vertical connector) within ~3px; that's a collision waiting to happen in print.
 
 #### Gantt — schedule across parallel workstreams
 
@@ -832,13 +921,33 @@ Apply these on top of the base scaffold.
 
 ## Footer
 
-Append a minimal `<footer class="doc-footer">` containing **only the export date** (ISO format). No source path, no template name, no generating agent, no "Exported from …" prefix — the recipient of a Kami PDF doesn't need the production metadata, and the file URL already carries the date in its slug.
+Append a minimal `<footer class="doc-footer">` containing **only the date** (ISO format, single token). Nothing else. The recipient of a Kami PDF doesn't need production metadata, and the file URL already carries the date in its slug.
 
-Example:
+Correct:
 
 ```html
 <footer class="doc-footer">2026-05-15</footer>
 ```
+
+**Forbidden** — every one of these is wrong, do not ship any variant:
+
+```html
+<!-- WRONG: source path -->
+<footer class="doc-footer">Exported from vault/learning/foo.md · 2026-05-15</footer>
+
+<!-- WRONG: template name -->
+<footer class="doc-footer">2026-05-15 · template long-doc</footer>
+
+<!-- WRONG: generating agent / persona -->
+<footer class="doc-footer">2026-05-15 · generated by educator</footer>
+
+<!-- WRONG: all three at once (the kitchen-sink failure mode) -->
+<footer class="doc-footer">
+  Exported from vault/learning/foo.md · 2026-05-15 · template long-doc · generated by educator
+</footer>
+```
+
+If you find yourself reaching for any "Exported from", "template", "generated by", "source", or persona name in the footer, stop — none of those belong in the deliverable. The footer is one date, that's it.
 
 For `letter`, omit the footer entirely (a letter doesn't carry meta about its production).
 
@@ -859,5 +968,6 @@ For `letter`, omit the footer entirely (a letter doesn't carry meta about its pr
 - **Don't use `rgba()` for tag/badge backgrounds.** Solid hex only.
 - **Don't fetch from external CDNs at render time** beyond a single woff2 font URL if local fonts are unavailable. The PDF must reproduce identically offline.
 - **Don't paste the rendered body inline** in the chat reply. The PDF path is the deliverable.
+- **Don't put production metadata in the footer.** No "Exported from …", no source path, no template name, no "generated by <persona>", no author handle. The footer is the date alone (or absent on `letter`). See the Footer section for the forbidden variants.
 - **Don't pick a ninth template.** If the request doesn't fit one of the eight, pick the closest and adapt.
 - **Don't run `export` on a draft.** Stabilize the markdown first.
