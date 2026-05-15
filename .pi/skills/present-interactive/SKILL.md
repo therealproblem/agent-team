@@ -161,6 +161,26 @@ Labels: `A -->|label| B` (solid) or `A -. label .-> B` (dotted).
 
 Same rule for node shapes — stick to documented forms: `[ ]` rectangle, `( )` round, `(( ))` circle, `{ }` rhombus, `[/ /]` parallelogram, `>` flag. Don't invent shape brackets.
 
+### Mermaid colors — don't set them
+
+The server ships a Mermaid renderer pre-themed with the DESIGN-2 palette (white nodes, black borders, black edges, parchment-tinted subgraphs, cobalt for chart bars). Every fenced ```mermaid``` block is already on-palette.
+
+**Do not emit:**
+- `style NodeId fill:#xxx,stroke:#xxx,color:#xxx` — overrides land on top of the theme and almost always produce parchment-on-parchment or near-zero contrast.
+- `%%{init: {'theme':'base', 'themeVariables': {...}}}%%` blocks — they fight the global theme. The defaults are the palette.
+- Per-diagram color literals at all. Just write the chart.
+
+**If you need to highlight a single node** (the "important" box in a flowchart, the active state in a state diagram), use `classDef` + `class` with the cobalt accent:
+
+```mermaid
+flowchart LR
+    A --> B --> C
+    classDef accent fill:#0058fe,stroke:#000000,color:#ffffff
+    class B accent
+```
+
+That's the only sanctioned color exception — and only because it pulls from the same DESIGN-2 cobalt token (`#0058fe`) the rest of the surface uses.
+
 ### When NOT to add a diagram
 
 - The markdown is < 200 words and entirely linear — no branches, no states, no entities, no time.
@@ -287,6 +307,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 - **Don't synthesize content.** Render reads the markdown source. If you find yourself inventing sections that weren't in the md, stop — edit the markdown via `note-taker` first, then re-run.
 - **Don't produce styled markdown.** If the output is just "h1 + paragraphs + tables + code blocks" with no diagrams or callouts — you built the wrong artifact. Pick 2–3 idioms from the picker or tell the caller the markdown is sufficient.
 - **Don't append a "Source:" footer or any provenance line to the rendered page.** Source path belongs in the chat reply only. The artifact stands alone.
+- **Don't set Mermaid colors.** No `style …` lines, no `%%{init}%%` palette blocks, no `themeVariables`. The renderer is pre-themed (DESIGN-2). One exception: a `classDef accent fill:#0058fe,stroke:#000000,color:#ffffff` + `class NodeId accent` to highlight a single node.
 - **Don't ship a presentation with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A presentation whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need a presentation — say so.
 - **Don't ship an unreadable diagram.** A `flowchart LR` squashed into a 30px-tall strip helps no one — readability beats diagram-purity. If the layout would be too wide / too dense to read at the article's column width (see "Diagram shape and density"), use a table or split into multiple diagrams. The diagrams-first rule does not override the readability rule.
 - **Don't use ASCII diagrams.** Write Mermaid for named types. Never ASCII.
