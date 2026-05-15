@@ -96,7 +96,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
 │   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_html_render` (md → Nextra content/v/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → <repo>/exports/<date>-<slug>-<epoch>.pdf, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time; each regeneration appends a fresh Unix-epoch suffix so the URL is never reused).
 │   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `npm run build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
-│   ├── news-ingest/           Registers `fetch_topic`, `query_today`, `get_item`, `refresh_all_topics`. Fetches RSS/Atom feeds (plain Node `fetch`, no Camoufox) and persists into a daily-rolling SQLite store at `.pi/state/news.db` (auto-purged on day rollover). Source registry: `.pi/state/news-sources.json` (topic → [feed URLs]). Topics absent from the registry return `fallback_hint: "no_rss_source"` so the `news` skill delegates to `research`. Cron-driven by `scripts/news-cron.sh`. Surfaces a `news: last refresh …` line on `session_start` (flags `stale` when the last refresh predates today's local-calendar day). Registers `/news-refresh` slash command — manual full sweep, runs entirely in-extension, no agent turn. Used by `news` skill.
+│   ├── news-ingest/           Registers `fetch_topic`, `query_today`, `get_item`, `refresh_all_topics`. Fetches RSS/Atom feeds (plain Node `fetch`, no Camoufox) and persists into a daily-rolling JSON store at `.pi/state/news.json` (auto-purged on day rollover). Source registry: `.pi/state/news-sources.json` (topic → [feed URLs]). Topics absent from the registry return `fallback_hint: "no_rss_source"` so the `news` skill delegates to `research`. Cron-driven by `scripts/news-cron.sh`. Surfaces a `news: last scrape …` line on `session_start` (or `No news` when empty). Slash commands: `/news-refresh` (manual full sweep, in-extension), `/show-news` (returns the `/news` page URL — Next.js route at `app/news/page.tsx` reads `news.json` on each request, Highlights / All toggle). Used by `news` skill.
 │   ├── srs/                   Registers `list_due`, `record`, `add_item`.
 │   ├── trade-journal/         Registers `list_trades`, `read_trade`.
 │   └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
@@ -115,7 +115,6 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 - **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
 - **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
   - `@the-forge-flow/camoufox-pi` — stealth web fetcher + DuckDuckGo search via Camoufox (fingerprint-resistant Firefox fork). Backs the `research` skill. First call downloads the Camoufox binary (~500 MB). Install: `pi install -l npm:@the-forge-flow/camoufox-pi`.
-  - `better-sqlite3` — synchronous SQLite binding. Backs `news-ingest`'s daily-rolling news store at `.pi/state/news.db`. Install: `pi install -l npm:better-sqlite3`.
 
 ## Local artifact server
 
@@ -205,7 +204,7 @@ Vars worth setting:
 
 ## News brief cron
 
-The `news` skill is backed by a daily-rolling SQLite store at `.pi/state/news.db`. To populate it before you start your day (so `query_today` returns content without hitting the network), schedule [scripts/news-cron.sh](scripts/news-cron.sh) via `cron`:
+The `news` skill is backed by a daily-rolling JSON store at `.pi/state/news.json`. To populate it before you start your day (so `query_today` returns content without hitting the network), schedule [scripts/news-cron.sh](scripts/news-cron.sh) via `cron`:
 
 ```bash
 # Once per morning at 07:00
@@ -276,7 +275,7 @@ These apply to every agent:
 | ext | server | Lifecycles the Next.js / Nextra server (port 8080). Spawns on session_start; kills on Pi exit. Detects an already-bound port and skips spawn. |
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
-| ext | news-ingest | Functional. Plain-fetch RSS/Atom from feeds listed per topic in `.pi/state/news-sources.json`. Hand-rolled RSS 2.0 + Atom 1.0 parser. Persists into `.pi/state/news.db` (SQLite via `better-sqlite3`), `UNIQUE(topic, url)` dedup, daily-purge on next write past local-day rollover. Four tools: `fetch_topic` (single topic, live fetch + DB write, 1h DB-backed freshness cache), `query_today` (DB-only read, no network), `get_item` (lookup by row id, used by bookmark flow), `refresh_all_topics` (cron-driven full sweep). Topics with no registry entry return `fallback_hint: "no_rss_source"` so the `news` skill can delegate to `research`. On `session_start` surfaces `news: last refresh <date> (<relative>), <N> items in store` — appends `— stale (cron skipped?). Run /news-refresh to refresh now.` when the last fetch predates today's local-calendar day. Slash command `/news-refresh` runs the same sweep manually, entirely in-extension (no agent turn). |
+| ext | news-ingest | Functional. Plain-fetch RSS/Atom from feeds listed per topic in `.pi/state/news-sources.json`. Hand-rolled RSS 2.0 + Atom 1.0 parser. Persists into `.pi/state/news.json` (plain JSON file), `(topic, url)` dedup, daily-purge on next write past local-day rollover. Four tools: `fetch_topic` (single topic, live fetch + write, 1h freshness cache), `query_today` (store-only read, no network), `get_item` (lookup by id, used by bookmark flow), `refresh_all_topics` (cron-driven full sweep). Topics with no registry entry return `fallback_hint: "no_rss_source"` so the `news` skill can delegate to `research`. On `session_start` surfaces `news: last scrape <date> (<relative>), <N> items in store` (or `No news` when empty). Slash commands: `/news-refresh` (manual full sweep, in-extension, no agent turn), `/show-news` (returns the `/news` page URL — Next.js route at `app/news/page.tsx` reads `news.json` on each request and offers a Highlights / All tab toggle). |
 | ext | reminders | Functional. Surfaces a numbered list from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. Registers `/clear <N>` slash command — clears reminder by index directly from the extension, no agent turn. Tools: `reminder_add`, `reminder_resolve` (fallback for natural-language resolves), `reminder_list`. |
 
 ## Verification

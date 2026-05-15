@@ -4,15 +4,16 @@ description: Fetch and summarize recent news on user-specified topics. Used by d
 
 # News
 
-Use this skill when the user (or another agent) wants curated, summarized news on one or more topics. Backed by the `news-ingest` extension which fetches RSS/Atom feeds and persists items into a daily-rolling SQLite store at `.pi/state/news.db`.
+Use this skill when the user (or another agent) wants curated, summarized news on one or more topics. Backed by the `news-ingest` extension which fetches RSS/Atom feeds and persists items into a daily-rolling JSON store at `.pi/state/news.json`.
 
 ## Storage model
 
-- **Daily-rolling SQLite** is the truth for "what's in the news today". Rows are keyed `UNIQUE(topic, url)` and auto-purged at the next write once their day rolls over (local time).
+- **Daily-rolling JSON file** is the truth for "what's in the news today". Items are deduped on `(topic, url)` and auto-purged at the next write once their day rolls over (local time).
 - **The vault is opt-in, manual.** Items are NOT auto-saved to the vault. Bookmarking is user-driven: the user picks an item, the skill calls `note-taker` with a markdown payload that includes the original URL.
-- A morning **cron job** (`scripts/news-cron.sh`, see AGENTS.md) calls `refresh_all_topics` to populate the DB before you start your day. Throughout the day, `query_today` reads from the DB without hitting the network; `fetch_topic` re-fetches a single topic if you want freshness on demand.
+- A morning **cron job** (`scripts/news-cron.sh`, see AGENTS.md) calls `refresh_all_topics` to populate the store before you start your day. Throughout the day, `query_today` reads from the store without hitting the network; `fetch_topic` re-fetches a single topic if you want freshness on demand.
 - **Session-start status line.** On Pi launch/resume, the extension surfaces a one-line status: `news: last refresh <YYYY-MM-DD HH:MM> (<relative>), <N> items in store.` If the last refresh is from a prior local-calendar day, the line appends `— stale (cron skipped?). Run /news-refresh to refresh now.` This is how you can tell, at a glance, whether the cron fired overnight while the laptop was asleep.
 - **Manual refresh: `/news-refresh`.** Runs the same code path as `refresh_all_topics`, entirely inside the extension — no agent turn, no LLM cost. Use this when the startup line says "stale", or any time you want to force a re-pull. Surfaces a "started" line immediately and a "done" line when the HTTP sweep completes (typically 5–30s).
+- **Browse the store: `/show-news`.** Surfaces the URL of a local HTML page (`/news` on the Next.js server) that reads `news.json` on each request. Tab control at the top toggles between **Highlights** (top 3 per topic) and **All** (everything in the store). Read-only, no network, no agent turn — use this when you want to skim what's in the store without going through a tool.
 
 ## When to call
 
@@ -24,7 +25,7 @@ Use this skill when the user (or another agent) wants curated, summarized news o
 
 ```
 news.fetch({
-  topics: ["<topic>", ...],          // required — e.g. ["AI", "JLPT", "XAUUSD"]
+  topics: ["<topic>", ...],          // required — e.g. ["AI", "tech", "XAUUSD"]
   window: "today" | "week" | "month" | { since: <ISO> },
   count: <number>,                   // max items per topic, default 5
   format: "headlines" | "summary" | "deepdive",
@@ -38,10 +39,10 @@ The `news-ingest` extension exposes four tools:
 
 | Tool | When |
 |---|---|
-| `query_today({ topic?, count? })` | **Default for "show me today's news".** Reads from the DB. No network. Fastest. |
-| `fetch_topic({ topic, window?, count? })` | When the user wants a freshness pull on a single topic. Live HTTP if the DB has nothing fetched within the last hour for that topic; otherwise serves DB rows. Always writes results back to the DB. |
-| `refresh_all_topics({ window?, count_per_topic? })` | Cron-driven. Iterates every topic in the registry, populates the DB. Don't call from interactive use unless you really want a full re-fetch. |
-| `get_item({ id })` | Look up a single row by id. Used by the bookmark flow. |
+| `query_today({ topic?, count? })` | **Default for "show me today's news".** Reads from the store. No network. Fastest. |
+| `fetch_topic({ topic, window?, count? })` | When the user wants a freshness pull on a single topic. Live HTTP if the store has nothing fetched within the last hour for that topic; otherwise serves cached items. Always writes results back to the store. |
+| `refresh_all_topics({ window?, count_per_topic? })` | Cron-driven. Iterates every topic in the registry, populates the store. Don't call from interactive use unless you really want a full re-fetch. |
+| `get_item({ id })` | Look up a single item by id. Used by the bookmark flow. |
 
 ## Steps — "what's the news today"
 
@@ -59,21 +60,25 @@ When the user says "bookmark item 7" / "save the third one to the vault" / simil
 
 1. Resolve the user's reference to a row `id` (from the most recent listing you showed them).
 2. Call `news-ingest.get_item({ id })`. If it returns `null`, the item was purged (e.g., user is referencing yesterday's listing) — say so.
+
 3. Hand a markdown payload to `note-taker` with:
    - frontmatter: `title`, `date` (use `published_at` if present, else today), `source`, `url`, `tags: [bookmark, news, <topic>]`
    - body: 1–2 lines of context if the user gave any, then the `summary`, then a final `[Original: <source>](<url>)` link line
    - filename: `news/bookmarks/<YYYY-MM-DD>-<slugified-title>.md` (note-taker will resolve the exact path under its conventions)
 4. Confirm with the user: vault path + URL.
 
-The DB row is NOT deleted on bookmark — the user can bookmark the same item to multiple notes if they want, and the daily purge will sweep it eventually.
+The store entry is NOT deleted on bookmark — the user can bookmark the same item to multiple notes if they want, and the daily purge will sweep it eventually.
 
 ## Sources
 
 The RSS source registry is `.pi/state/news-sources.json` — a map of `topic → [feed URL, ...]`. Topics in the registry are fetched directly; topics without an entry fall through to the `research` search-back path (step 2 above).
 
+In addition, every topic in the registry is automatically supplemented with a Google News query (`https://news.google.com/rss/search?q=<topic>`) for cross-publisher coverage — no extra config required. Items from Google News use the per-item `<source>` tag as their publisher label (e.g. "The New York Times") and have their " - Publisher" suffix stripped from the title. Their `summary` is left empty: the Google News redirect URL is a JS interstitial, so meta-description scraping can't follow through to the article. Title + source carry the info.
+
 - **Agents read it.** Only the user edits it.
 - **Plain-fetch only.** Camoufox is not used at the extension layer. If a feed turns out to be blocked (CAPTCHA, 403, consent wall), remove it from `news-sources.json` and let the `research` fallback cover the topic instead.
 - **Window filtering is per-item, by published date.** Feeds without proper `pubDate`/`published` elements bubble up undated and sort last.
+- **`summary` is enriched from the article page.** After each new item is inserted, the extension does a one-shot GET against the item URL and pulls `og:description` / `<meta name="description">` / `twitter:description` (in that order) into `summary`. Falls back to the RSS-provided summary on any failure (timeout, non-HTML, missing meta). This is what gives feeds like `github-trending` real one-line repo descriptions instead of just titles.
 
 ### Persona conventions for topic keys
 
@@ -90,7 +95,6 @@ These are the topics the registry currently covers. Use the listed key — inven
 | Engineer | `mobile-dev` | Swift by Sundell (iOS), Android Developers Blog |
 | Engineer | `dev-news` | Lobsters, Changelog — engineering-flavored industry news |
 | PM | `product-hunt` | New launches from Product Hunt's main feed |
-| Language | `JLPT` | Tofugu — Japanese learning |
 | Trader | `XAUUSD` | FXStreet news — gold / FX macro |
 
 Snapshot — the registry is the source of truth. If a key isn't here or you're unsure, `read('.pi/state/news-sources.json')` to confirm before falling back to `research`.

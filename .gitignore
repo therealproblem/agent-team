@@ -20,6 +20,7 @@ exports/
 .pi/server/node_modules/
 .pi/server/.next/
 .pi/server/next-env.d.ts
+*.tsbuildinfo
 # Runtime-generated presentation artifacts (URL date-slug paths).
 .pi/server/content/v/*.mdx
 # Transient export-HTML staging — written, rendered to PDF, then deleted.

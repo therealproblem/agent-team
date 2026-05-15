@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# news-cron.sh — refresh the daily news SQLite store (.pi/state/news.db) by
+# news-cron.sh — refresh the daily news JSON store (.pi/state/news.json) by
 # calling pi --no-session against the news-ingest extension's
 # `refresh_all_topics` tool. Designed for `cron` / `launchd`.
 #
