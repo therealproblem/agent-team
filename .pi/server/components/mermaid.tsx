@@ -12,6 +12,14 @@
  * and DESIGN-2 themeVariables so every fenced ```mermaid``` block looks
  * right against parchment without any per-diagram %%{init}%% block.
  *
+ * Flowcharts render via the Eclipse Layout Kernel (`@mermaid-js/layout-elk`)
+ * instead of Mermaid's default dagre engine. ELK handles dense / multi-rank
+ * graphs (deep decision trees, fan-outs, subgraph-heavy architectures)
+ * dramatically better — far fewer node collisions and smarter edge routing
+ * on the kind of diagram that overwhelms dagre. Layout is still static, so
+ * a structurally-too-wide diagram is still the author's job to fix (see
+ * the breadth/depth caps in render-html/SKILL.md).
+ *
  * Agents must NOT emit `style …` overrides or `%%{init}%%` palette
  * blocks in chart source — the defaults below are the palette.
  */
@@ -147,6 +155,17 @@ export function Mermaid({ chart }: { chart: string }) {
 
     (async () => {
       const { default: mermaid } = await import("mermaid");
+      // Register the Eclipse Layout Kernel renderer. ELK handles dense and
+      // multi-rank flowcharts dramatically better than Mermaid's default
+      // dagre engine — fewer node collisions, smarter edge routing,
+      // reasonable behaviour on decision trees that dagre would stack on
+      // top of itself. We still keep dagre's friendlier spacing tokens for
+      // simple charts (sequence, state, etc.) that don't use the
+      // flowchart renderer.
+      const { default: elkLayouts } = await import(
+        "@mermaid-js/layout-elk"
+      );
+      mermaid.registerLayoutLoaders(elkLayouts);
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: "loose",
@@ -154,6 +173,17 @@ export function Mermaid({ chart }: { chart: string }) {
         theme: "base",
         themeVariables: MERMAID_THEME_VARIABLES,
         themeCSS: "margin: 1.5rem auto 0;",
+        flowchart: {
+          nodeSpacing: 60,
+          rankSpacing: 80,
+          diagramPadding: 12,
+          // ELK is the default flowchart renderer. Charts that explicitly
+          // opt out via `%%{init: {'flowchart': {'defaultRenderer':'dagre'}}}%%`
+          // are stripped by stripColorOverrides() so the palette stays
+          // consistent — if you genuinely need dagre, raise the rule
+          // there.
+          defaultRenderer: "elk",
+        },
       });
       try {
         const { svg: rendered } = await mermaid.render(
