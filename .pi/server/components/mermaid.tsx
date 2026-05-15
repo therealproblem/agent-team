@@ -172,9 +172,5 @@ export function Mermaid({ chart }: { chart: string }) {
     };
   }, [chart, isVisible, id]);
 
-  return jsx("div", {
-    ref: containerRef,
-    className: "mermaid",
-    dangerouslySetInnerHTML: { __html: svg },
-  });
+  return jsx("div", { ref: containerRef, dangerouslySetInnerHTML: { __html: svg } });
 }
