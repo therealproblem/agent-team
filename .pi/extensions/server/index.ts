@@ -28,12 +28,16 @@
  *
  * If you're iterating on the .pi/server/ Next app itself, `next start` won't
  * pick up changes — rebuild with `cd .pi/server && npm run build` and
- * restart Pi, or run `npm run dev` in a separate terminal on a different
- * port for live reload.
+ * restart Pi, or set `AGENTS_TEAM_SERVER_MODE=dev` to spawn `next dev` with
+ * hot reload instead (skips the build-dir check; first request will compile
+ * on demand).
  *
  * Configure via env vars:
  *   AGENTS_TEAM_SERVER_PATH — default: <cwd>/.pi/server
  *   AGENTS_TEAM_SERVER_PORT — default: 8080
+ *   AGENTS_TEAM_SERVER_MODE — `production` (default) or `dev`/`development`.
+ *     `dev` runs `next dev --webpack` (hot reload, on-demand compile);
+ *     anything else runs `next start` against the pre-built `.next/`.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
@@ -53,6 +57,8 @@ const SERVER_ROOT = resolve(
 	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),
 );
 const SERVER_PORT = Number(process.env.AGENTS_TEAM_SERVER_PORT ?? 8080);
+const SERVER_MODE = (process.env.AGENTS_TEAM_SERVER_MODE ?? "production").toLowerCase();
+const IS_DEV = SERVER_MODE === "dev" || SERVER_MODE === "development";
 const LOG_PATH = join(process.cwd(), ".pi", "state", "server.log");
 const NEXT_BIN = join(SERVER_ROOT, "node_modules", "next", "dist", "bin", "next");
 const NEXT_BUILD_DIR = join(SERVER_ROOT, ".next");
@@ -134,7 +140,7 @@ export default function (pi: ExtensionAPI): void {
 			);
 			return;
 		}
-		if (!existsSync(NEXT_BUILD_DIR)) {
+		if (!IS_DEV && !existsSync(NEXT_BUILD_DIR)) {
 			surface(
 				pi,
 				`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && npm run build\`) first`,
@@ -155,11 +161,17 @@ export default function (pi: ExtensionAPI): void {
 		}
 		const log = createWriteStream(LOG_PATH, { flags: "a" });
 
-		// Spawn Next directly. `npm run start` would interpose an npm process
-		// that swallows SIGTERM, leaving orphan Next.js children behind.
-		// `next start` serves the pre-built .next/ artifacts — fast cold start,
-		// no compile-on-request, matches what the cloudflared tunnel exposes.
-		child = spawn("node", [NEXT_BIN, "start", "-p", String(SERVER_PORT)], {
+		// Spawn Next directly. `npm run start`/`npm run dev` would interpose an
+		// npm process that swallows SIGTERM, leaving orphan Next.js children
+		// behind.
+		//   prod: `next start` serves pre-built .next/ artifacts — fast cold
+		//         start, no compile-on-request.
+		//   dev : `next dev --webpack` enables hot reload and compiles on
+		//         demand (first request is slow; pre-warm below absorbs it).
+		const nextArgs = IS_DEV
+			? [NEXT_BIN, "dev", "--webpack", "-p", String(SERVER_PORT)]
+			: [NEXT_BIN, "start", "-p", String(SERVER_PORT)];
+		child = spawn("node", nextArgs, {
 			cwd: SERVER_ROOT,
 			stdio: ["ignore", "pipe", "pipe"],
 		});

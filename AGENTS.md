@@ -108,6 +108,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 - **Vault location.** Default: project-root `vault/` (gitignored). Override with the `AGENTS_TEAM_VAULT_PATH` env var if you want notes to land in your real Obsidian vault elsewhere on disk. Used by `obsidian-vault` and `trade-journal` extensions.
 - **Server location.** Default: project-root `.pi/server/`. Override with `AGENTS_TEAM_SERVER_PATH`. Houses the Next.js + Nextra app that serves renders and PDFs.
 - **Server port.** Default: `8080`. Override with `AGENTS_TEAM_SERVER_PORT`.
+- **Server mode.** Default: `production` (spawns `next start` against the pre-built `.next/`). Set `AGENTS_TEAM_SERVER_MODE=dev` (or `development`) to spawn `next dev --webpack` with hot reload — the build-dir check is skipped and the first request compiles on demand.
 - **Server title.** Default: `agents-team`. Override with `AGENTS_TEAM_SERVER_TITLE` — appears as the wordmark in the top-left navbar and as the suffix on every page's `<title>`. **Read at build time**, not runtime: `layout.tsx` is statically pre-rendered, so the value is baked into `.pi/server/.next/`. Change the var, then re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for the new title to take effect. `scripts/setup.sh` auto-sources `.env` for the build.
 - **Public URL.** Default: `http://localhost:8080`. Override with `AGENTS_TEAM_SERVER_PUBLIC_URL` — set this to your **named** cloudflared tunnel hostname so HTML render / PDF URLs returned by tools are share-ready across sessions. (Quick tunnels rotate URLs on every restart; named tunnels are persistent.) Read at runtime, so a Pi restart is enough — no rebuild needed.
 - **Chrome binary.** PDF export uses headless Chrome. Auto-detected on macOS (`/Applications/Google Chrome.app`), Linux, and Windows. Override with `AGENTS_TEAM_CHROME_PATH` if Chrome is installed elsewhere.
@@ -196,6 +197,7 @@ Vars worth setting:
 - `AGENTS_TEAM_VAULT_PATH` — point at your real Obsidian vault elsewhere on disk.
 - `AGENTS_TEAM_SERVER_PATH` — relocate the Next.js + Nextra server (default `.pi/server/`).
 - `AGENTS_TEAM_SERVER_PORT` — port the dev server binds (default `8080`).
+- `AGENTS_TEAM_SERVER_MODE` — `production` (default) or `dev` for `next dev --webpack` with hot reload.
 - `AGENTS_TEAM_SERVER_TITLE` — wordmark + page-title suffix (default `agents-team`).
 - `AGENTS_TEAM_SERVER_PUBLIC_URL` — base URL the tools return. Set to your named cloudflared tunnel hostname so HTML render / PDF URLs are share-ready.
 - `AGENTS_TEAM_CHROME_PATH` — override Chrome binary used for PDF export (auto-detected on macOS / Linux / Windows by default).
