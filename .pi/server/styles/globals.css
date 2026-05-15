@@ -112,6 +112,12 @@ aside.nextra-sidebar-container {
 
 .nextra-navbar { border-bottom: 1px solid #000000 !important; }
 
+/* Hide the Nextra footer. Nextra 4 ships the footer as a `<footer>` inside a
+ * gray-100 wrapper (no semantic class hook), so target the wrapper via `:has()`. */
+body div:has(> footer) {
+  display: none !important;
+}
+
 /* TOC text — visible. Active item gets the cobalt accent. */
 .nextra-toc a,
 .nextra-sidebar a {

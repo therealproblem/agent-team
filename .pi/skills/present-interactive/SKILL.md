@@ -98,7 +98,7 @@ The agent's user-facing reply is then:
 > Open: `<url>`
 > Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-run)
 
-Do not paste the rendered body inline.
+Do not paste the rendered body inline. **Do not append a "Source:" footer (or any provenance line) to the rendered page** — the source path belongs in the chat reply only, not in the artifact.
 
 ## Diagrams first — but readable beats ambitious
 
@@ -140,6 +140,26 @@ flowchart LR
 ````
 
 `@theguild/remark-mermaid` (configured in `next.config.mjs`) handles rendering. Falls back to a code block if the plugin can't render.
+
+### Mermaid link syntax — use only these forms
+
+Don't extrapolate. These are the only valid edge forms:
+
+| Form | Meaning |
+|---|---|
+| `-->` | solid arrow |
+| `---` | solid line, no arrow |
+| `--x` | solid, X end |
+| `--o` | solid, circle end |
+| `-.->` | dotted arrow |
+| `-. label .->` | dotted arrow with label |
+| `==>` | thick arrow |
+| `~~~` | invisible link (layout-only) |
+
+Labels: `A -->|label| B` (solid) or `A -. label .-> B` (dotted).
+**Do not invent combinations** like `-.x.-`, `=.->`, `~~>`, `-.->|label|`. If unsure of a form, fall back to `-->` or `---` and put intent in a label.
+
+Same rule for node shapes — stick to documented forms: `[ ]` rectangle, `( )` round, `(( ))` circle, `{ }` rhombus, `[/ /]` parallelogram, `>` flag. Don't invent shape brackets.
 
 ### When NOT to add a diagram
 
@@ -250,7 +270,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 2. **Scan for diagrammable shapes FIRST.** Run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one — ideally two — diagrams to include. If your honest scan finds zero diagrammable shapes, the presentation may not be worth the work; tell the caller so.
 3. **Decide the rest of the pattern set.** Look at the note's type (folder or frontmatter `type:`). From the pattern picker above, pick 2–3 *other* idioms that fit alongside the diagram(s).
 4. **Generate the markdown body** — convert the source markdown, lift sections that should become callouts, insert Mermaid blocks where shapes were identified, use `<Tabs>` / `<Steps>` / `<Cards>` only where pure markdown can't express it.
-5. **Call `write_presentation`** with the assembled `markdown` body, the original `title`, and the `source_md_path` (so the response records both paths together).
+5. **Call `write_presentation`** with the assembled `markdown` body, the original `title`, and the `source_md_path` (so the response records both paths together). The body must NOT contain a "Source:" footer or any provenance line — provenance lives in the chat reply, not in the rendered artifact.
 6. **Return** `{ id, url, path, title, source_md_path }` to the caller.
 7. **The agent's user-facing reply** is then:
    > Open: `<url>`
@@ -266,6 +286,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 - **Don't auto-present.** Personas (or the user) explicitly trigger the skill. There is no global "save and present" hook.
 - **Don't synthesize content.** Render reads the markdown source. If you find yourself inventing sections that weren't in the md, stop — edit the markdown via `note-taker` first, then re-run.
 - **Don't produce styled markdown.** If the output is just "h1 + paragraphs + tables + code blocks" with no diagrams or callouts — you built the wrong artifact. Pick 2–3 idioms from the picker or tell the caller the markdown is sufficient.
+- **Don't append a "Source:" footer or any provenance line to the rendered page.** Source path belongs in the chat reply only. The artifact stands alone.
 - **Don't ship a presentation with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A presentation whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need a presentation — say so.
 - **Don't ship an unreadable diagram.** A `flowchart LR` squashed into a 30px-tall strip helps no one — readability beats diagram-purity. If the layout would be too wide / too dense to read at the article's column width (see "Diagram shape and density"), use a table or split into multiple diagrams. The diagrams-first rule does not override the readability rule.
 - **Don't use ASCII diagrams.** Write Mermaid for named types. Never ASCII.
