@@ -93,8 +93,8 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   └── meta-review/SKILL.md   Layer 0 — cross-profile synthesis
 ├── extensions/                TypeScript extensions (auto-loaded by Pi)
 │   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
-│   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_presentation` (md → Nextra content/v/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → public/p/<date>-<slug>.pdf via headless Chrome).
-│   ├── server/                Subscribes to `session_start`; spawns `next dev` on :8080 from `.pi/server/`, kills on Pi exit. Surfaces ready/failed status as a TUI message.
+│   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_presentation` (md → Nextra content/v/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → <repo>/exports/<date>-<slug>.pdf, served via a `.pi/server/public/p` → `exports/` symlink).
+│   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `npm run build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
 │   ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
 │   ├── srs/                   Registers `list_due`, `record`, `add_item`.
 │   ├── trade-journal/         Registers `list_trades`, `read_trade`.
