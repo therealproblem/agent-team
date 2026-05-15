@@ -188,7 +188,23 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. .env scaffold (preserves existing .env)
+# 6. Local patches against .pi/npm/ packages
+#
+# Some upstream playwright bugs bite us mid-research (Firefox uncaughtError
+# with no source location crashes the entire Node process — see
+# scripts/patches/playwright-core+1.60.0.patch). We carry small patches in
+# scripts/patches/ and reapply them after every `pi install -l`. Idempotent:
+# already-applied patches are skipped silently.
+# ---------------------------------------------------------------------------
+
+if [[ -d "${REPO_ROOT}/.pi/npm/node_modules" ]]; then
+	bash "${REPO_ROOT}/scripts/apply-patches.sh" || warn "some patches failed — see output above"
+else
+	info "no .pi/npm/node_modules/ — skipping patches"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. .env scaffold (preserves existing .env)
 # ---------------------------------------------------------------------------
 
 ENV_FILE="${REPO_ROOT}/.env"
@@ -206,7 +222,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Legacy frontend cleanup
+# 8. Legacy frontend cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent

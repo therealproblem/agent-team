@@ -1,0 +1,34 @@
+# Guard the BrowserContext PageError dispatcher against undefined pageError.location.
+#
+# Firefox emits Page.uncaughtError with location: undefined for errors that lack
+# a source location (CORS-stripped "Script error.", async throws from setTimeout/
+# Promise callbacks, content-script errors, eval/Function errors, worker errors
+# proxied to the page). FFPage._onUncaughtError forwards params.location raw to
+# addPageError, which passes it to this dispatcher, which then dereferences
+# .url / .lineNumber / .columnNumber and throws TypeError. The throw escapes the
+# event loop and aborts the entire Node process — taking down our pi agent
+# mid-fetch when researching pages that happen to throw locationless errors.
+#
+# This guards the deref with a fallback identical to what the Chromium codepath
+# already does in stackTraceToLocation (coreBundle.js:34160-34166).
+#
+# Applies to playwright-core 1.60.0 (also unfixed in 1.61.0-alpha and main as of
+# 2026-05-15). When upstream lands a fix and we bump, this patch will fail to
+# apply — that's the signal to drop it.
+#
+--- a/playwright-core/lib/coreBundle.js
++++ b/playwright-core/lib/coreBundle.js
+@@ -49619,11 +49619,11 @@
+         this.addObjectListener(BrowserContext.Events.PageError, (pageError, page) => {
+           this._dispatchEvent("pageError", {
+             error: serializeError(pageError.error),
+             page: PageDispatcher.from(this, page),
+-            location: {
++            location: pageError.location ? {
+               url: pageError.location.url,
+               line: pageError.location.lineNumber,
+               column: pageError.location.columnNumber
+-            }
++            } : { url: "", line: 0, column: 0 }
+           });
+         });
