@@ -17,7 +17,8 @@
  *   4. Poll the port until it answers (up to 15s) or timeout. Pre-warm `/`
  *      with a fetch — production start is fast but the warm-up still
  *      cheap-insures the first user request.
- *   5. Surface a status line in the TUI: ✓ ready / starting / failed.
+ *   5. Stay silent on the happy path; only surface a TUI line when something
+ *      needs attention (missing build, spawn error, 15s timeout).
  *
  * On Pi exit (`exit` / SIGINT / SIGTERM):
  *   Send SIGTERM to the spawned process; SIGKILL fallback after 2s.
@@ -142,10 +143,7 @@ export default function (pi: ExtensionAPI): void {
 		}
 
 		if (await isPortBound(SERVER_PORT)) {
-			surface(
-				pi,
-				`server: ✓ http://localhost:${SERVER_PORT} (already running)`,
-			);
+			// Already running — stay silent on the happy path.
 			return;
 		}
 
@@ -177,7 +175,7 @@ export default function (pi: ExtensionAPI): void {
 		for (let i = 0; i < 30; i++) {
 			if (await isPortBound(SERVER_PORT)) {
 				await preWarm(SERVER_PORT);
-				surface(pi, `server: ✓ http://localhost:${SERVER_PORT}`);
+				// Came up cleanly — stay silent on the happy path.
 				return;
 			}
 			await new Promise((r) => setTimeout(r, 500));
