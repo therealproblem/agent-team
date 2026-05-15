@@ -13,6 +13,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { loadDotenv } from "../../lib/dotenv";
+
+loadDotenv();
 
 // Default: project-root `vault/`. Override with AGENTS_TEAM_VAULT_PATH.
 const VAULT_ROOT = resolve(

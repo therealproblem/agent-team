@@ -44,6 +44,9 @@ import {
 	type MessageRenderer,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { loadDotenv } from "../../lib/dotenv";
+
+loadDotenv();
 
 const SERVER_ROOT = resolve(
 	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),

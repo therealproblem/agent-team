@@ -295,7 +295,20 @@ fi
 
 if [[ -f "${SERVER_DIR}/package.json" && -d "${SERVER_DIR}/node_modules" ]]; then
 	info "building Nextra server for production (npm run build in .pi/server)…"
-	if (cd "$SERVER_DIR" && npm run build --silent); then
+	# Source .env so build-time env vars (e.g. AGENTS_TEAM_SERVER_TITLE) get
+	# baked into the static HTML. layout.tsx reads them at build time — without
+	# this, the navbar wordmark stays at its default. Subshell isolates the
+	# `set -a` from the rest of the script.
+	if (
+		cd "$SERVER_DIR"
+		if [[ -f "${REPO_ROOT}/.env" ]]; then
+			set -a
+			# shellcheck disable=SC1091
+			source "${REPO_ROOT}/.env"
+			set +a
+		fi
+		npm run build --silent
+	); then
 		ok ".pi/server/ production build complete (.next/ generated)"
 	else
 		warn ".pi/server/ build failed — server can still run via 'cd .pi/server && npm run dev'. Re-run 'npm run build' there once the error is fixed."

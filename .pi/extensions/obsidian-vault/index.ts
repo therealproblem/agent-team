@@ -8,12 +8,12 @@
  *                          markdown-first so the Obsidian graph view,
  *                          backlinks, and tag search work. Called by the
  *                          `note-taker` skill (Layer 3).
- *   - `write_presentation` — markdown body, written as `.mdx` into the
+ *   - `write_html_render` — markdown body, written as `.mdx` into the
  *                            Next.js server's `content/v/` directory.
  *                            Nextra serves it at `/v/<YYYY-MM-DD>-<slug>`.
  *                            Re-running the same title on the same day
  *                            overwrites the file; the URL stays stable.
- *                            Used by the `present-interactive` skill
+ *                            Used by the `render-html` skill
  *                            (Layer 3).
  *   - `write_export_pdf` — PDF, written into the canonical export root
  *                          at `<repo>/exports/`. The Next.js server's
@@ -36,14 +36,15 @@
  *   AGENTS_TEAM_VAULT_PATH        — default: <cwd>/vault
  *   AGENTS_TEAM_SERVER_PATH       — default: <cwd>/.pi/server
  *   AGENTS_TEAM_EXPORT_PATH       — default: <cwd>/exports
- *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080
- *                                   Set to your cloudflared tunnel hostname
- *                                   so returned URLs are share-ready.
+ *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080. If the
+ *                                   user has set this (typically to a tunnel
+ *                                   hostname), returned URLs use it
+ *                                   automatically.
  *   AGENTS_TEAM_CHROME_PATH       — default: platform auto-detect (macOS:
  *                                   /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
  *
  * Agents should NOT call these tools directly — they go through `note-taker`,
- * `present-interactive`, and `export` skills so naming, folder, and design
+ * `render-html`, and `export` skills so naming, folder, and design
  * conventions stay consistent.
  */
 
@@ -54,6 +55,9 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { loadDotenv } from "../../lib/dotenv";
+
+loadDotenv();
 
 const execFileP = promisify(execFile);
 
@@ -107,7 +111,7 @@ const writeNote = defineTool({
 	name: "write_note",
 	label: "Write Note",
 	description:
-		"Write a markdown note to the Obsidian vault. Owns YAML frontmatter, inline tags, wiki-link footers. Called by the `note-taker` skill. Markdown only — HTML output goes through the `write_presentation` tool (via the `present-interactive` skill).",
+		"Write a markdown note to the Obsidian vault. Owns YAML frontmatter, inline tags, wiki-link footers. Called by the `note-taker` skill. Markdown only — HTML output goes through the `write_html_render` tool (via the `render-html` skill).",
 	parameters: Type.Object({
 		title: Type.String({
 			description: "Short noun-phrase title for the note.",
@@ -207,11 +211,11 @@ const writeNote = defineTool({
 	},
 });
 
-const writePresentation = defineTool({
-	name: "write_presentation",
-	label: "Write Presentation",
+const writeHtmlRender = defineTool({
+	name: "write_html_render",
+	label: "Write HTML Render",
 	description:
-		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-running on the same title on the same day overwrites the file; the URL stays stable. Used by the `present-interactive` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome.",
+		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. Used by the `render-html` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -224,7 +228,7 @@ const writePresentation = defineTool({
 		source_md_path: Type.Optional(
 			Type.String({
 				description:
-					"Vault-relative path of the markdown source this presentation was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
+					"Vault-relative path of the markdown source this render was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
 			}),
 		),
 	}),
@@ -243,7 +247,7 @@ const writePresentation = defineTool({
 			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
 			await writeFile(path, frontmatter + params.markdown, { encoding: "utf8" });
 			return {
-				content: [{ type: "text", text: `Presented ${url}` }],
+				content: [{ type: "text", text: `Rendered ${url}` }],
 				details: {
 					slug,
 					path,
@@ -256,7 +260,7 @@ const writePresentation = defineTool({
 			const message = (e as Error).message;
 			return {
 				content: [
-					{ type: "text", text: `Failed to write presentation: ${message}` },
+					{ type: "text", text: `Failed to write HTML render: ${message}` },
 				],
 				details: { error: message },
 				isError: true,
@@ -269,7 +273,7 @@ const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
 	description:
-		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (the local Nextra server's `public/p/` is a symlink into the export root). Override the host with `AGENTS_TEAM_SERVER_PUBLIC_URL` — typically a cloudflared tunnel hostname for share-ready URLs. Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError.",
+		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (the local Nextra server's `public/p/` is a symlink into the export root). The host portion is overridden by `AGENTS_TEAM_SERVER_PUBLIC_URL` if set. Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -382,6 +386,6 @@ const writeExportPdf = defineTool({
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(writeNote);
-	pi.registerTool(writePresentation);
+	pi.registerTool(writeHtmlRender);
 	pi.registerTool(writeExportPdf);
 }

@@ -1,12 +1,12 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is written to the canonical export root at `<repo>/exports/` and served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `present-interactive` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is written to the canonical export root at `<repo>/exports/` and served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render-html` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
 ---
 
 # Export
 
 `export` is the **markdown → Kami-styled PDF** skill. It produces print-ready deliverables — the kind of artifact you attach to an email, hand to a printer, or archive as the canonical formal version of a document.
 
-> If a user asks you to "make a PDF", "export this", "produce a resume", "send a letter", "deliver a report" — and the output should look polished and printed — this is the skill. If they want an *interactive* document to read on screen, that's `present-interactive`, not `export`.
+> If a user asks you to "make a PDF", "export this", "produce a resume", "send a letter", "deliver a report" — and the output should look polished and printed — this is the skill. If they want an *interactive* document to read on screen, that's `render-html`, not `export`.
 
 ## Why this skill exists
 
@@ -15,7 +15,7 @@ Three different read paths, three different skills:
 | Read path | Owner | Format | Location |
 |---|---|---|---|
 | **Knowledge graph / archival** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
-| **On-screen exploration** | `present-interactive` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
+| **On-screen exploration** | `render-html` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 | **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
 
 The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, exposed to Nextra via a `.pi/server/public/p` → `exports/` symlink so the served URL stays stable). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
@@ -38,10 +38,10 @@ The local server hides discovery vectors (`/`, `/p`, sitemap, search index, 404 
 **Don't call `export` for:**
 
 - Anything the user will read in the terminal — PDFs aren't terminal-readable.
-- On-screen exploration of a long document — use `present-interactive` (the PDF is static; the HTML is interactive).
+- On-screen exploration of a long document — use `render-html` (the PDF is static; the HTML is interactive).
 - Quick captures, inbox notes, journal entries — markdown is the right artifact.
 - Sub-session output, agent-to-agent hand-offs, prompt context — markdown is leaner.
-- Anything that needs live JS interactivity (configurators, decks with arrow-key nav, copy buttons) — that's `present-interactive`, not `export`.
+- Anything that needs live JS interactivity (configurators, decks with arrow-key nav, copy buttons) — that's `render-html`, not `export`.
 - A draft that the user is still editing — let them stabilize the markdown via `note-taker` first.
 
 **Call `export` after** the markdown is stable. If the markdown is from the vault, do not edit it inline in this skill — fix the source via `note-taker` and re-export.
@@ -74,7 +74,7 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — set this to your cloudflared tunnel hostname for share-ready URLs across sessions).
+A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Return the URL plainly — do NOT add suggestions about cloudflared, tunnels, or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.
 
 The intermediate HTML is written transiently to `.pi/server/.export-tmp/`, fed to Chrome, then deleted once Chrome confirms the PDF was produced. The only case where an HTML file survives is when Chrome itself failed (no binary found, render error), in which case the tool returns `isError: true` plus the path of the HTML it could not convert.
 
@@ -128,7 +128,7 @@ These are not stylistic suggestions. They define what a Kami PDF looks like. Vio
 7. **Tags: solid hex backgrounds ONLY.** Never `rgba()` for tag backgrounds (a WeasyPrint bug produces a double-rectangle if you do; Chrome doesn't have the bug but the discipline is kept for cross-engine portability). Use `#ebe9e0` for neutral tags, the accent hex for emphasized tags.
 8. **No emoji.** No emoji glyphs in headings, body, or decorative places. Kami documents are formal artifacts.
 9. **No `position: fixed` / `position: sticky`.** It's a print document; nothing scrolls. Pagination is handled by `@page` rules.
-10. **No JavaScript.** Headless Chrome runs it once, but the artifact is print. If you need interactivity, you picked the wrong skill — use `present-interactive`.
+10. **No JavaScript.** Headless Chrome runs it once, but the artifact is print. If you need interactivity, you picked the wrong skill — use `render-html`.
 
 ## The eight templates
 

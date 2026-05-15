@@ -1,12 +1,12 @@
 ---
-description: Layer 3 shared skill — converts an existing markdown note from the Obsidian vault into an interactive Nextra-served web page at `/v/<YYYY-MM-DD>-<slug>`. Reads the markdown source via the core `read` tool, emits a markdown body (NOT full HTML), and calls the `write_presentation` tool. Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, callouts, and the parchment styling. The page is served at `http://localhost:8080/v/{slug}` by the local Nextra server (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-running on the same title on the same day overwrites the file; the URL stays stable. Returns the http URL. The presentation is a one-way derivative; the markdown is always the source of truth. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work — short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
+description: Layer 3 shared skill — renders an existing markdown note from the Obsidian vault into an interactive Nextra-served HTML page at `/v/<YYYY-MM-DD>-<slug>`. Reads the markdown source via the core `read` tool, emits a markdown body (NOT full HTML), and calls the `write_html_render` tool. Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, callouts, and the parchment styling. The page is served at `http://localhost:8080/v/{slug}` by the local Nextra server (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. Returns the http URL. The rendered HTML is a one-way derivative; the markdown is always the source of truth. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work — short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
 ---
 
-# Present Interactive
+# Render HTML
 
-`present-interactive` is the **markdown → Nextra web page** skill. It takes an already-saved note in the Obsidian vault and emits a markdown body that the local Nextra server publishes at `/v/<YYYY-MM-DD>-<slug>`.
+`render-html` is the **markdown → Nextra web page** skill. It takes an already-saved note in the Obsidian vault and emits a markdown body that the local Nextra server publishes at `/v/<YYYY-MM-DD>-<slug>`.
 
-> If you would otherwise paste a multi-section markdown doc inline as the agent's reply, **stop**. Save it via `note-taker` first (the vault is markdown-canonical), then call `present-interactive` to give the user a URL to read.
+> If you would otherwise paste a multi-section markdown doc inline as the agent's reply, **stop**. Save it via `note-taker` first (the vault is markdown-canonical), then call `render-html` to give the user a URL to read.
 
 ## Output is markdown body only
 
@@ -28,15 +28,15 @@ Two separate concerns:
 | Concern | Owner | Format | Location |
 |---|---|---|---|
 | **Storage / knowledge graph** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
-| **Reading experience** | `present-interactive` (this skill) | Nextra-served page | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
+| **Reading experience** | `render-html` (this skill) | Nextra-served page | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 
 The vault is an Obsidian vault: it must stay markdown so frontmatter, `[[wiki-links]]`, inline `#tags`, and graph view continue to work. HTML / MDX files in the vault break that — they're not indexed, links inside aren't traced.
 
-The presentation is a **one-way derivative** — regeneratable from the markdown at any time. If the user edits the markdown later, re-run `present-interactive` and the new content lands at the same URL (slug = date + title; same-day re-runs overwrite).
+The rendered HTML is a **one-way derivative** — regeneratable from the markdown at any time. If the user edits the markdown later, re-run `render-html` and the new content lands at the same URL (slug = date + title; same-day re-runs overwrite).
 
 ## URL access model
 
-Each presentation lives at `http://…/v/<YYYY-MM-DD>-<slug>` where `<slug>` is the slugified title. The URL is the access control — anyone with the link reads; no auth, no login. The user shares the URL deliberately.
+Each rendered page lives at `http://…/v/<YYYY-MM-DD>-<slug>` where `<slug>` is the slugified title. The URL is the access control — anyone with the link reads; no auth, no login. The user shares the URL deliberately.
 
 The local server hides discovery vectors that would let someone enumerate paths:
 
@@ -46,25 +46,25 @@ The local server hides discovery vectors that would let someone enumerate paths:
 - Search index (`/_pagefind/*`) is not built at all
 - 404 page is bare — no enumeration of top-level routes
 
-Slugs are predictable from the title, so don't treat the URL as a secret. Don't volunteer "here are your recent presentations"; share each URL only in direct response to the user who asked for it.
+Slugs are predictable from the title, so don't treat the URL as a secret. Don't volunteer "here are your recent renders"; share each URL only in direct response to the user who asked for it.
 
 ## When to call
 
-**Call `present-interactive` when** the markdown would meaningfully benefit from at least 2–3 of the patterns below (diagrams, tabs, callouts, timelines, sparklines, configurators). If the markdown is just headings + paragraphs + code blocks, *skip it*; the markdown itself reads fine in Obsidian.
+**Call `render-html` when** the markdown would meaningfully benefit from at least 2–3 of the patterns below (diagrams, tabs, callouts, timelines, sparklines, configurators). If the markdown is just headings + paragraphs + code blocks, *skip it*; the markdown itself reads fine in Obsidian.
 
-**Don't call `present-interactive` for:**
+**Don't call `render-html` for:**
 - Inbox captures, journal entries, trade entries, meeting notes — short, no structure, no audience.
 - ADRs / PRDs whose primary read path is git PR review — the diff IS the read.
 - Anything agent-to-agent (sub-session output, prompt context, hand-offs) — markdown is leaner.
 - Output the user will read in the terminal — HTML is unreadable there.
 - 50-word replies — they don't deserve a styled page.
 
-**Always call `present-interactive` after** `note-taker` (not before). The markdown file path is the input — the skill reads the file, it does not synthesize content from scratch.
+**Always call `render-html` after** `note-taker` (not before). The markdown file path is the input — the skill reads the file, it does not synthesize content from scratch.
 
 ## Inputs
 
 ```
-present-interactive({
+render-html({
   md_path:        "<vault-relative path of the source note>",    // required
                                                                   // e.g. "pm/prd/2026-05-15-foo.md"
   title:          "<override the title>",                         // optional — defaults to the
@@ -75,11 +75,11 @@ present-interactive({
 })
 ```
 
-## What `present-interactive` produces
+## What `render-html` produces
 
 A markdown body, written as an `.mdx` file under `.pi/server/content/v/<YYYY-MM-DD>-<slug>.mdx`. The tool injects frontmatter (`title`, `sidebar: false`) — **do not include frontmatter in the markdown you emit**.
 
-The page is served by Nextra at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — set this to your cloudflared tunnel hostname for share-ready URLs across sessions).
+The page is served by Nextra at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Return the URL plainly — do NOT add suggestions about cloudflared, tunnels, or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.
 
 Returned to the caller:
 
@@ -102,7 +102,7 @@ Do not paste the rendered body inline. **Do not append a "Source:" footer (or an
 
 ## Diagrams first — but readable beats ambitious
 
-The default-AI failure mode is markdown-as-prose: paragraphs, bullets, code blocks, and **no diagram** even when the content is screaming for one. A presentation without a single diagram is usually under-cooked. So scan first, diagram first.
+The default-AI failure mode is markdown-as-prose: paragraphs, bullets, code blocks, and **no diagram** even when the content is screaming for one. A rendered page without a single diagram is usually under-cooked. So scan first, diagram first.
 
 **But: an unreadable diagram is worse than a table.** A `flowchart LR` with 15 leaf nodes squashes into a thin strip nobody can read; the same data as a 3-column table is instantly scannable. The rule isn't "always a diagram" — it's "a diagram when it actually communicates more than a table". If the diagram, given its shape, won't render legibly at the article's width, fall back to a table or split into multiple smaller diagrams. **Don't ship the unreadable strip.**
 
@@ -122,7 +122,7 @@ The default-AI failure mode is markdown-as-prose: paragraphs, bullets, code bloc
 | Numbers over time (metrics, scores, trends) | Inline SVG sparkline as an MDX expression |
 | Comparison of N independent options (no edges between them) | **Not** a diagram — use a markdown table or a `<Cards>` block. Forcing a diagram on independent options is worse than the table. |
 
-The same source often has more than one diagrammable shape — pick the most informative, or include two if they show different facets. **A presentation with two well-chosen diagrams usually beats a presentation with five prose sections.**
+The same source often has more than one diagrammable shape — pick the most informative, or include two if they show different facets. **A rendered page with two well-chosen diagrams usually beats one with five prose sections.**
 
 ### Mermaid via fenced code blocks
 
@@ -192,7 +192,7 @@ That's the only sanctioned color exception — and only because it pulls from th
 - It's a single decision with no alternatives weighed (a one-line ADR draft).
 - **The diagram would have too many nodes to render legibly** (see "Diagram shape and density" below) — fall back to a table or split into multiple smaller diagrams.
 
-If your honest scan against the table above finds zero diagrammable shapes, that's a signal the content may not need a presentation at all — markdown is enough.
+If your honest scan against the table above finds zero diagrammable shapes, that's a signal the content may not need an HTML render at all — markdown is enough.
 
 ### Diagram shape and density
 
@@ -238,7 +238,7 @@ For richer components (`<Tabs>`, `<Steps>`, `<Cards>`), see the next section —
 
 ## When MDX expressions are worth it
 
-The presentation tool always writes `.mdx` files, so you *can* drop in inline JSX components when a markdown idiom doesn't fit. Use sparingly — most presentations should be pure markdown.
+The render tool always writes `.mdx` files, so you *can* drop in inline JSX components when a markdown idiom doesn't fit. Use sparingly — most rendered pages should be pure markdown.
 
 Nextra ships these MDX components ready to use:
 
@@ -290,10 +290,10 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 ## Steps
 
 1. **Read the markdown.** Use the core `read` tool on `md_path` (resolved against the vault root). Parse out the frontmatter (title, tags, source_agent, etc.) and the body.
-2. **Scan for diagrammable shapes FIRST.** Run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one — ideally two — diagrams to include. If your honest scan finds zero diagrammable shapes, the presentation may not be worth the work; tell the caller so.
+2. **Scan for diagrammable shapes FIRST.** Run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one — ideally two — diagrams to include. If your honest scan finds zero diagrammable shapes, an HTML render may not be worth the work; tell the caller so.
 3. **Decide the rest of the pattern set.** Look at the note's type (folder or frontmatter `type:`). From the pattern picker above, pick 2–3 *other* idioms that fit alongside the diagram(s).
 4. **Generate the markdown body** — convert the source markdown, lift sections that should become callouts, insert Mermaid blocks where shapes were identified, use `<Tabs>` / `<Steps>` / `<Cards>` only where pure markdown can't express it.
-5. **Call `write_presentation`** with the assembled `markdown` body, the original `title`, and the `source_md_path` (so the response records both paths together). The body must NOT contain a "Source:" footer or any provenance line — provenance lives in the chat reply, not in the rendered artifact.
+5. **Call `write_html_render`** with the assembled `markdown` body, the original `title`, and the `source_md_path` (so the response records both paths together). The body must NOT contain a "Source:" footer or any provenance line — provenance lives in the chat reply, not in the rendered artifact.
 6. **Return** `{ id, url, path, title, source_md_path }` to the caller.
 7. **The agent's user-facing reply** is then:
    > Open: `<url>`
@@ -304,17 +304,17 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 ## Don't
 
 - **Don't write HTML / CSS / JS.** Nextra owns the chrome. Emit markdown body only.
-- **Don't include frontmatter** in the markdown you pass to `write_presentation` — the tool prepends it for you.
-- **Don't write HTML to the vault.** Use `write_presentation`. HTML / MDX in the vault breaks Obsidian's graph.
-- **Don't auto-present.** Personas (or the user) explicitly trigger the skill. There is no global "save and present" hook.
-- **Don't synthesize content.** Render reads the markdown source. If you find yourself inventing sections that weren't in the md, stop — edit the markdown via `note-taker` first, then re-run.
+- **Don't include frontmatter** in the markdown you pass to `write_html_render` — the tool prepends it for you.
+- **Don't write HTML to the vault.** Use `write_html_render`. HTML / MDX in the vault breaks Obsidian's graph.
+- **Don't auto-render.** Personas (or the user) explicitly trigger the skill. There is no global "save and render" hook.
+- **Don't synthesize content.** The render reads the markdown source. If you find yourself inventing sections that weren't in the md, stop — edit the markdown via `note-taker` first, then re-run.
 - **Don't produce styled markdown.** If the output is just "h1 + paragraphs + tables + code blocks" with no diagrams or callouts — you built the wrong artifact. Pick 2–3 idioms from the picker or tell the caller the markdown is sufficient.
 - **Don't append a "Source:" footer or any provenance line to the rendered page.** Source path belongs in the chat reply only. The artifact stands alone.
 - **Don't set Mermaid colors.** No `style …` lines, no `%%{init}%%` palette blocks, no `themeVariables`. The renderer is pre-themed (DESIGN-2). One exception: a `classDef accent fill:#032F62,stroke:#000000,color:#ffffff` + `class NodeId accent` to highlight a single node.
-- **Don't ship a presentation with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A presentation whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need a presentation — say so.
+- **Don't ship a render with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A page whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need an HTML render — say so.
 - **Don't ship an unreadable diagram.** A `flowchart LR` squashed into a 30px-tall strip helps no one — readability beats diagram-purity. If the layout would be too wide / too dense to read at the article's column width (see "Diagram shape and density"), use a table or split into multiple diagrams. The diagrams-first rule does not override the readability rule.
 - **Don't use ASCII diagrams.** Write Mermaid for named types. Never ASCII.
 - **Don't ship the "default-AI aesthetic."** No gradients, no glass morphism, no neon glow, no emoji headers, no purple-to-pink branding. Nextra's parchment theme is the only theme.
 - **Don't paste the rendered body inline** in the chat reply. The URL is the deliverable.
-- **Don't list multiple presentation URLs proactively.** The URL-secrecy model means each URL is shared deliberately. Never volunteer "here are your recent presentations".
+- **Don't list multiple render URLs proactively.** The URL-secrecy model means each URL is shared deliberately. Never volunteer "here are your recent renders".
 - **Don't include the markdown source as a code block** in the rendered markdown — the source path goes in the response metadata, the file lives in the vault.
