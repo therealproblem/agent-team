@@ -100,6 +100,55 @@ blockquote * {
   color: #000000 !important;
 }
 
+/* GFM alert callouts — Nextra maps [!NOTE]/[!TIP]/[!IMPORTANT]/[!WARNING]/[!CAUTION]
+ * to <Callout type="info|default|important|warning|error">. Each type lands a
+ * different Tailwind bg class on `.nextra-callout`; we key off that class to
+ * paint a parchment-friendly tint + a saturated left rail per type. */
+.nextra-callout {
+  background: #f1e9e7 !important;
+  border: 1px solid #000000 !important;
+  border-left-width: 4px !important;
+  color: #000000 !important;
+  border-radius: 0 !important;
+}
+.nextra-callout * { color: #000000 !important; }
+.nextra-callout svg { color: inherit !important; }
+
+/* NOTE — dark-navy (theme accent) */
+.nextra-callout.x\:bg-blue-100 {
+  background: rgba(3, 47, 98, 0.06) !important;
+  border-left-color: #032F62 !important;
+}
+.nextra-callout.x\:bg-blue-100 svg { color: #032F62 !important; }
+
+/* TIP — forest green */
+.nextra-callout.x\:bg-green-100 {
+  background: rgba(10, 127, 63, 0.06) !important;
+  border-left-color: #0a7f3f !important;
+}
+.nextra-callout.x\:bg-green-100 svg { color: #0a7f3f !important; }
+
+/* IMPORTANT — deep violet */
+.nextra-callout.x\:bg-purple-100 {
+  background: rgba(111, 66, 193, 0.06) !important;
+  border-left-color: #6f42c1 !important;
+}
+.nextra-callout.x\:bg-purple-100 svg { color: #6f42c1 !important; }
+
+/* WARNING — amber */
+.nextra-callout.x\:bg-yellow-50 {
+  background: rgba(181, 137, 0, 0.08) !important;
+  border-left-color: #b58900 !important;
+}
+.nextra-callout.x\:bg-yellow-50 svg { color: #b58900 !important; }
+
+/* CAUTION — red */
+.nextra-callout.x\:bg-red-100 {
+  background: rgba(176, 0, 32, 0.06) !important;
+  border-left-color: #b00020 !important;
+}
+.nextra-callout.x\:bg-red-100 svg { color: #b00020 !important; }
+
 /* Tables */
 table, th, td {
   border-color: rgba(0, 0, 0, 0.15) !important;
