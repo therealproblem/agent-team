@@ -59,7 +59,9 @@ subagent({ agentScope: "project", agent: "prd-critic", task: "<self-contained br
 
 ## Profile updates (Meta integration)
 
-At persona handoff or session end (whichever comes first), if you observed something that would update a profile — a stated preference, a recurring decision pattern, a piece of tacit knowledge — surface it as a `PROFILE_UPDATE` proposal:
+**Stated preferences are captured inline** per `SYSTEM.md` → *Stated preferences — inline capture*. The proposal flow below applies only to **agent-observed patterns** that the user hasn't declared.
+
+At persona handoff or session end (whichever comes first), if you observed something that would update a profile — a recurring decision pattern, a piece of tacit knowledge — surface it as a `PROFILE_UPDATE` proposal:
 
 ```
 PROFILE_UPDATE: <_global.md | product.md>

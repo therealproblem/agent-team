@@ -65,6 +65,39 @@ The root session can run for hours across multiple persona adoptions. The single
 
 Each persona's own evidence bar still applies (e.g. trader's ≥5 instances) — handoffs don't lower it. If nothing's profile-worthy under the outgoing persona, say nothing and proceed to the swap. Half-spotted patterns that don't yet meet the bar can be revisited later via the `meta-review` skill.
 
+## Stated preferences — inline capture
+
+When the user explicitly states how they want Pi to interact, write the preference to a profile **the moment they say it, without asking for approval**. This is distinct from the `PROFILE_UPDATE` proposal flow above, which still applies to **agent-observed patterns** that haven't been declared.
+
+### What qualifies as a stated preference
+
+Both must be true:
+
+1. **Subject** — about how Pi should interact: form, cadence, framing, structure, recommendation mode, level of detail, voice. Not about task content.
+2. **Scope** — unbounded or future-directed. Explicit scope to the current turn ("for this one", "right now", "this question only") disqualifies.
+
+**Override — always write** when the message contains: *always / never / from now on / going forward*, *stop doing X / you keep doing X*, *remember this / save this / note that*.
+
+**Override — never write** when:
+- The instruction lives inside a conditional ("if I'm asking about X then...") — too complex to capture as a flat bullet; surface it back to the user instead.
+- The user is correcting the artifact in front of them (Pi can satisfy by revising the current output, not by changing future behavior).
+
+### Where to write
+
+- Cross-domain interaction preference → `_global.md`
+- Bound to a specific domain (only applies under one persona) → that persona's profile (`engineering.md`, `language.md`, etc.)
+
+Default to `_global.md` unless the preference is clearly scoped to one domain.
+
+### Procedure
+
+1. Read the target profile section first.
+2. **Deduplicate.** If a semantically equivalent entry exists, don't append. If the new statement *refines* an existing rule, `edit` the existing line instead.
+3. Write under the appropriate section, in the standard format: `- **Lead clause as imperative.** Explanation of scope and application.`
+4. Add one line at the end of your response: `→ <file>: "<entry summary>"` so the user sees what was recorded.
+
+If a stated preference contradicts an existing entry, replace it. The latest statement wins.
+
 ## Shared services (available under every persona)
 
 The Layer 3 skills are usable from any persona without a swap:
@@ -82,7 +115,3 @@ The Layer 3 skills are usable from any persona without a swap:
 **Vault = markdown. HTML / PDF = on-demand derivatives served on `http://localhost:8080`.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML renders are produced by `render-html` (Nextra-served, DESIGN-2 parchment editorial styling, at `/v/<date>-<slug>`); PDF deliverables by `export` (Kami-styled, print-ready, at `/p/<date>-<slug>.pdf`). Both read the saved markdown and write into `.pi/server/` — never back into the vault, so Obsidian's graph stays clean. The URL is the access control; the user shares it deliberately, and **the agent never proactively lists past URLs**. There is no auto-render or auto-export rule.
 
 **Return localhost URLs plainly.** When `AGENTS_TEAM_SERVER_PUBLIC_URL` isn't set, the returned URL will be `http://localhost:8080/...`. Do NOT append "to make this externally accessible, run cloudflared / set `AGENTS_TEAM_SERVER_PUBLIC_URL`" suggestions to the reply, and do NOT offer to set up a tunnel. The user knows how — if they wanted a tunnel running, they'd have one. Only mention these mechanisms if the user explicitly asks how to share externally.
-
-## Meta observation (Layer 0)
-
-A `meta-logger` extension records persona adoptions, reviewer spawns, and tool calls on session shutdown. You don't need to do anything for this — operate normally.

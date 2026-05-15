@@ -325,17 +325,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. Legacy frontend cleanup
+# 11. Legacy artifact cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
-# frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
-# when there's nothing to clean.
+# experiments — old frontend attempts (pi-rpc-shim, Open WebUI, piclaw) and
+# retired extensions (meta-logger and its orphan log dir). Idempotent —
+# silent when there's nothing to clean.
 # ---------------------------------------------------------------------------
 
 removed_any=false
 
-# Repo-local folders left by the shim or piclaw bind mounts.
-for legacy_dir in services home .piclaw; do
+# Repo-local folders left by the shim, piclaw bind mounts, or retired extensions.
+for legacy_dir in services home .piclaw .pi/extensions/meta-logger .pi/meta-logs; do
 	if [[ -e "${REPO_ROOT}/${legacy_dir}" ]]; then
 		info "removing legacy folder: ${legacy_dir}/"
 		rm -rf "${REPO_ROOT}/${legacy_dir}"
@@ -364,7 +365,7 @@ if have docker && docker info >/dev/null 2>&1; then
 fi
 
 if [[ "$removed_any" == "true" ]]; then
-	ok "legacy frontend state cleaned up"
+	ok "legacy artifacts cleaned up"
 fi
 
 # ---------------------------------------------------------------------------

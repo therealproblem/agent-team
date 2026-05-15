@@ -278,7 +278,7 @@ export default defineExtension({
 });
 ```
 
-Read existing extensions for the right shape — `.pi/extensions/obsidian-vault/` is the fullest example; `.pi/extensions/reminders/` shows the slash-command pattern; `.pi/extensions/meta-logger/` shows the pure-event-subscriber pattern.
+Read existing extensions for the right shape — `.pi/extensions/obsidian-vault/` is the fullest example; `.pi/extensions/reminders/` shows the slash-command pattern.
 
 If the extension needs env vars, route through `.pi/lib/dotenv.ts` (already in the repo) so `.env` is auto-loaded.
 

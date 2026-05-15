@@ -25,7 +25,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 
 | Architectural concept | Pi artifact |
 |---|---|
-| Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. `meta-logger` extension subscribes to `session_shutdown`. |
+| Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. |
 | Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
@@ -99,7 +99,6 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
 │   ├── srs/                   Registers `list_due`, `record`, `add_item`.
 │   ├── trade-journal/         Registers `list_trades`, `read_trade`.
-│   ├── meta-logger/           Subscribes to `session_shutdown`; appends to .pi/meta-logs/.
 │   └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
 └── server/                    Next.js 16 + Nextra 4 app — serves HTML renders at /v/<date>-<slug> and PDFs at /p/<date>-<slug>-<epoch>.pdf on port 8080. Themed with the OpenWeb parchment palette (DESIGN-2). Boots automatically via the `server` extension. No auth — URL is the access control.
 ```
@@ -247,7 +246,6 @@ These apply to every agent:
 
 | Layer | Component | Status |
 |---|---|---|
-| 0 | meta-logger extension (`session_shutdown` hook) | Functional stub |
 | 1 | Root session (`.pi/SYSTEM.md`) | Persona-adoption model (Path B) |
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |

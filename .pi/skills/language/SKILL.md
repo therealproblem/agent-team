@@ -84,6 +84,8 @@ When a traditional drill format would require handwriting, substitute its typed 
 
 ## Profile updates (Meta integration)
 
+**Stated preferences are captured inline** per `SYSTEM.md` → *Stated preferences — inline capture*. The proposal flow below applies only to **agent-observed patterns** that the user hasn't declared.
+
 At persona handoff or session end (whichever comes first), surface a `PROFILE_UPDATE` proposal if you observed something durable:
 
 ```
