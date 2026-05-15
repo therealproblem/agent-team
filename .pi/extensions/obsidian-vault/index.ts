@@ -1,6 +1,6 @@
 /**
  * obsidian-vault — write interface to the user's Obsidian vault and to the
- * adjacent `renders/` and `exports/` directories for derivative artifacts.
+ * local Next.js / Nextra server that serves derivative artifacts over HTTP.
  *
  * Three tools:
  *   - `write_note`       — markdown-only, into the Obsidian vault. Owns
@@ -8,29 +8,35 @@
  *                          markdown-first so the Obsidian graph view,
  *                          backlinks, and tag search work. Called by the
  *                          `note-taker` skill (Layer 3).
- *   - `write_render`     — HTML, into a separate `renders/` directory OUTSIDE
- *                          the vault. Used by the `render` skill (Layer 3)
- *                          when a caller wants the markdown presented as an
- *                          interactive HTML page. Keeping HTML out of the
- *                          vault preserves the graph (Obsidian does not index
- *                          .html files).
- *   - `write_export_pdf` — PDF, into a separate `exports/` directory. Used by
- *                          the `export` skill (Layer 3) to produce print-ready
- *                          deliverables (resumes, letters, reports, slides)
- *                          styled by the Kami design system. The caller
- *                          provides Kami-styled HTML; this tool writes the
+ *   - `write_render`     — markdown body, written as `.mdx` into the Next.js
+ *                          server's `content/r/` directory. Nextra serves it
+ *                          at `/r/<YYYY-MM-DD>-<slug>`. Re-rendering the
+ *                          same title on the same day overwrites the file;
+ *                          the URL stays stable. Used by the `render` skill
+ *                          (Layer 3).
+ *   - `write_export_pdf` — PDF, written into the Next.js server's
+ *                          `public/p/` directory so it's served at
+ *                          `/p/<YYYY-MM-DD>-<slug>.pdf`. Re-exporting the
+ *                          same title on the same day overwrites the file;
+ *                          the URL stays stable. Used by the `export` skill
+ *                          (Layer 3) to produce print-ready deliverables
+ *                          (resumes, letters, reports, slides) styled by the
+ *                          Kami design system. The caller provides
+ *                          Kami-styled HTML; this tool writes a transient
  *                          HTML, shells out to headless Chrome to render the
- *                          PDF, and then deletes the intermediate HTML once
+ *                          PDF, then deletes the intermediate HTML once
  *                          Chrome confirms the PDF was produced. The HTML is
  *                          retained only when Chrome fails (no binary, render
  *                          error) so the caller has a recovery path.
  *
  * Configure paths via env vars:
- *   AGENTS_TEAM_VAULT_PATH    — default: <cwd>/vault
- *   AGENTS_TEAM_RENDERS_PATH  — default: <cwd>/renders
- *   AGENTS_TEAM_EXPORTS_PATH  — default: <cwd>/exports
- *   AGENTS_TEAM_CHROME_PATH   — default: platform auto-detect (macOS:
- *                               /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
+ *   AGENTS_TEAM_VAULT_PATH        — default: <cwd>/vault
+ *   AGENTS_TEAM_SERVER_PATH       — default: <cwd>/.pi/server
+ *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080
+ *                                   Set to your cloudflared tunnel hostname
+ *                                   so returned URLs are share-ready.
+ *   AGENTS_TEAM_CHROME_PATH       — default: platform auto-detect (macOS:
+ *                                   /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
  *
  * Agents should NOT call these tools directly — they go through `note-taker`,
  * `render`, and `export` skills so naming, folder, and design conventions
@@ -50,12 +56,11 @@ const execFileP = promisify(execFile);
 const VAULT_ROOT = resolve(
 	process.env.AGENTS_TEAM_VAULT_PATH ?? join(process.cwd(), "vault"),
 );
-const RENDERS_ROOT = resolve(
-	process.env.AGENTS_TEAM_RENDERS_PATH ?? join(process.cwd(), "renders"),
+const SERVER_ROOT = resolve(
+	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),
 );
-const EXPORTS_ROOT = resolve(
-	process.env.AGENTS_TEAM_EXPORTS_PATH ?? join(process.cwd(), "exports"),
-);
+const SERVER_PUBLIC_URL =
+	process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "http://localhost:8080";
 
 function resolveChromeBinary(): string | null {
 	if (process.env.AGENTS_TEAM_CHROME_PATH) return process.env.AGENTS_TEAM_CHROME_PATH;
@@ -197,16 +202,17 @@ const writeNote = defineTool({
 
 const writeRender = defineTool({
 	name: "write_render",
-	label: "Write HTML Render",
+	label: "Write Render",
 	description:
-		"Write a fully-assembled HTML file to the `renders/` directory (OUTSIDE the Obsidian vault). Used by the `render` skill to publish a presentation of a markdown note. The HTML body must be a complete self-contained document — caller owns `<!doctype>`, `<head>`, styles, scripts. Returns a `file://` URL the user can open in a browser.",
+		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/r/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/r/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-rendering the same title on the same day overwrites the file; the URL stays stable. Used by the `render` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome.",
 	parameters: Type.Object({
 		title: Type.String({
-			description: "Title for slug + filename. Should match the source note's title.",
-		}),
-		html: Type.String({
 			description:
-				"Complete HTML document, written verbatim. Must start with <!doctype html> and be self-contained.",
+				"Title for the page (set as `title` in frontmatter, used to build the URL slug). Should match the source note's title.",
+		}),
+		markdown: Type.String({
+			description:
+				"Markdown body, written verbatim. NO frontmatter (this tool prepends it). NO `<!doctype>` / `<html>` / `<head>` / `<style>` / `<script>` — Nextra owns the chrome. Mermaid blocks via ```mermaid` fences are supported. GFM callouts via `> [!NOTE]` / `> [!WARNING]` / `> [!DANGER]` are rendered as styled boxes.",
 		}),
 		source_md_path: Type.Optional(
 			Type.String({
@@ -214,30 +220,25 @@ const writeRender = defineTool({
 					"Vault-relative path of the markdown source this render was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
 			}),
 		),
-		subfolder: Type.Optional(
-			Type.String({
-				description:
-					"Optional sub-path under `renders/` (e.g. 'pm/prd'). Default: flat — files land directly under `renders/`.",
-			}),
-		),
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const subfolder = params.subfolder ?? "";
-		const filename = `${todayIso()}-${slugify(params.title)}.html`;
-		const path = subfolder
-			? join(RENDERS_ROOT, subfolder, filename)
-			: join(RENDERS_ROOT, filename);
+		const slug = `${todayIso()}-${slugify(params.title)}`;
+		const dir = join(SERVER_ROOT, "content", "r");
+		const path = join(dir, `${slug}.mdx`);
+		const url = `${SERVER_PUBLIC_URL}/r/${slug}`;
 
 		try {
-			if (!existsSync(dirname(path))) {
-				await mkdir(dirname(path), { recursive: true });
+			if (!existsSync(dir)) {
+				await mkdir(dir, { recursive: true });
 			}
-			await writeFile(path, params.html, { encoding: "utf8" });
-			const url = `file://${path}`;
+			const titleEscaped = params.title.replace(/"/g, '\\"');
+			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
+			await writeFile(path, frontmatter + params.markdown, { encoding: "utf8" });
 			return {
-				content: [{ type: "text", text: `Rendered ${path}` }],
+				content: [{ type: "text", text: `Rendered ${url}` }],
 				details: {
+					slug,
 					path,
 					url,
 					title: params.title,
@@ -261,11 +262,11 @@ const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
 	description:
-		"Render a complete HTML document to PDF (via headless Chrome) and write it to the `exports/` directory. Used by the `export` skill to produce print-ready Kami-styled deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. The PDF is the only artifact that survives. Returns the absolute path and `file://` URL of the PDF. If Chrome fails, the HTML is retained (in case the caller wants to recover it manually) and the tool returns isError with the HTML path.",
+		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the local Nextra server's `public/p/` directory. The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — typically a cloudflared tunnel hostname for share-ready URLs). Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
-				"Title used for slug + filename. Should match the source document's title.",
+				"Title used for the document and to build the URL slug. Recorded in the response.",
 		}),
 		html: Type.String({
 			description:
@@ -277,12 +278,6 @@ const writeExportPdf = defineTool({
 					"Vault-relative path of the markdown source, if the export was generated from a vault note. Recorded in the response so the caller can keep them paired. Omit for one-shot inline exports (e.g. resumes the user does not want archived).",
 			}),
 		),
-		subfolder: Type.Optional(
-			Type.String({
-				description:
-					"Optional sub-path under `exports/` (e.g. 'resume', 'letters/2026', 'reports/q2'). Default: flat — files land directly under `exports/`.",
-			}),
-		),
 		template: Type.Optional(
 			Type.String({
 				description:
@@ -292,16 +287,16 @@ const writeExportPdf = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const subfolder = params.subfolder ?? "";
-		const slug = slugify(params.title);
-		const baseDir = subfolder ? join(EXPORTS_ROOT, subfolder) : EXPORTS_ROOT;
-		const htmlPath = join(baseDir, `${todayIso()}-${slug}.html`);
-		const pdfPath = join(baseDir, `${todayIso()}-${slug}.pdf`);
+		const slug = `${todayIso()}-${slugify(params.title)}`;
+		const pdfDir = join(SERVER_ROOT, "public", "p");
+		const tmpDir = join(SERVER_ROOT, ".export-tmp");
+		const htmlPath = join(tmpDir, `${slug}.html`);
+		const pdfPath = join(pdfDir, `${slug}.pdf`);
+		const pdfUrl = `${SERVER_PUBLIC_URL}/p/${slug}.pdf`;
 
 		try {
-			if (!existsSync(baseDir)) {
-				await mkdir(baseDir, { recursive: true });
-			}
+			if (!existsSync(pdfDir)) await mkdir(pdfDir, { recursive: true });
+			if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
 			await writeFile(htmlPath, params.html, { encoding: "utf8" });
 
 			const chrome = resolveChromeBinary();
@@ -315,7 +310,6 @@ const writeExportPdf = defineTool({
 					],
 					details: {
 						html_path: htmlPath,
-						html_url: `file://${htmlPath}`,
 						pdf_path: null,
 						pdf_url: null,
 						title: params.title,
@@ -352,10 +346,11 @@ const writeExportPdf = defineTool({
 			await unlink(htmlPath).catch(() => undefined);
 
 			return {
-				content: [{ type: "text", text: `Exported ${pdfPath}` }],
+				content: [{ type: "text", text: `Exported ${pdfUrl}` }],
 				details: {
+					slug,
 					pdf_path: pdfPath,
-					pdf_url: `file://${pdfPath}`,
+					pdf_url: pdfUrl,
 					title: params.title,
 					source_md_path: params.source_md_path,
 					template: params.template,

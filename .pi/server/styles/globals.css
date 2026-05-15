@@ -1,0 +1,228 @@
+@import "tailwindcss";
+@import "nextra-theme-docs/style.css";
+
+/*
+ * DESIGN-2 — OpenWeb editorial parchment palette. Light theme only.
+ */
+@theme {
+  --color-parchment-white: #f1e9e7;
+  --color-midnight-ink: #000000;
+  --color-arctic-frost: #ffffff;
+  --color-slate-gray: #7b7f83;
+  --color-vivid-cobalt: #0058fe;
+}
+
+:root,
+:root.light,
+:root.dark {
+  --color-parchment-white: #f1e9e7;
+  --color-midnight-ink: #000000;
+  --color-arctic-frost: #ffffff;
+  --color-slate-gray: #7b7f83;
+  --color-vivid-cobalt: #0058fe;
+
+  /* Wire Nextra's accent (hue triplet) to DESIGN-2 cobalt #0058fe ≈ HSL(218°, 100%, 50%) */
+  --nextra-primary-hue: 218deg;
+  --nextra-primary-saturation: 100%;
+  --nextra-primary-lightness: 50%;
+}
+
+/* Force light scheme — DESIGN-2 has no dark variant. */
+html,
+html.dark,
+html.light {
+  color-scheme: light !important;
+  background: #f1e9e7 !important;
+  color: #000000 !important;
+}
+
+body {
+  background: #f1e9e7 !important;
+  color: #000000 !important;
+}
+
+/* Nextra's prose / typography classes set their own text colors via Tailwind
+ * utility classes baked into compiled components. Override every common one
+ * back to midnight-ink so body copy is actually readable on parchment. */
+main,
+main *,
+article,
+article *,
+.nextra-content,
+.nextra-content * {
+  color: #000000;
+}
+
+/* Headings — DESIGN-2 prefers serif at editorial scale. */
+h1, h2, h3, h4, h5, h6,
+main h1, main h2, main h3, main h4, main h5, main h6,
+article h1, article h2, article h3, article h4, article h5, article h6 {
+  color: #000000 !important;
+  font-family: "Copernicus", "Charter", "Charter BT", Georgia, "Times New Roman", serif !important;
+  letter-spacing: -0.01em;
+}
+
+/* Body copy — neutral sans for utilitarian readability. */
+body {
+  font-family: "Helvetica", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Inline code & code blocks — parchment-aware backgrounds. */
+code:not(pre code) {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #000000 !important;
+}
+pre,
+pre code {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #000000 !important;
+}
+
+/* Body links — vivid cobalt (the only accent). */
+main a:not([data-no-style]),
+article a:not([data-no-style]),
+.nextra-content a:not([data-no-style]) {
+  color: #0058fe !important;
+}
+
+/* Blockquotes / GFM callouts — keep readable, kill the muted-gray default. */
+blockquote,
+blockquote * {
+  color: #000000 !important;
+}
+
+/* Tables */
+table, th, td {
+  color: #000000 !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Nextra chrome — navbar, sidebar, TOC. Match the parchment surface. */
+.nextra-navbar,
+.nextra-navbar-blur,
+.nextra-sidebar,
+.nextra-sidebar-container,
+.nextra-toc,
+nav.nextra-toc,
+aside.nextra-sidebar-container {
+  background: #f1e9e7 !important;
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+.nextra-navbar { border-bottom: 1px solid #000000 !important; }
+
+/* TOC text — visible. Active item gets the cobalt accent. */
+.nextra-toc a,
+.nextra-sidebar a {
+  color: #000000 !important;
+}
+.nextra-toc a[aria-selected="true"],
+.nextra-toc a.nextra-focus,
+.nextra-sidebar a[aria-current="page"],
+.nextra-sidebar .active {
+  color: #0058fe !important;
+}
+
+/* Sharp corners — DESIGN-2 enforces 0px radius on UI elements. */
+button, input, select, textarea, .nextra-button {
+  border-radius: 0 !important;
+}
+
+/* Search input is hidden (search: false in next.config.mjs disables index)
+ * but the slot can still render — hide any stray ⌘K box. */
+.nextra-search { display: none !important; }
+
+/* Renders are URL-only standalone pages — there's no inter-page nav. The
+ * left sidebar stays hidden on desktop (it would just be empty); on mobile,
+ * the TOC takes its place via the mobile drawer. */
+.nextra-sidebar,
+aside.nextra-sidebar-container > .nextra-sidebar {
+  display: none !important;
+}
+
+/* Move TOC from the right to the left, and force it visible at every
+ * breakpoint (Nextra hides it below xl by default). */
+nav.nextra-toc[aria-label="table of contents"] {
+  order: -1 !important;
+  display: block !important;
+}
+
+/* CSS-only mobile TOC drawer.
+ *
+ * The checkbox + label pattern: tapping the hamburger toggles the checkbox;
+ * a sibling-combinator selector slides the TOC in from the left. The
+ * backdrop label closes the drawer when tapped outside. No JS.
+ */
+.toc-toggle-input { display: none !important; }
+.toc-toggle-label,
+.toc-toggle-backdrop { display: none; }
+
+@media (max-width: 767px) {
+  /* Hide Nextra's built-in mobile hamburger — we use our own (below) so
+   * the same toggle controls our TOC drawer rather than Nextra's empty
+   * page-tree drawer. */
+  .nextra-hamburger,
+  button.nextra-hamburger {
+    display: none !important;
+  }
+
+  /* Hamburger button — fixed top-left, above everything else. */
+  .toc-toggle-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 60;
+    width: 2.5rem;
+    height: 2.5rem;
+    background: #f1e9e7;
+    color: #000;
+    border: 1px solid #000;
+    cursor: pointer;
+    font-size: 1.6rem;
+    line-height: 1;
+    user-select: none;
+  }
+
+  /* Push the navbar's content over so the wordmark doesn't sit beneath the
+   * hamburger button. */
+  .nextra-navbar nav {
+    padding-left: 3.75rem !important;
+  }
+
+  /* Backdrop — only visible while drawer is open; tapping closes it. */
+  .toc-toggle-input:checked ~ .toc-toggle-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 54;
+  }
+
+  /* TOC becomes a fixed slide-out drawer from the left (matching the
+   * left-side hamburger position); off-screen by default. */
+  nav.nextra-toc[aria-label="table of contents"] {
+    position: fixed !important;
+    top: 0 !important;
+    left: -100% !important;
+    right: auto !important;
+    width: 80% !important;
+    max-width: 320px !important;
+    height: 100vh !important;
+    background: #f1e9e7 !important;
+    border-right: 1px solid #000 !important;
+    z-index: 55 !important;
+    overflow-y: auto !important;
+    padding: 4rem 1rem 2rem !important;
+    transition: left 0.2s ease !important;
+    margin: 0 !important;
+  }
+  /* When checkbox is checked, slide TOC into view. The `~ *` reaches into
+   * the Layout subtree where the TOC lives. */
+  .toc-toggle-input:checked ~ * nav.nextra-toc[aria-label="table of contents"] {
+    left: 0 !important;
+  }
+}

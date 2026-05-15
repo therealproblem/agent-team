@@ -5,13 +5,20 @@ data/
 # if you'd rather point at your real Obsidian vault.
 vault/
 
-# Render derivatives — interactive HTML produced by the `render` skill.
-# Regeneratable from vault markdown.
+# Legacy file:// artifacts. Migrated to the Next.js server under .pi/server/
+# (see .pi/state/migration-map.json). Kept here so any stray writes stay out
+# of git, but the directories are no longer the active artifact home.
 renders/
-
-# PDF deliverables produced by the `export` skill. Regeneratable from markdown,
-# and often contain personal data (resumes, letters) — don't commit.
 exports/
+
+# Next.js + Nextra app — install deps, build cache, and runtime artifacts.
+.pi/server/node_modules/
+.pi/server/.next/
+.pi/server/next-env.d.ts
+# Runtime-generated render and export artifacts (URL-secret nanoid paths).
+.pi/server/content/r/*.mdx
+.pi/server/public/p/*.pdf
+.pi/server/.export-tmp/
 
 # Local secrets — copy .env.example to .env and fill in. Never commit .env.
 .env

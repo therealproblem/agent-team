@@ -65,8 +65,8 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── trader/SKILL.md        PERSONA
 │   │
 │   ├── note-taker/SKILL.md    Layer 3 (DEFAULT vault writer — markdown only, Obsidian-strict)
-│   ├── render/SKILL.md        Layer 3 (md → interactive HTML in renders/ outside vault)
-│   ├── export/SKILL.md        Layer 3 (md → Kami-styled PDF deliverable in exports/ outside vault)
+│   ├── render/SKILL.md        Layer 3 (md → Nextra page served at /r/<YYYY-MM-DD>-<slug> on :8080)
+│   ├── export/SKILL.md        Layer 3 (md → Kami-styled PDF served at /p/<YYYY-MM-DD>-<slug>.pdf on :8080)
 │   ├── news/SKILL.md          Layer 3
 │   ├── scribe/SKILL.md        Layer 3
 │   ├── research/SKILL.md      Layer 3 (online research via camoufox-pi)
@@ -91,25 +91,51 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── pattern-watch/SKILL.md inner (trader)
 │   ├── question-generator/SKILL.md    inner (trader)
 │   └── meta-review/SKILL.md   Layer 0 — cross-profile synthesis
-└── extensions/                TypeScript extensions (auto-loaded by Pi)
-    ├── subagent/              Official Pi example — spawns reviewer sub-sessions
-    ├── obsidian-vault/        Registers `write_note` (markdown to vault), `write_render` (HTML to `renders/`), and `write_export_pdf` (PDF to `exports/` via headless Chrome).
-    ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
-    ├── srs/                   Registers `list_due`, `record`, `add_item`.
-    ├── trade-journal/         Registers `list_trades`, `read_trade`.
-    ├── meta-logger/           Subscribes to `session_shutdown`; appends to .pi/meta-logs/.
-    └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
+├── extensions/                TypeScript extensions (auto-loaded by Pi)
+│   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
+│   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_render` (md → Nextra content/r/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → public/p/<date>-<slug>.pdf via headless Chrome).
+│   ├── server/                Subscribes to `session_start`; spawns `next dev` on :8080 from `.pi/server/`, kills on Pi exit. Surfaces ready/failed status as a TUI message.
+│   ├── news-ingest/           Registers `fetch_topic`. Used by `news` skill.
+│   ├── srs/                   Registers `list_due`, `record`, `add_item`.
+│   ├── trade-journal/         Registers `list_trades`, `read_trade`.
+│   ├── meta-logger/           Subscribes to `session_shutdown`; appends to .pi/meta-logs/.
+│   └── reminders/             Subscribes to `session_start`; surfaces open items from .pi/state/reminders.md as a TUI message.
+└── server/                    Next.js 16 + Nextra 4 app — serves renders at /r/<date>-<slug> and PDFs at /p/<date>-<slug>.pdf on port 8080. Themed with the OpenWeb parchment palette (DESIGN-2). Boots automatically via the `server` extension. No auth — URL is the access control.
 ```
 
 ## Configuration
 
 - **Vault location.** Default: project-root `vault/` (gitignored). Override with the `AGENTS_TEAM_VAULT_PATH` env var if you want notes to land in your real Obsidian vault elsewhere on disk. Used by `obsidian-vault` and `trade-journal` extensions.
-- **Renders location.** Default: project-root `renders/`. Override with `AGENTS_TEAM_RENDERS_PATH`. Lives OUTSIDE the vault so HTML doesn't break Obsidian's graph.
-- **Exports location.** Default: project-root `exports/`. Override with `AGENTS_TEAM_EXPORTS_PATH`. Holds PDFs produced by the `export` skill. The intermediate HTML is deleted once Chrome confirms the PDF on disk; it survives only when Chrome itself fails, as a manual-recovery path.
+- **Server location.** Default: project-root `.pi/server/`. Override with `AGENTS_TEAM_SERVER_PATH`. Houses the Next.js + Nextra app that serves renders and PDFs.
+- **Server port.** Default: `8080`. Override with `AGENTS_TEAM_SERVER_PORT`.
+- **Server title.** Default: `agents-team`. Override with `AGENTS_TEAM_SERVER_TITLE` — appears as the wordmark in the top-left navbar and as the suffix on every page's `<title>`.
+- **Public URL.** Default: `http://localhost:8080`. Override with `AGENTS_TEAM_SERVER_PUBLIC_URL` — set this to your **named** cloudflared tunnel hostname so render / export URLs returned by tools are share-ready across sessions. (Quick tunnels rotate URLs on every restart; named tunnels are persistent.)
 - **Chrome binary.** PDF export uses headless Chrome. Auto-detected on macOS (`/Applications/Google Chrome.app`), Linux, and Windows. Override with `AGENTS_TEAM_CHROME_PATH` if Chrome is installed elsewhere.
 - **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
 - **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
   - `@the-forge-flow/camoufox-pi` — stealth web fetcher + DuckDuckGo search via Camoufox (fingerprint-resistant Firefox fork). Backs the `research` skill. First call downloads the Camoufox binary (~500 MB). Install: `pi install -l npm:@the-forge-flow/camoufox-pi`.
+
+## Local artifact server
+
+The `server` extension boots a Next.js 16 + Nextra 4 dev server on port 8080 at session start. Renders land at `http://localhost:8080/r/<YYYY-MM-DD>-<slug>`; PDFs at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf`. URL is the access control — anyone with the link can read; no auth, no listing (sidebar hidden, search index not built, sitemap not generated, 404 page is bare). Slugs are predictable from the title, so the URL is not secret — share each one deliberately.
+
+To expose the server externally, run cloudflared yourself:
+
+```bash
+# Quick (URL rotates on restart):
+cloudflared tunnel --url http://localhost:8080
+
+# Named tunnel (persistent URL — recommended for AGENTS_TEAM_SERVER_PUBLIC_URL):
+cloudflared tunnel create agents-team
+cloudflared tunnel route dns agents-team renders.example.com
+cloudflared tunnel run agents-team
+```
+
+First-time server setup:
+
+```bash
+cd .pi/server && npm install
+```
 
 ## Layer 0 — Meta (per-domain user model)
 
@@ -166,8 +192,10 @@ cp .env.example .env
 Vars worth setting:
 
 - `AGENTS_TEAM_VAULT_PATH` — point at your real Obsidian vault elsewhere on disk.
-- `AGENTS_TEAM_RENDERS_PATH` — relocate `renders/` (HTML derivatives).
-- `AGENTS_TEAM_EXPORTS_PATH` — relocate `exports/` (PDF deliverables).
+- `AGENTS_TEAM_SERVER_PATH` — relocate the Next.js + Nextra server (default `.pi/server/`).
+- `AGENTS_TEAM_SERVER_PORT` — port the dev server binds (default `8080`).
+- `AGENTS_TEAM_SERVER_TITLE` — wordmark + page-title suffix (default `agents-team`).
+- `AGENTS_TEAM_SERVER_PUBLIC_URL` — base URL the tools return. Set to your named cloudflared tunnel hostname so render / export URLs are share-ready.
 - `AGENTS_TEAM_CHROME_PATH` — override Chrome binary used for PDF export (auto-detected on macOS / Linux / Windows by default).
 
 ## Implementation workflow rule
@@ -206,7 +234,7 @@ The pause is the point. Do not skip it for "small" extensions — small custom c
 
 These apply to every agent:
 
-1. **Vault is markdown. HTML and PDF are on-demand derivatives.** Everything that needs to persist — PRDs, ADRs, reports, lesson plans, summaries, exec briefs, captures, journal entries — goes through `note-taker` and lands in the Obsidian vault as markdown with proper YAML frontmatter, inline `#tags`, and `[[wiki-links]]`. The vault is an Obsidian vault: graph view, backlinks, and tag search depend on it staying markdown-first. **HTML and PDF are separate, opt-in derivatives** in their own directories outside the vault: `render` produces a self-contained interactive HTML file (shadcn aesthetic, full chromatic palette, opt-in CDN assets, Mermaid diagrams) in `renders/`; `export` produces a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue) in `exports/`. The agent's reply for a derivative is the `file://` URL plus the markdown source path — **never** the rendered body inline. Render only when the artifact would meaningfully benefit from on-screen interactivity (diagrams, tabs, callouts, timelines, decks); export only when the artifact is a real deliverable that needs to be sent, printed, or formally archived (resume, letter, portfolio, report, slides). Short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
+1. **Vault is markdown. HTML and PDF are on-demand derivatives served over HTTP.** Everything that needs to persist — PRDs, ADRs, reports, lesson plans, summaries, exec briefs, captures, journal entries — goes through `note-taker` and lands in the Obsidian vault as markdown with proper YAML frontmatter, inline `#tags`, and `[[wiki-links]]`. The vault is an Obsidian vault: graph view, backlinks, and tag search depend on it staying markdown-first. **HTML and PDF are separate, opt-in derivatives** served by the local Nextra server on port 8080: `render` produces a Nextra-rendered markdown page (DESIGN-2 parchment editorial styling, Mermaid diagrams, GFM callouts) at `http://localhost:8080/r/<YYYY-MM-DD>-<slug>`; `export` produces a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf`. The URL is the access control — anyone with the link reads; no auth, no listing. The agent's reply for a derivative is the http URL plus the markdown source path — **never** the rendered body inline, and **never** a list of URLs the user didn't ask for. Render only when the artifact would meaningfully benefit from on-screen presentation (diagrams, tabs, callouts, timelines); export only when the artifact is a real deliverable that needs to be sent, printed, or formally archived (resume, letter, portfolio, report, slides). Short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
 2. **Never write to the vault directly.** All vault writes go through `note-taker` (which calls `write_note`). All HTML renders go through `render` (which calls `write_render`). All PDF exports go through `export` (which calls `write_export_pdf`). These three skills are the only sanctioned writers.
 3. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
 4. **Trader is a student.** Never prescribes; only questions.
@@ -221,10 +249,11 @@ These apply to every agent:
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
-| 3 | note-taker, render, export, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render` reads vault markdown and produces interactive HTML in `renders/` outside the vault. `export` produces Kami-styled PDFs in `exports/` (via headless Chrome) for deliverables — resume, letter, portfolio, report, slides, etc. `fetch_topic` still returns empty (TODO: pick source or delegate to `research`). |
+| 3 | note-taker, render, export, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render` reads vault markdown and emits a markdown body that Nextra serves at `/r/<YYYY-MM-DD>-<slug>`. `export` produces Kami-styled PDFs served at `/p/<YYYY-MM-DD>-<slug>.pdf` (via headless Chrome) for deliverables — resume, letter, portfolio, report, slides, etc. `fetch_topic` still returns empty (TODO: pick source or delegate to `research`). |
 | 3 | research | Skill present. Backed by installed npm package `@the-forge-flow/camoufox-pi` (tools: `tff-fetch_url`, `tff-search_web`). |
 | ext | subagent | Pi's example, with profile pre-load + `--system-prompt` patch |
-| ext | obsidian-vault | Three tools: `write_note` (markdown → vault), `write_render` (HTML → `renders/`), `write_export_pdf` (PDF → `exports/` via headless Chrome). |
+| ext | obsidian-vault | Three tools: `write_note` (markdown → vault), `write_render` (md → `.pi/server/content/r/<date>-<slug>.mdx`), `write_export_pdf` (PDF → `.pi/server/public/p/<date>-<slug>.pdf` via headless Chrome). |
+| ext | server | Lifecycles the Next.js / Nextra server (port 8080). Spawns on session_start; kills on Pi exit. Detects an already-bound port and skips spawn. |
 | ext | trade-journal | Functional (read-side accessor) |
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
 | ext | news-ingest | Stub (`realFetch` returns []) |

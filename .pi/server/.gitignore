@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# Render content and exported PDFs are personal artifacts.
+content/r/*.mdx
+public/p/*.pdf

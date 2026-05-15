@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready PDF styled by the Kami design system (parchment canvas, ink-blue accent, serif typography, warm neutrals, no second chromatic hue). Takes either a vault-relative markdown path or inline markdown content, generates a complete Kami-styled HTML document, and calls the `write_export_pdf` tool to produce a PDF (via headless Chrome) into `exports/` OUTSIDE the vault. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form documents, and slide decks. Picks one of eight templates (one-pager · long-doc · letter · portfolio · resume · slides · equity-report · changelog) based on the request. Distinct from `render` (on-screen interactive HTML, shadcn aesthetic, full chromatic palette) and `note-taker` (markdown source in the Obsidian vault). The PDF is a one-way deliverable; the markdown is always the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout, single chromatic hue). Takes a vault markdown path or inline markdown, generates a Kami-styled HTML, and calls `write_export_pdf` to produce a PDF via headless Chrome. The PDF is served by the local Nextra server at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or the `AGENTS_TEAM_SERVER_PUBLIC_URL` hostname). Re-exporting the same title on the same day overwrites the file. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render` (interactive page) and `note-taker` (markdown source). The PDF is a one-way deliverable; markdown is the source of truth.
 ---
 
 # Export
@@ -15,10 +15,16 @@ Three different read paths, three different skills:
 | Read path | Owner | Format | Location |
 |---|---|---|---|
 | **Knowledge graph / archival** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
-| **On-screen exploration** | `render` | Interactive HTML (shadcn aesthetic) | `renders/<slug>.html` |
-| **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `exports/<slug>.pdf` |
+| **On-screen exploration** | `render` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/r/<YYYY-MM-DD>-<slug>` |
+| **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
 
-The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export. The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `exports/`. (If Chrome fails to render, the HTML is retained as a fallback so you can inspect what was generated and re-run the renderer manually.)
+The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export and the new content lands at the same URL (slug = date + title; same-day re-exports overwrite). The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `.pi/server/public/p/`. (If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.)
+
+## URL access model
+
+Each PDF lives at `http://…/p/<YYYY-MM-DD>-<slug>.pdf` where `<slug>` is the slugified title. The URL is the access control. There is no auth — the user shares the URL deliberately with whoever should receive the deliverable.
+
+The local server hides discovery vectors (`/`, `/p`, sitemap, search index, 404 page) so listing what exists is not possible from outside. Slugs are predictable from the title, though, so don't treat the URL as a secret — share each URL only in direct response to the user who asked for it.
 
 ## When to call
 
@@ -54,10 +60,8 @@ export({
                   "portfolio" | "resume" | "slides" |
                   "equity-report" | "changelog",
 
-  title:          "<title>",                                        // required — used for slug + filename
-                                                                    //   + page title + first heading
-  subfolder:      "<sub-path under exports/>",                      // optional — e.g. "resume",
-                                                                    //   "letters/2026", "reports/q2"
+  title:          "<title>",                                        // required — used for the document
+                                                                    //   title and to build the URL slug
 
   meta:           { author, date, audience, recipient, ... },       // optional — surfaced in the
                                                                     //   header/footer per template
@@ -70,14 +74,17 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `exports/<subfolder>/<YYYY-MM-DD>-<slug>.pdf`. Nothing else — the intermediate HTML is written transiently, fed to Chrome, then deleted once Chrome confirms the PDF was produced. The only case where an HTML file survives is when Chrome itself failed (no binary found, render error), in which case the tool returns `isError: true` plus the path of the HTML it could not convert.
+A `.pdf` file under `.pi/server/public/p/<YYYY-MM-DD>-<slug>.pdf`, served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to — set this to your cloudflared tunnel hostname for share-ready URLs across sessions).
+
+The intermediate HTML is written transiently to `.pi/server/.export-tmp/`, fed to Chrome, then deleted once Chrome confirms the PDF was produced. The only case where an HTML file survives is when Chrome itself failed (no binary found, render error), in which case the tool returns `isError: true` plus the path of the HTML it could not convert.
 
 Returned to the caller (success case):
 
 ```
 {
+  slug:      "<YYYY-MM-DD>-<title-slug>",
   pdf_path:  "<absolute path to PDF>",
-  pdf_url:   "file:///<absolute path to PDF>",
+  pdf_url:   "http://localhost:8080/p/<slug>.pdf",
   title:     "<title>",
   template:  "<which template was used>"
 }
@@ -95,7 +102,7 @@ Returned to the caller (Chrome failure — rare):
 
 The agent's user-facing reply is then:
 
-> Exported: `file:///…/file.pdf`
+> Exported: `<pdf_url>`
 > Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-export)
 
 Do not paste the rendered body inline. The PDF is the deliverable.
@@ -312,6 +319,85 @@ Math: circumference is `2π × 26 ≈ 163`. For score `s` out of 100, `stroke-da
 </svg>
 ```
 
+#### Vertical sequential flow — pipeline / stacked steps
+
+Use when the source markdown shows a top-to-bottom pipeline (numbered steps, "first … then … finally"). Do **not** reuse the horizontal-flow snippet rotated 90°; the polygon arrowheads in that snippet point right, and a sideways triangle on a vertical line reads as a tick mark, not an arrow.
+
+```html
+<svg viewBox="0 0 260 380" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="11" fill="var(--ink)" text-anchor="middle">
+    <rect x="40" y="10"  width="180" height="50" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="130" y="32">1. User Input</text>
+    <text x="130" y="48" font-size="9" fill="var(--ink-mute)">"Tell me about my project"</text>
+
+    <line x1="130" y1="60" x2="130" y2="82" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <polygon points="124,78 136,78 130,88" fill="var(--ink-mute)"/>
+
+    <rect x="40" y="92"  width="180" height="50" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="130" y="114">2. Query Episodic Memory</text>
+    <text x="130" y="130" font-size="9" fill="var(--ink-mute)">Past sessions mentioning "project"</text>
+
+    <line x1="130" y1="142" x2="130" y2="164" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <polygon points="124,160 136,160 130,170" fill="var(--ink-mute)"/>
+
+    <rect x="40" y="174" width="180" height="50" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
+    <text x="130" y="196" fill="var(--paper)">3. Construct Prompt</text>
+    <text x="130" y="212" font-size="9" fill="var(--paper)">System + Memory + Input</text>
+
+    <line x1="130" y1="224" x2="130" y2="246" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <polygon points="124,242 136,242 130,252" fill="var(--ink-mute)"/>
+
+    <rect x="40" y="256" width="180" height="50" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="130" y="284">4. Model Inference</text>
+  </g>
+</svg>
+```
+
+Arrowhead geometry (memorize this): for a **down-pointing** triangle whose tip sits at `(X, Y)`, the polygon is `points="X-6,Y-10 X+6,Y-10 X,Y"` — 12px wide, 10px tall. That's the minimum size that reads as an arrow at print scale; smaller and it looks like a stray dot. The line that feeds the arrow should stop ~6px short of the tip so the triangle doesn't have a stem sticking out the top.
+
+#### Fan-out — one parent connecting to N children (comb routing)
+
+Use whenever a single box has edges down to multiple boxes below it (the most common architecture-diagram shape). **Do NOT draw N diagonal lines from a single point on the parent**; that reads as a starburst, not a topology. Use a "comb": a short trunk down from the parent, a horizontal bus, and a drop into each child.
+
+```html
+<svg viewBox="0 0 480 220" aria-hidden="true">
+  <g font-family="var(--serif)" font-size="11" fill="var(--ink)" text-anchor="middle">
+    <!-- Parent -->
+    <rect x="140" y="10" width="200" height="56" rx="6" fill="var(--accent)" stroke="var(--accent)"/>
+    <text x="240" y="38" fill="var(--paper)">Session Manager</text>
+    <text x="240" y="54" font-size="9" fill="var(--paper)">parse · retrieve · call · update</text>
+
+    <!-- Trunk down from parent center-bottom -->
+    <line x1="240" y1="66" x2="240" y2="96" stroke="var(--ink-mute)" stroke-width="1"/>
+    <!-- Horizontal bus -->
+    <line x1="100" y1="96" x2="380" y2="96" stroke="var(--ink-mute)" stroke-width="1"/>
+    <!-- Drop into each child, with arrowhead overlapping the child's top edge -->
+    <line x1="100" y1="96" x2="100" y2="128" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <polygon points="94,124 106,124 100,134" fill="var(--ink-mute)"/>
+    <line x1="380" y1="96" x2="380" y2="128" stroke="var(--ink-mute)" stroke-width="1.25"/>
+    <polygon points="374,124 386,124 380,134" fill="var(--ink-mute)"/>
+
+    <!-- Children -->
+    <rect x="20"  y="134" width="160" height="64" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="100" y="160">Hermes 3 Model</text>
+    <text x="100" y="178" font-size="9" fill="var(--ink-mute)">Llama 3.1 fine-tune</text>
+
+    <rect x="300" y="134" width="160" height="64" rx="6" fill="var(--paper-soft)" stroke="var(--rule)"/>
+    <text x="380" y="160">Memory Store</text>
+    <text x="380" y="178" font-size="9" fill="var(--ink-mute)">SQLite + vectors</text>
+  </g>
+</svg>
+```
+
+For 3 children, add a middle drop at the parent's center X (`x1="240" x2="240"`). For 4+ children, keep them evenly spaced along the bus; if the bus would be wider than the canvas, switch to a two-level tree (parent → 2 group nodes → leaves) instead of cramming.
+
+**Anti-patterns to avoid in fan-out / pipeline diagrams:**
+
+- **Starburst origin.** Multiple connectors sharing one origin point and fanning out diagonally to children. Always use a trunk + bus (comb) instead.
+- **Floating arrowhead.** An arrow whose tip sits in empty space, not overlapping any child's top edge. The tip must land on (or just inside) the target box's border.
+- **Phantom edge.** A connector that points to no target at all. If the source markdown describes a path that has nowhere to go in your current diagram, drop the path or add the target box — don't ship a dangling arrow.
+- **Pencil-mark arrowheads.** A `<line>` with no `<polygon>`, or a polygon under ~8px wide. At print scale these read as decoration. Use the 12×10 polygon from the snippet above.
+
 ### Per-template diagram fit
 
 | Template | Where the diagram naturally lives |
@@ -337,10 +423,10 @@ If `~/.config/kami/brand.md` exists (YAML frontmatter + markdown body), apply it
 4. **Decide the language.** Default `en`. Switch font stack accordingly.
 5. **Scan for diagrammable shapes.** Before assembling the HTML, run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one inline SVG to include (two if the content supports it and the template tolerates two). Compose the SVG using the snippets in the diagrams section as a base. For `letter` and pure-list `resume` sections, skipping is fine — see "When NOT to add a diagram".
 6. **Assemble the HTML** using the template scaffold below as the base, filling in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}}`, `{{BODY}}`, `{{META_FOOTER}}`. **Place the diagram(s) near the section they illustrate** — not at the end as decoration. Embed all CSS inline. No remote scripts. No Mermaid.
-7. **Call `write_export_pdf`** with the assembled HTML, the title, the template name, and (if applicable) `source_md_path` + `subfolder`.
-8. **Return** `{ pdf_path, pdf_url, title, template }` to the caller. (The intermediate HTML was deleted by the tool after Chrome rendered the PDF.)
+7. **Call `write_export_pdf`** with the assembled HTML, the title, the template name, and (if applicable) `source_md_path`.
+8. **Return** `{ id, pdf_path, pdf_url, title, template }` to the caller. (The intermediate HTML was deleted by the tool after Chrome rendered the PDF.)
 9. **The agent's user-facing reply** is then:
-   > Exported: `file:///…/file.pdf`
+   > Exported: `<pdf_url>`
    > Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-export)
 
    Do not paste the rendered body inline.
@@ -653,7 +739,8 @@ For `letter`, omit the footer entirely (a letter doesn't carry meta about its pr
 
 ## Don't
 
-- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets `exports/` outside the vault. Vault stays markdown-only.
+- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets `.pi/server/public/p/` (served by Nextra) outside the vault. Vault stays markdown-only.
+- **Don't proactively list URLs.** Each PDF URL is shared deliberately by the user. Never volunteer "here are your recent exports".
 - **Don't synthesize content.** Export reads the markdown source (or the inline markdown passed in). If you find yourself inventing sections that weren't in the source, stop — edit the markdown via `note-taker` first, then re-export.
 - **Don't auto-export.** The user explicitly triggers this skill. No "save and export" hook.
 - **Don't ship a second chromatic hue.** Ink-blue is the only accent. No green checkmarks, no red warnings, no orange highlights. Tone is conveyed by structure and serif weight, not color.
