@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout). Takes a vault markdown path or inline markdown, generates Kami-styled HTML, and calls `write_export_pdf` to produce the PDF via headless Chrome. The PDF lands in `<repo>/exports/` and is served at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` — each regeneration appends a fresh epoch suffix to defeat Cloudflare edge caching, so older PDFs are NOT overwritten (the user prunes manually). Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates: one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render-html` (interactive page) and `note-taker` (markdown source); the PDF is a one-way deliverable, markdown is the source of truth.
+description: Layer 3 shared skill — exports markdown to a print-ready Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout). Takes a vault markdown path or inline markdown, generates Kami-styled HTML, and calls `write_export_pdf` to produce the PDF via headless Chrome. The PDF lands in `<repo>/exports/` and is served at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` — each regeneration appends a fresh epoch suffix to defeat Cloudflare edge caching, and prior PDFs for the same title (across all dates) are deleted automatically after the new one is on disk, so only the latest version per title stays on disk. Use for deliverables that will be sent, printed, or archived — resumes, letters, portfolios, equity reports, changelogs, one-pagers, long-form docs, slide decks. Picks one of eight templates — one-pager, long-doc, letter, portfolio, resume, slides, equity-report, changelog. Distinct from `render-html` (interactive page) and `note-taker` (markdown source); the PDF is a one-way deliverable, markdown is the source of truth.
 ---
 
 # Export
@@ -18,7 +18,7 @@ Three different read paths, three different skills:
 | **On-screen exploration** | `render-html` | Nextra-served page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 | **Print / deliverable** | `export` (this skill) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` |
 
-The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export, and a NEW file lands at a NEW URL: slug = `<YYYY-MM-DD>-<title>-<epoch>` where `<epoch>` is the Unix-seconds timestamp of the export. The prior PDF is left untouched on disk — same title, same date, different epoch suffix, two files. This is deliberate: a stable URL would be served stale by Cloudflare's edge cache when you regenerate, so each export gets its own URL and the cache simply never sees the old one again. **The user prunes old PDFs manually** — there is no auto-cleanup. Within one title, the higher epoch = newer file. The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, exposed to Nextra via a `.pi/server/public/p` → `exports/` symlink). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
+The PDF is a **one-way derivative** — regeneratable from the markdown at any time. Edit the markdown, re-export, and a NEW file lands at a NEW URL: slug = `<YYYY-MM-DD>-<title>-<epoch>` where `<epoch>` is the Unix-seconds timestamp of the export. Each export gets its own URL so Cloudflare's edge cache can't serve a stale copy. **After the new PDF is on disk, prior PDFs for the same title across ALL dates are deleted automatically** — the regex wildcards the date prefix and matches the title slug exactly, so yesterday's `2026-05-14-foo-…pdf` is removed by today's `2026-05-15-foo-…pdf`. Only one file per title stays in `<repo>/exports/` at any time. Legacy unsuffixed PDFs (from before the epoch suffix existed) are caught in the same pass via an optional `-<epoch>` group. Per-file unlink failures are swallowed; the export still succeeds. The intermediate HTML is deleted once Chrome confirms the PDF was written; only the `.pdf` remains in `<repo>/exports/` (the canonical export root, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time — the previous `public/p` symlink approach broke under `next start` because Next caches its public-files manifest at build time and prerenders 404s for files added later). Override the export root with `AGENTS_TEAM_EXPORT_PATH`. If Chrome fails to render, the HTML is retained as a fallback in `.pi/server/.export-tmp/` so you can inspect what was generated and re-run the renderer manually.
 
 ## URL access model
 
@@ -74,7 +74,7 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). The `<epoch>` is Unix-seconds at export time — every regeneration produces a new filename, so the prior PDF is preserved and the CDN cache can't return a stale copy under the same URL. Old PDFs accumulate; the user prunes them manually. Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
+A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). The `<epoch>` is Unix-seconds at export time — every regeneration produces a new filename so the CDN cache can't serve a stale copy under the URL it just handed out. After the new PDF is on disk, prior PDFs for the same title across ALL dates are unlinked automatically; only the latest version per title stays in the export root. Served by Nextra at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to) via a route handler at `.pi/server/app/p/[slug]/route.ts` that reads from `exports/` at request time. Cache-Control set to `public, max-age=31536000, immutable` since URLs are never reused — Cloudflare can cache each PDF for a year.
 
 **Returning the URL to the user.** The URL is the entire response. Do NOT:
 
@@ -119,7 +119,7 @@ Do not paste the rendered body inline. The PDF is the deliverable.
 
 These are not stylistic suggestions. They define what a Kami PDF looks like. Violating any one of them produces a document that is *not* a Kami document.
 
-1. **Canvas: parchment `#f5f4ed`.** Never pure white. The page background is parchment everywhere — `body`, `@page`, every region.
+1. **Canvas: parchment `#f5f4ed`, edge to edge — on every page, not just the first.** Never pure white. Painted by `@page { background-color: #f5f4ed }` plus `html { background }` + `body { background }` + `print-color-adjust: exact`. Per-page gutters live on `@page { margin }` (e.g. `14mm 16mm`), NOT on `body { padding }` — `body { padding }` only applies once at the start of the body and once at the end, so on a multi-page document intermediate pages get zero top/bottom gutter and content butts the page edge. Modern Chrome `--headless=new` (the print engine the `write_export_pdf` tool invokes) honours `@page { background-color }`, so the parchment paints into the margin area on every page; the legacy "white border around the parchment" bug no longer applies. Keep `body { padding: 0 }` so the @page margin is the only gutter.
 2. **Accent: ink-blue `#1B365D`, single hue.** This is the *only* chromatic color in the document. Link underlines, accent rules, decorative dividers — all use this hue. No second chromatic accent (no secondary brand color, no semantic green/red/orange, no callout palette). Discipline through restraint.
 3. **Neutrals: warm-toned.** All grays carry a yellow-brown undertone. Use `#1c1917`, `#44403c`, `#78716c`, `#a8a29e`, `#d6d3d1`, `#e7e5e4`, `#ebe9e0`. Banned: cool blue-grays (`#0f172a`, `#475569`, `#64748b`, `#94a3b8` — the Tailwind `slate`/`zinc`/`gray` cool palette). The warm undertone is essential to Kami's character.
 4. **Serif throughout.** Body 400, headings 500. **No synthetic bold** (no `font-weight: 700` or `bold`). Use weight 500 with serif headings for emphasis.
@@ -182,6 +182,7 @@ The patterns table below tells you *what* to draw once you've decided a diagram 
 |---|---|
 | A **comparison of N independent options** (cloud vs. self-host, plan A vs. plan B, "when to pick X over Y") | `.grid-2` or `.grid-3` of bordered `.card`s — one card per option, criteria as a bulleted list inside. A callout above the grid carries the recommendation (if any). |
 | A **single binary decision** ("should I do A or B?", "when to choose each") | Prose lede stating the question + 2-card grid for the answers. Do NOT use a decision diamond. The diamond is too small to hold a readable question at print scale, and the choice of which branch to fill with `--accent` injects editorial bias into the *geometry* before the reader has read a word — a chart should never argue for one branch by drawing it more vividly than the other. |
+| A **multi-level decision tree leading to >4 leaves OR >2 levels of branching** ("how to choose between these 6 patterns", "which approach for problem X") | `.grid-N` of bordered `.card`s — one card per leaf outcome, with the decision criteria written as a bulleted list *inside* each card. A short prose lede above the grid lists the questions a reader should ask. **Trees with >2 levels overflow A4 portrait at any layout direction** — top-down stacks too tall, left-to-right squashes too wide and nodes overlap. The 6-pattern decision tree in agentic-design-patterns is the canonical violator: 3 levels of yes/no forks landing on 6 leaves, drawn as a flowchart it cannot help but overlap; drawn as 6 cards it reads in 30 seconds. Use the binary-decision exit above for 1 fork → 2 outcomes; use a single-level horizontal tree (in the patterns table) for 1 fork → ≤4 outcomes. Everything denser becomes cards. |
 | An **absence, negation, or "this thing is gone"** state | Prose caption in `var(--ink-mute)`, or a struck-through label, or an empty bracketed slot `[ — ]`. Do NOT invent a glyph (`✕`, `?`, `!`, `∅`) and place it on an edge or between nodes without an adjacent caption — readers cannot decode an uncaptioned symbol. If you need to express "memory wiped between sessions", write the words "memory wiped" next to the gap; don't draw an X and hope. |
 | **Pure enumeration without flow** ("here are 5 features", "the four pillars") | Numbered list or `.grid-N` of cards. Boxes-and-arrows imply causation or sequence; if neither exists in the source, the diagram lies. |
 | The **table IS already the diagram** | Leave it as a table. An equity-report Numbers section, a feature comparison matrix, a pricing grid — the structure is the visual. Wrapping it in SVG adds nothing. |
@@ -193,8 +194,8 @@ If none of the above fires, continue to the patterns table.
 | If the markdown contains… | Reach for |
 |---|---|
 | Sequenced steps or a process | Horizontal flow — rounded rects + arrows in `var(--ink-mute)`, accent fill on the current/highlighted node |
-| Decisions with **≥3 outcomes** at ONE level (single fork) | Horizontal tree — parent node with comb-routed drops to each outcome (see fan-out snippet). For 2 outcomes use the binary-decision exit above. |
-| **Multi-level** decision tree (sequence of forks → N outcomes) | Left-to-right tree with labelled branches — see "Decision tree" snippet. Top-down layout overflows A4 portrait once leaves ≥ 4; sideways layout flows down the page instead of off the right edge. |
+| Decisions with **≥3 outcomes** at ONE level (single fork, ≤4 outcomes) | Horizontal tree — parent node with comb-routed drops to each outcome (see fan-out snippet). For 2 outcomes use the binary-decision exit above. **For >4 outcomes, or any tree with >1 fork, use the multi-level decision-tree exit above (cards).** |
+| **Multi-level** decision tree, ≤2 levels deep AND ≤4 total leaves | Left-to-right tree with labelled branches — see "Decision tree" snippet. Anything denser (3+ levels OR 5+ leaves) overflows A4 portrait at any layout direction and **must** use the cards exit instead — do not even attempt the SVG. |
 | State transitions | Nodes-and-edges with state labels; "active" state filled `var(--accent)`, others outlined |
 | Time-based progression — single thread (incident timeline, version history, one-track roadmap) | Vertical timeline with `var(--rule)` axis, accent dots for events |
 | Schedule across multiple parallel workstreams (quarterly roadmap, sprint plan, project plan) | Gantt — rows per workstream, time axis on top, status encoded by fill (filled / outlined / dashed) not by hue |
@@ -526,6 +527,7 @@ Use when the source markdown describes a *sequence* of forks that leads to N out
 
 - **Uncaptioned glyph edge.** A symbol (`✕`, `?`, `!`, `∅`, dot, slash) placed between or on nodes with no adjacent caption telling the reader what it means. Readers cannot decode unlabelled symbols; either caption it within 4px or replace it with words. The classic offender is "session ✕ session ✕ session" to mean "memory wiped" — write the words.
 - **Decision diamond for a binary choice.** A small rotated square with a question crammed into two cramped lines, two lines drooping out of its lower vertices toward two outcome boxes. At print scale the diamond is too small to hold a readable question, the lines tend to terminate mid-air short of the boxes, and any colour asymmetry between the two branches editorialises in geometry. For 2 outcomes use a prose lede + 2-card grid; see the exit-conditions table above.
+- **Deep nested decision tree at column width.** A flowchart with 3+ levels of forks landing on 5+ leaves, drawn at A4-portrait column width. No layout engine — dagre, ELK, or otherwise — can stop adjacent nodes from overlapping when the engine computes positions at one scale and the SVG is shrunk to fit a 700px column: nodes that were comfortably spaced in native coordinates collide visually. The canonical broken-example is "how to pick one of 6 agentic patterns" rendered as 3 nested yes/no forks: it overlaps as `flowchart LR`, stacks too tall as `flowchart TD`, and reads in 30 seconds as a 6-card grid. Take the cards exit (see the exit-conditions table) the moment you see >2 levels or >4 leaves.
 
 *Colour / palette:*
 
@@ -547,6 +549,7 @@ Before embedding any inline SVG in the HTML, walk this list. If any item fails, 
 8. **Symmetry where the content is symmetric.** In any comparison or fork-shaped diagram, both arms have the same fill treatment, the same stroke treatment, the same arrowhead treatment. The text labels carry any argument; the geometry stays neutral.
 9. **viewBox width within page budget.** Width ≤ 520 on A4 portrait (or ≤ 800 on landscape, e.g. slides). If a tree, flow, or architecture sketch exceeds the budget, restructure — rotate top-down trees to LR layout (see the multi-level decision tree snippet), split into two diagrams, or move that single section to landscape. Right-edge overflow is invisible in the source markdown but silently clips text in the PDF.
 10. **Edge labels off the line.** Any `<text>` that names a branch sits 6-10px perpendicular to the connector it names, never at the connector's own coordinate. Search the SVG for `<text>` and `<line>` elements that share a y-value (horizontal connector) or x-value (vertical connector) within ~3px; that's a collision waiting to happen in print.
+11. **Decision-tree density cap.** If this SVG is a tree (forks landing on outcome boxes), count the levels of branching and the total number of leaves. Levels ≤ 2 AND leaves ≤ 4 → SVG is fine. Anything denser (3+ forks deep, or 5+ leaves) → STOP and route through the multi-level decision-tree exit (a card grid). At column width Chrome will scale the SVG down to fit, and node positions that were comfortably spaced at native size will collide. No layout engine survives the compression.
 
 #### Gantt — schedule across parallel workstreams
 
@@ -671,10 +674,18 @@ This is the **base scaffold**. Fill in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}
      Chinese: TsangerJinKai02 (free for personal use). Japanese: YuMincho (local on macOS). -->
 
 <style>
+  /* Per-page gutter lives on `@page { margin }` so every page gets the
+   * same top/bottom breathing room — `body { padding }` only applies once
+   * (at the very start and very end of the body), so on a multi-page doc
+   * intermediate pages would butt content against the page edge.
+   * `@page { background-color }` paints the parchment into the margin area
+   * so there's no white frame; modern Chrome `--headless=new` honours this
+   * (the legacy "@page background ignored" bug is fixed). Per-template
+   * overrides set @page { margin }, NOT body { padding }. */
   @page {
     size: A4;
-    margin: 22mm 20mm 22mm 20mm;
-    background: #f5f4ed;
+    margin: 22mm 20mm;
+    background-color: #f5f4ed;
   }
 
   :root {
@@ -692,7 +703,16 @@ This is the **base scaffold**. Fill in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; }
+  /* Force Chrome to actually print the background colour. Without this,
+   * Chrome's print preview omits backgrounds by default and the parchment
+   * disappears in the PDF entirely. Both prefixed and unprefixed are set
+   * because Chrome accepts both at different versions. */
+  html, body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  html { background: var(--paper); }
   body {
     background: var(--paper);
     color: var(--ink);
@@ -700,17 +720,25 @@ This is the **base scaffold**. Fill in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}
     font-weight: 400;
     font-size: 11pt;
     line-height: 1.55;
+    /* Gutter lives on @page { margin } above, not here — body padding
+     * only applies once per document (start + end), so using it would
+     * leave intermediate pages flush against the page edge. */
+    padding: 0;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /* Headings — weight 500, serif. No synthetic bold. Titles 1.1–1.3 line-height. */
+  /* Headings — weight 500, serif. No synthetic bold. Titles 1.1–1.3 line-height.
+   * Keep with next: a heading must never be stranded at the bottom of a page
+   * while its content (paragraph, figure, table) jumps to the next. Both the
+   * legacy and modern keywords are set — some Chrome builds only honour one. */
   h1, h2, h3, h4 {
     font-family: var(--serif);
     font-weight: 500;
     color: var(--ink);
     letter-spacing: -0.005em;
     page-break-after: avoid;
+    break-after: avoid;
   }
   h1 { font-size: 26pt; line-height: 1.15; margin: 0 0 0.4em; letter-spacing: -0.015em; }
   h2 { font-size: 15pt; line-height: 1.2;  margin: 1.6em 0 0.5em; padding-bottom: 0.25em;
@@ -821,16 +849,37 @@ This is the **base scaffold**. Fill in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}
     padding: 1px 5px;
     border-radius: 3px;
   }
+  /* Code blocks — wrap, don't scroll. PDFs can't scroll, so `overflow: auto`
+   * leaves clipped lines + a useless scrollbar (visible in print). `pre-wrap`
+   * preserves newlines and the original indentation, while `overflow-wrap:
+   * anywhere` breaks pathological long tokens (URLs, base64 blobs). */
   pre {
     background: var(--paper-soft);
     padding: 12px 14px;
     border-radius: 4px;
-    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     font-size: 9.5pt;
     line-height: 1.4;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
   pre code { background: transparent; padding: 0; }
+
+  /* Figures and inline SVG diagrams — never split across pages. A diagram
+   * cut in half is useless, and the page-break-after: avoid on its preceding
+   * heading depends on the figure also refusing to split: otherwise Chrome
+   * keeps the heading + first half on page N and pushes the second half to
+   * N+1. Both legacy and modern keywords set for cross-Chrome reliability. */
+  figure,
+  svg,
+  .diagram-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  /* Strip default <figure> margin so an inline-SVG inside a figure block
+   * doesn't gain a 40px gutter from the user agent stylesheet. */
+  figure { margin: 1em 0; }
 
   /* Layout helpers — opt-in per template. */
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr;       gap: 18px; margin: 1em 0; }
@@ -876,53 +925,54 @@ This is the **base scaffold**. Fill in `{{TITLE}}`, `{{HEAD_FONTS}}`, `{{HEADER}
 
 ## Per-template adjustments
 
-Apply these on top of the base scaffold.
+Apply these on top of the base scaffold. **Per-template gutters live on `@page { margin }`, not on `body { padding }`** — `body { padding }` only paints once (document start + end), so multi-page docs would butt content against the page edge on intermediate pages. Always pair the @page margin override with `background-color: #f5f4ed` so the parchment continues to paint into the margin area; `body { padding }` stays at 0.
 
 ### one-pager
-- `@page { size: A4; margin: 18mm 18mm 18mm 18mm; }`
+- `@page { margin: 18mm 18mm; background-color: #f5f4ed; }` (only override if you need to deviate from the 22mm/20mm default)
 - Headline + subtitle, then either `.grid-3` or three `<section>` blocks.
 - No page break — content must fit on one A4 page.
 
 ### long-doc
-- `@page { size: A4; margin: 22mm 20mm 22mm 20mm; }`
+- @page margin stays at the base `22mm 20mm`.
 - Optional title page (`<section class="page-break">` with just `h1` + `.meta`).
 - Optional TOC: `<nav class="toc"><ol>…</ol></nav>` directly after the title page. No sidebar TOC (this is print).
 - Sections with `h2` — let pagination flow naturally; only force `page-break-before` for major parts.
 
 ### letter
-- `@page { size: A4; margin: 28mm 24mm 28mm 24mm; }`
+- `@page { margin: 28mm 24mm; background-color: #f5f4ed; }` — letter convention is generous gutters.
 - Sender block (right-aligned): name, address, email, date.
 - Recipient block (left-aligned), 1 line break below sender.
 - Salutation, body paragraphs (reading line-height 1.55), closing ("Sincerely,"), signature line, typed name.
 - No header band; the letter starts directly with sender/recipient.
 
 ### portfolio
-- `@page { size: A4; margin: 22mm 20mm 22mm 20mm; }`
+- @page margin stays at the base `22mm 20mm`.
 - Cover page: `<section class="page-break">` with `h1` (name) + `.doc-sub` (positioning line) + accent rule.
 - One `<section class="page-break">` per project. Inside: project title (h2), `.meta` row (role · dates · stack), 2–3 paragraphs of narrative, optional `.callout` for a pull-quote, optional inline SVG visual.
 
 ### resume
-- `@page { size: A4; margin: 16mm 18mm 18mm 18mm; }`
-- Tight, single-column or two-column (`.grid-resume`: sidebar 30% / main 70%).
+- `@page { margin: 16mm 18mm 18mm 18mm; background-color: #f5f4ed; }` — resumes pack tight.
+- Single-column or two-column (`.grid-resume`: sidebar 30% / main 70%).
 - Header: `<h1>` name, `.meta` strip with contact details (email · phone · location · links).
 - Sections (h2): Experience · Projects · Education · Skills. Dense line-height (`<main class="dense">`).
 - Each experience entry: `<h3>` role · company, `.meta` dates/location, 2–4 bullet outcomes.
 
 ### slides
-- `@page { size: 297mm 210mm landscape; margin: 0; }`
+- Override the base page rule: `@page { size: 297mm 210mm landscape; margin: 0; background-color: #f5f4ed; }` — slides go edge-to-edge, so override the base 22mm/20mm margin back to 0. Keep `background-color` so the parchment still paints.
+- `body { padding: 0; }` (already the base) — the `.slide` class supplies its own internal padding (`padding: 8vh 8vw`).
 - One `<section class="slide">` per slide.
 - h1 as title slide; h2 as section slides. Body text is short — slides are landing-pad markers, not paragraphs.
 - Add page number in bottom-right via `<footer>` inside each `.slide` (no `position: fixed`).
 
 ### equity-report
-- `@page { size: A4; margin: 20mm 20mm 22mm 20mm; }`
+- `@page { margin: 20mm 20mm 22mm 20mm; background-color: #f5f4ed; }`
 - Header band: ticker · price · rating · target (use `.doc-header` with `.doc-meta` right-aligned).
 - Executive summary `<div class="callout">` directly under the header.
 - Sections: Thesis · Numbers · Risks · Catalysts. Heavy use of `<table>` for the Numbers section.
 - Optional inline SVG sparkline next to key metrics.
 
 ### changelog
-- `@page { size: A4; margin: 18mm 20mm 18mm 20mm; }`
+- `@page { margin: 18mm 20mm; background-color: #f5f4ed; }`
 - `h2` per version with `.meta` strip (date · type [major/minor/patch] · tags).
 - `h3` per category: Added · Changed · Fixed · Removed.
 - Dense bullet lists, no paragraphs.
@@ -961,7 +1011,7 @@ For `letter`, omit the footer entirely (a letter doesn't carry meta about its pr
 
 ## Don't
 
-- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets the canonical export root at `<repo>/exports/` (served by Nextra via a symlink). Vault stays markdown-only — PDFs are derivatives and don't belong next to source notes.
+- **Don't write PDF to the vault.** Always use `write_export_pdf`, which targets the canonical export root at `<repo>/exports/` (served by the Next.js route handler at `app/p/[slug]/route.ts`). Vault stays markdown-only — PDFs are derivatives and don't belong next to source notes.
 - **Don't proactively list URLs.** Each PDF URL is shared deliberately by the user. Never volunteer "here are your recent exports".
 - **Don't synthesize content.** Export reads the markdown source (or the inline markdown passed in). If you find yourself inventing sections that weren't in the source, stop — edit the markdown via `note-taker` first, then re-export.
 - **Don't auto-export.** The user explicitly triggers this skill. No "save and export" hook.

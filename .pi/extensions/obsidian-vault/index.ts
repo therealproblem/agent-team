@@ -16,12 +16,19 @@
  *                            Used by the `render-html` skill
  *                            (Layer 3).
  *   - `write_export_pdf` — PDF, written into the canonical export root
- *                          at `<repo>/exports/`. The Next.js server's
- *                          `public/p/` is a symlink into this directory so
- *                          the PDF is served at
- *                          `/p/<YYYY-MM-DD>-<slug>.pdf`. Re-exporting the
- *                          same title on the same day overwrites the file;
- *                          the URL stays stable. Used by the `export` skill
+ *                          at `<repo>/exports/`. The Next.js server reads
+ *                          from this directory at request time via a route
+ *                          handler at `app/p/[slug]/route.ts` and serves
+ *                          the PDF at
+ *                          `/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf`. Each
+ *                          regeneration appends a fresh Unix-epoch suffix
+ *                          rather than overwriting the prior file, so a
+ *                          CDN (Cloudflare) can't serve a stale cached
+ *                          copy under the URL it just served. After a
+ *                          successful write, prior PDFs for the SAME
+ *                          title (across all dates) are unlinked so only
+ *                          the latest version of any given title stays
+ *                          on disk. Used by the `export` skill
  *                          (Layer 3) to produce print-ready deliverables
  *                          (resumes, letters, reports, slides) styled by the
  *                          Kami design system. The caller provides
@@ -50,7 +57,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
@@ -273,7 +280,7 @@ const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
 	description:
-		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>.pdf` and served at `http://localhost:8080/p/{slug}.pdf` (the local Nextra server's `public/p/` is a symlink into the export root). The host portion is overridden by `AGENTS_TEAM_SERVER_PUBLIC_URL` if set. Re-exporting the same title on the same day overwrites the file; the URL stays stable. Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>-<epoch>.pdf` (Unix-epoch seconds appended) and served at `http://localhost:8080/p/{slug}.pdf` by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time. The host portion is overridden by `AGENTS_TEAM_SERVER_PUBLIC_URL` if set. Each regeneration produces a NEW filename — the epoch suffix defeats CDN (Cloudflare) caching because the URL changes per export. After the new PDF is on disk, prior PDFs for the SAME title across ALL dates are deleted automatically so the export root holds only the latest version per title; date prefix in the regex is wild, title slug is exact, optional epoch suffix is matched too (so legacy unsuffixed PDFs are pruned in the same pass). Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -298,7 +305,15 @@ const writeExportPdf = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const slug = `${todayIso()}-${slugify(params.title)}`;
+		// Append Unix-epoch seconds so every regeneration produces a unique
+		// filename rather than overwriting the prior PDF. This defeats
+		// Cloudflare's edge cache: the URL changes, so the CDN can't serve
+		// a stale copy under the same URL. After a successful write we
+		// prune older PDFs for the same title across ALL dates, so the
+		// export root holds only one file per title.
+		const epoch = Math.floor(Date.now() / 1000);
+		const prefix = `${todayIso()}-${slugify(params.title)}`;
+		const slug = `${prefix}-${epoch}`;
 		const pdfDir = EXPORT_ROOT;
 		const tmpDir = join(SERVER_ROOT, ".export-tmp");
 		const htmlPath = join(tmpDir, `${slug}.html`);
@@ -355,6 +370,31 @@ const writeExportPdf = defineTool({
 			// PDF is the deliverable; the intermediate HTML is no longer needed.
 			// Swallow unlink errors — the export still succeeded.
 			await unlink(htmlPath).catch(() => undefined);
+
+			// Prune older PDFs for this title across all dates. Match any
+			// filename of the form `<YYYY-MM-DD>-<title-slug>(-<epoch>)?.pdf`
+			// — date prefix is wild, title slug is exact, epoch suffix is
+			// optional so legacy unsuffixed files (from before the epoch
+			// suffix was added) are caught too. Result: a re-export keeps
+			// only the just-written file for that title, regardless of
+			// when prior versions were generated. Run AFTER the new file
+			// is on disk so a failed export can't wipe out the prior good
+			// version. Per-file unlink failures are swallowed — one stuck
+			// file shouldn't fail the export.
+			const titleSlug = slugify(params.title);
+			const newFilename = `${slug}.pdf`;
+			const titleRegex = new RegExp(
+				`^\\d{4}-\\d{2}-\\d{2}-${titleSlug.replace(
+					/[.*+?^${}()|[\]\\]/g,
+					"\\$&",
+				)}(-\\d+)?\\.pdf$`,
+			);
+			const existing = await readdir(pdfDir).catch(() => [] as string[]);
+			await Promise.all(
+				existing
+					.filter((f) => f !== newFilename && titleRegex.test(f))
+					.map((f) => unlink(join(pdfDir, f)).catch(() => undefined)),
+			);
 
 			return {
 				content: [{ type: "text", text: `Exported ${pdfUrl}` }],

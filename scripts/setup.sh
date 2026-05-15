@@ -222,37 +222,21 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. exports/ root + Nextra-served symlink
+# 8. exports/ root
 #
-# `write_export_pdf` writes PDFs to <repo>/exports/. Nextra serves them at
-# /p/<slug>.pdf via a .pi/server/public/p → exports/ symlink. Both the
-# directory and the symlink are gitignored / not tracked, so fresh clones
-# need them recreated. Idempotent: skips when already correct, warns when
-# the symlink points somewhere unexpected.
+# `write_export_pdf` writes PDFs to <repo>/exports/. The Next.js server
+# serves them at /p/<slug>.pdf via a route handler at
+# .pi/server/app/p/[slug]/route.ts that reads from disk at request time —
+# no longer a public/ symlink (that approach broke under `next start`
+# because Next caches the public-files manifest at build time and serves
+# prerendered 404s for files added at runtime). All we need at setup time
+# is for the exports/ directory itself to exist; the route handler
+# creates the rest of the pipe.
 # ---------------------------------------------------------------------------
 
 EXPORT_ROOT="${REPO_ROOT}/exports"
-SERVED_LINK="${REPO_ROOT}/.pi/server/public/p"
-SERVED_LINK_PARENT="${REPO_ROOT}/.pi/server/public"
-SERVED_LINK_TARGET="../../../exports"
-
 mkdir -p "$EXPORT_ROOT"
-mkdir -p "$SERVED_LINK_PARENT"
-
-if [[ -L "$SERVED_LINK" ]]; then
-	current_target="$(readlink "$SERVED_LINK")"
-	if [[ "$current_target" == "$SERVED_LINK_TARGET" ]]; then
-		ok ".pi/server/public/p → exports/ symlink already in place"
-	else
-		warn ".pi/server/public/p exists but points to '${current_target}' (expected '${SERVED_LINK_TARGET}'). Leaving as-is; remove it manually if you want setup to recreate it."
-	fi
-elif [[ -e "$SERVED_LINK" ]]; then
-	warn ".pi/server/public/p exists as a regular file/directory, not a symlink. Setup will not overwrite it. Move or delete it, then re-run setup to create the exports/ symlink."
-else
-	info "creating .pi/server/public/p → ../../../exports symlink…"
-	ln -s "$SERVED_LINK_TARGET" "$SERVED_LINK"
-	ok ".pi/server/public/p → exports/ symlink created"
-fi
+ok "exports/ root in place"
 
 # ---------------------------------------------------------------------------
 # 9. Nextra server npm install
@@ -262,6 +246,19 @@ fi
 # gitignored, so fresh clones need an install. `npm ci` is the right call
 # when node_modules is absent (faster, lockfile-respecting); fall back to
 # `npm install` for re-runs that might be picking up new deps.
+#
+# Notable deps (declared in .pi/server/package.json — installed automatically
+# by the steps below, listed here so failures are easier to diagnose):
+#   • next, nextra, react, react-dom — the framework + theme.
+#   • @theguild/remark-mermaid       — emits <Mermaid> elements for fenced
+#                                       ```mermaid blocks.
+#   • @mermaid-js/layout-elk         — Eclipse Layout Kernel renderer.
+#                                       Mermaid's flowchart engine is set to
+#                                       "elk" in components/mermaid.tsx, so
+#                                       a missing layout-elk module breaks
+#                                       every flowchart on the site. The
+#                                       verification step below catches this.
+#   • remark-github-blockquote-alert — GFM callouts (> [!NOTE] etc.).
 # ---------------------------------------------------------------------------
 
 SERVER_DIR="${REPO_ROOT}/.pi/server"
@@ -278,6 +275,16 @@ if [[ -f "${SERVER_DIR}/package.json" ]]; then
 		}
 	fi
 	ok ".pi/server/ deps installed"
+
+	# Verify the ELK layout module specifically — without it, every
+	# flowchart on the site renders blank because mermaid.tsx registers
+	# the elk loader at init time. Failing loudly here saves debugging
+	# "why are all my diagrams broken" later.
+	if [[ -d "${SERVER_DIR}/node_modules/@mermaid-js/layout-elk" ]]; then
+		ok "@mermaid-js/layout-elk present (Mermaid flowchart layout engine)"
+	else
+		warn "@mermaid-js/layout-elk is missing from node_modules. Every Mermaid flowchart will fail to render. Run 'cd .pi/server && npm install @mermaid-js/layout-elk' to fix."
+	fi
 else
 	info "no .pi/server/package.json — skipping Nextra install"
 fi

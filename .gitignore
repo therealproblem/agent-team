@@ -9,9 +9,11 @@ vault/
 # Kept ignored so any stray writes stay out of git.
 renders/
 
-# Canonical export root for write_export_pdf. The Next.js server serves these
-# at /p/<slug>.pdf via a .pi/server/public/p → exports/ symlink. Override the
-# root with AGENTS_TEAM_EXPORT_PATH.
+# Canonical export root for write_export_pdf. The Next.js server serves
+# these at /p/<slug>.pdf via a route handler at .pi/server/app/p/[slug]/
+# that reads from disk at request time (the prior public/p symlink design
+# broke under `next start` because Next caches its public-files manifest
+# at build time). Override the root with AGENTS_TEAM_EXPORT_PATH.
 exports/
 
 # Next.js + Nextra app — install deps, build cache, and runtime artifacts.
@@ -20,9 +22,6 @@ exports/
 .pi/server/next-env.d.ts
 # Runtime-generated presentation artifacts (URL date-slug paths).
 .pi/server/content/v/*.mdx
-# Served-PDF symlink → exports/ (created locally; not source-controlled).
-# The PDFs it points to are ignored via the exports/ rule above.
-.pi/server/public/p
 # Transient export-HTML staging — written, rendered to PDF, then deleted.
 # Retained on Chrome failure for manual recovery.
 .pi/server/.export-tmp/
