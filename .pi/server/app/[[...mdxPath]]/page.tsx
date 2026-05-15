@@ -25,9 +25,9 @@ export default async function Page(props: PageProps) {
   // importPage calls notFound() internally on miss — Next routes that to
   // app/not-found.tsx, which is a bare 404 (no sidebar enumeration).
   const result = await importPage(params.mdxPath ?? []);
-  const { default: MDXContent, toc, metadata } = result;
+  const { default: MDXContent, toc, metadata, sourceCode } = result;
   return Wrapper ? (
-    <Wrapper toc={toc} metadata={metadata}>
+    <Wrapper toc={toc} metadata={metadata} sourceCode={sourceCode}>
       <MDXContent {...props} params={params} />
     </Wrapper>
   ) : (

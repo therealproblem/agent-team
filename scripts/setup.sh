@@ -283,7 +283,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Legacy frontend cleanup
+# 10. Nextra server production build
+#
+# Pre-build the Next.js app so `pi` (or any caller) can start it via
+# `next start` in production mode instead of `next dev`. Production mode
+# is faster, lower-RAM, and matches what the cloudflared tunnel ends up
+# serving. `next build` is idempotent and overwrites .pi/server/.next/.
+# Soft-fail: if the build errors, setup keeps going — the dev script
+# (`next dev`) is still a valid fallback.
+# ---------------------------------------------------------------------------
+
+if [[ -f "${SERVER_DIR}/package.json" && -d "${SERVER_DIR}/node_modules" ]]; then
+	info "building Nextra server for production (npm run build in .pi/server)…"
+	if (cd "$SERVER_DIR" && npm run build --silent); then
+		ok ".pi/server/ production build complete (.next/ generated)"
+	else
+		warn ".pi/server/ build failed — server can still run via 'cd .pi/server && npm run dev'. Re-run 'npm run build' there once the error is fixed."
+	fi
+else
+	info "no .pi/server/node_modules — skipping production build"
+fi
+
+# ---------------------------------------------------------------------------
+# 11. Legacy frontend cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
