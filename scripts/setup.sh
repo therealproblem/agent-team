@@ -255,7 +255,35 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Legacy frontend cleanup
+# 9. Nextra server npm install
+#
+# .pi/server/ is the local Next.js + Nextra app that serves rendered
+# presentations (/v/...) and exported PDFs (/p/...). Its node_modules/ is
+# gitignored, so fresh clones need an install. `npm ci` is the right call
+# when node_modules is absent (faster, lockfile-respecting); fall back to
+# `npm install` for re-runs that might be picking up new deps.
+# ---------------------------------------------------------------------------
+
+SERVER_DIR="${REPO_ROOT}/.pi/server"
+
+if [[ -f "${SERVER_DIR}/package.json" ]]; then
+	if [[ -d "${SERVER_DIR}/node_modules" ]]; then
+		info "Nextra server deps present — running npm install to pick up any changes…"
+		(cd "$SERVER_DIR" && npm install --no-audit --no-fund) || warn "npm install in .pi/server failed — re-run manually"
+	else
+		info "installing Nextra server deps (npm ci in .pi/server)…"
+		(cd "$SERVER_DIR" && npm ci --no-audit --no-fund) || {
+			warn "npm ci failed — falling back to npm install"
+			(cd "$SERVER_DIR" && npm install --no-audit --no-fund) || fail "Could not install Nextra server deps. Run 'cd .pi/server && npm install' manually."
+		}
+	fi
+	ok ".pi/server/ deps installed"
+else
+	info "no .pi/server/package.json — skipping Nextra install"
+fi
+
+# ---------------------------------------------------------------------------
+# 10. Legacy frontend cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # frontend attempts (pi-rpc-shim, Open WebUI, piclaw). Idempotent — silent
