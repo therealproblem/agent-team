@@ -79,7 +79,15 @@ render-html({
 
 A markdown body, written as an `.mdx` file under `.pi/server/content/v/<YYYY-MM-DD>-<slug>.mdx`. The tool injects frontmatter (`title`, `sidebar: false`) — **do not include frontmatter in the markdown you emit**.
 
-The page is served by Nextra at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Return the URL plainly — do NOT add suggestions about cloudflared, tunnels, or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.
+The page is served by Nextra at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
+
+**Returning the URL to the user.** The URL is the entire response. Do NOT:
+
+- suggest setting up cloudflared, tunnels, or `AGENTS_TEAM_SERVER_PUBLIC_URL`;
+- append a closing line restating that the page is "now live", "available at the public URL", or otherwise re-affirming what the URL already proves;
+- mention the tunnel, cloudflared, or any infrastructure detail on the happy path — the URL stands alone.
+
+If there is nothing substantive to add after the URL (a clarifying question, a real next step the user needs to take), say nothing else. Re-renders work the same way: one URL, no wrap-up.
 
 Returned to the caller:
 

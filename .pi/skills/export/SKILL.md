@@ -74,7 +74,15 @@ export({
 
 ## What `export` produces
 
-A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Return the URL plainly — do NOT add suggestions about cloudflared, tunnels, or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.
+A `.pdf` file under `<repo>/exports/<YYYY-MM-DD>-<slug>.pdf` (override the root with `AGENTS_TEAM_EXPORT_PATH`). Served by Nextra (Next.js static) at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` via a `.pi/server/public/p` → `exports/` symlink (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
+
+**Returning the URL to the user.** The URL is the entire response. Do NOT:
+
+- suggest setting up cloudflared, tunnels, or `AGENTS_TEAM_SERVER_PUBLIC_URL`;
+- append a closing line restating that the deliverable is "now live", "available at the public URL", or otherwise re-affirming what the URL already proves;
+- mention the tunnel, cloudflared, or any infrastructure detail on the happy path — the URL stands alone.
+
+If there is nothing substantive to add after the URL (a clarifying question, a real next step the user needs to take), say nothing else. Re-exports work the same way: one URL, no wrap-up.
 
 The intermediate HTML is written transiently to `.pi/server/.export-tmp/`, fed to Chrome, then deleted once Chrome confirms the PDF was produced. The only case where an HTML file survives is when Chrome itself failed (no binary found, render error), in which case the tool returns `isError: true` plus the path of the HTML it could not convert.
 
