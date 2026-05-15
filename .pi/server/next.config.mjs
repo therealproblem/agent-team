@@ -12,6 +12,11 @@ const withNextra = nextra({
   defaultShowCopyCode: true,
   mdxOptions: {
     remarkPlugins: [remarkMermaid],
+    // Shiki theme — pick a single light theme so code blocks read on parchment.
+    // Nextra's default ships dark-on-light tokens that clash with the editorial palette.
+    rehypePrettyCodeOptions: {
+      theme: "github-light",
+    },
   },
 });
 
@@ -21,7 +26,7 @@ export default withNextra({
   productionBrowserSourceMaps: false,
   // Alias `@theguild/remark-mermaid/mermaid` → our local component so every
   // Mermaid block renders with DESIGN-2 themeVariables (white nodes, black
-  // borders, cobalt accent). Upstream component bakes `theme: 'default'`,
+  // borders, dark-navy accent). Upstream component bakes `theme: 'default'`,
   // which has near-zero contrast on parchment.
   webpack: (config) => {
     config.resolve.alias = {

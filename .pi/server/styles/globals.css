@@ -9,7 +9,7 @@
   --color-midnight-ink: #000000;
   --color-arctic-frost: #ffffff;
   --color-slate-gray: #7b7f83;
-  --color-vivid-cobalt: #0058fe;
+  --color-dark-navy: #032F62;
 }
 
 :root,
@@ -19,12 +19,12 @@
   --color-midnight-ink: #000000;
   --color-arctic-frost: #ffffff;
   --color-slate-gray: #7b7f83;
-  --color-vivid-cobalt: #0058fe;
+  --color-dark-navy: #032F62;
 
-  /* Wire Nextra's accent (hue triplet) to DESIGN-2 cobalt #0058fe ≈ HSL(218°, 100%, 50%) */
-  --nextra-primary-hue: 218deg;
-  --nextra-primary-saturation: 100%;
-  --nextra-primary-lightness: 50%;
+  /* Wire Nextra's accent (hue triplet) to DESIGN-2 dark-navy #032F62 ≈ HSL(212°, 94%, 20%) */
+  --nextra-primary-hue: 212deg;
+  --nextra-primary-saturation: 94%;
+  --nextra-primary-lightness: 20%;
 }
 
 /* Force light scheme — DESIGN-2 has no dark variant. */
@@ -43,13 +43,17 @@ body {
 
 /* Nextra's prose / typography classes set their own text colors via Tailwind
  * utility classes baked into compiled components. Override every common one
- * back to midnight-ink so body copy is actually readable on parchment. */
+ * back to midnight-ink so body copy is actually readable on parchment.
+ *
+ * Excludes `svg *` — Mermaid renders accent-node labels inside
+ * `<foreignObject>` with its own `color:#ffffff`, and a blanket `main * {
+ * color:#000 }` rule would clobber the white label to black on navy. */
 main,
-main *,
+main :not(svg, svg *),
 article,
-article *,
+article :not(svg, svg *),
 .nextra-content,
-.nextra-content * {
+.nextra-content :not(svg, svg *) {
   color: #000000;
 }
 
@@ -72,17 +76,22 @@ code:not(pre code) {
   background: rgba(0, 0, 0, 0.06) !important;
   color: #000000 !important;
 }
-pre,
-pre code {
+/* Background lives only on the outer <pre> — `pre code` stays transparent so
+ * the rgba tint doesn't stack on itself (which read as two backgrounds: 6%
+ * in the padding strip, 12% under the code). */
+pre {
   background: rgba(0, 0, 0, 0.06) !important;
+}
+pre code {
+  background: transparent !important;
   color: #000000 !important;
 }
 
-/* Body links — vivid cobalt (the only accent). */
+/* Body links — dark navy (the only accent). */
 main a:not([data-no-style]),
 article a:not([data-no-style]),
 .nextra-content a:not([data-no-style]) {
-  color: #0058fe !important;
+  color: #032F62 !important;
 }
 
 /* Blockquotes / GFM callouts — keep readable, kill the muted-gray default. */
@@ -93,8 +102,18 @@ blockquote * {
 
 /* Tables */
 table, th, td {
-  color: #000000 !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
+}
+table td {
+  color: #000000 !important;
+}
+table th {
+  background: #032F62 !important;
+  color: #ffffff !important;
+  border-color: #032F62 !important;
+}
+table th * {
+  color: #ffffff !important;
 }
 
 /* Nextra chrome — navbar, sidebar, TOC. Match the parchment surface. */
@@ -118,7 +137,7 @@ body div:has(> footer) {
   display: none !important;
 }
 
-/* TOC text — visible. Active item gets the cobalt accent. */
+/* TOC text — visible. Active item gets the dark-navy accent. */
 .nextra-toc a,
 .nextra-sidebar a {
   color: #000000 !important;
@@ -127,7 +146,7 @@ body div:has(> footer) {
 .nextra-toc a.nextra-focus,
 .nextra-sidebar a[aria-current="page"],
 .nextra-sidebar .active {
-  color: #0058fe !important;
+  color: #032F62 !important;
 }
 
 /* Sharp corners — DESIGN-2 enforces 0px radius on UI elements. */
