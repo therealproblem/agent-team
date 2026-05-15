@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import nextra from "nextra";
 import { remarkMermaid } from "@theguild/remark-mermaid";
+import { remarkAlert } from "remark-github-blockquote-alert";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +12,7 @@ const withNextra = nextra({
   search: false,
   defaultShowCopyCode: true,
   mdxOptions: {
-    remarkPlugins: [remarkMermaid],
+    remarkPlugins: [remarkMermaid, remarkAlert],
     // Shiki theme — pick a single light theme so code blocks read on parchment.
     // Nextra's default ships dark-on-light tokens that clash with the editorial palette.
     rehypePrettyCodeOptions: {

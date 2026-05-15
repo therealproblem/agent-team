@@ -100,54 +100,70 @@ blockquote * {
   color: #000000 !important;
 }
 
-/* GFM alert callouts — Nextra maps [!NOTE]/[!TIP]/[!IMPORTANT]/[!WARNING]/[!CAUTION]
- * to <Callout type="info|default|important|warning|error">. Each type lands a
- * different Tailwind bg class on `.nextra-callout`; we key off that class to
- * paint a parchment-friendly tint + a saturated left rail per type. */
-.nextra-callout {
+/* GFM alert callouts — remark-github-blockquote-alert rewrites
+ * `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`
+ * blockquotes into `<div class="markdown-alert markdown-alert-{type}">` with
+ * a `<p class="markdown-alert-title">` header. Paint a parchment-friendly
+ * tint and a 4px left rail per type. */
+.markdown-alert {
   background: #f1e9e7 !important;
   border: 1px solid #000000 !important;
   border-left-width: 4px !important;
   color: #000000 !important;
   border-radius: 0 !important;
+  padding: 12px 16px !important;
+  margin: 1em 0 !important;
 }
-.nextra-callout * { color: #000000 !important; }
-.nextra-callout svg { color: inherit !important; }
+.markdown-alert * { color: #000000 !important; }
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin: 0 0 4px 0 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
+}
+.markdown-alert .markdown-alert-title svg.octicon {
+  margin-right: 8px;
+  fill: currentColor;
+}
+.markdown-alert > p:last-child { margin-bottom: 0 !important; }
 
 /* NOTE — dark-navy (theme accent) */
-.nextra-callout.x\:bg-blue-100 {
+.markdown-alert.markdown-alert-note {
   background: rgba(3, 47, 98, 0.06) !important;
   border-left-color: #032F62 !important;
 }
-.nextra-callout.x\:bg-blue-100 svg { color: #032F62 !important; }
+.markdown-alert.markdown-alert-note .markdown-alert-title { color: #032F62 !important; }
 
 /* TIP — forest green */
-.nextra-callout.x\:bg-green-100 {
+.markdown-alert.markdown-alert-tip {
   background: rgba(10, 127, 63, 0.06) !important;
   border-left-color: #0a7f3f !important;
 }
-.nextra-callout.x\:bg-green-100 svg { color: #0a7f3f !important; }
+.markdown-alert.markdown-alert-tip .markdown-alert-title { color: #0a7f3f !important; }
 
 /* IMPORTANT — deep violet */
-.nextra-callout.x\:bg-purple-100 {
+.markdown-alert.markdown-alert-important {
   background: rgba(111, 66, 193, 0.06) !important;
   border-left-color: #6f42c1 !important;
 }
-.nextra-callout.x\:bg-purple-100 svg { color: #6f42c1 !important; }
+.markdown-alert.markdown-alert-important .markdown-alert-title { color: #6f42c1 !important; }
 
 /* WARNING — amber */
-.nextra-callout.x\:bg-yellow-50 {
+.markdown-alert.markdown-alert-warning {
   background: rgba(181, 137, 0, 0.08) !important;
   border-left-color: #b58900 !important;
 }
-.nextra-callout.x\:bg-yellow-50 svg { color: #b58900 !important; }
+.markdown-alert.markdown-alert-warning .markdown-alert-title { color: #b58900 !important; }
 
 /* CAUTION — red */
-.nextra-callout.x\:bg-red-100 {
+.markdown-alert.markdown-alert-caution {
   background: rgba(176, 0, 32, 0.06) !important;
   border-left-color: #b00020 !important;
 }
-.nextra-callout.x\:bg-red-100 svg { color: #b00020 !important; }
+.markdown-alert.markdown-alert-caution .markdown-alert-title { color: #b00020 !important; }
 
 /* Tables */
 table, th, td {
