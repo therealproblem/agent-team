@@ -170,6 +170,18 @@ That's a useful answer. The caller can decide whether to escalate.
 4. **Cite as you reason.** Anything the caller surfaces to the user should be attributable to a fetched URL — keep the URL alongside any claim.
 5. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` — and, if the caller wants an interactive HTML render of the saved synthesis, a follow-up call to `render-html`.
 
+## Default downstream action: render
+
+When the user asks for research and does **not** specify a format, the default downstream action is **render** (via `render-html`). The full default flow is: research → `note-taker` (save markdown) → `render-html` (interactive HTML page) → return the URL.
+
+| User said | Downstream action |
+|---|---|
+| "research X" / "look up X" / "find sources on Y" — no format mentioned | **Render** (default). Save via `note-taker`, then call `render-html`, return the `/v/…` URL. |
+| "summarise X" / "give me a summary of Y" / "TL;DR Z" | **Summarise** in the reply. Do not render. Do not export. |
+| "export to PDF" / "make a PDF" / "printable" / "deliverable" | **Export** via the `export` skill. Save via `note-taker` first, then `export`, return the `/p/…` URL. |
+
+Do not ask which format to use when none is specified — render is the default. Only summarise or export when the user explicitly indicates so.
+
 ## Caller patterns
 
 | Caller | Use case |
