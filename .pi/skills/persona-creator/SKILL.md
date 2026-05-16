@@ -44,7 +44,10 @@ Files always land at:
 
 Pi auto-discovers files in `.pi/skills/`, `.pi/agents/`, and `.pi/extensions/`, so the new component is *callable* the moment the file exists. But it isn't *findable by humans or other agents* until you patch the human-readable indexes:
 
-- **New persona** → add a row to `AGENTS.md` "Directory layout" table and `.pi/SYSTEM.md` "Personas" table.
+- **New persona** → all of:
+  - Add a row to `AGENTS.md` "Directory layout" table and `.pi/SYSTEM.md` "Personas" table.
+  - **`.pi/extensions/statusline/index.ts`** — append the persona slug to the `PERSONAS` array AND to the `SKILL_REGEX` alternation. Without this the persona never lights up on the footer's persona row, even when adopted, and the `tool_call` hook that watches for SKILL.md reads will ignore it.
+  - **`.pi/extensions/quiet-read/index.ts`** — extend the `persona` regex in `describePurpose` to include the new slug so `read .pi/skills/<new>/SKILL.md` renders as `adopt <new> persona` instead of the generic skill label.
 - **New inner skill** → add it under the owner persona's `## Inner skills` list in `.pi/skills/<persona>/SKILL.md` AND under "Inner skills" in `AGENTS.md`'s directory layout.
 - **New Layer 3 skill** → add it to every persona's `## Layer 3 services` section and to `.pi/SYSTEM.md`'s "Shared services" block.
 - **New reviewer** → add a row to `.pi/SYSTEM.md` "Reviewers" table, and to the spawning persona's `## Isolated reviewer` section. Also list it in `AGENTS.md` "Pi mapping" and "Directory layout" sections.
@@ -61,7 +64,22 @@ If the new component is a persona, it almost certainly needs a domain profile un
 
 If creating a new profile file, also patch the table in `AGENTS.md` ("Layer 0 — Meta") that maps profile files to personas.
 
-### Step 5 — Verify
+### Step 5 — Footer-status check (personas only)
+
+Ask: **does this persona have running state worth surfacing at all times?** The footer's right side already shows NEWS / REM / SRV — small persistent counters tied to ambient services. A persona qualifies for its own footer entry only when it owns durable, query-cheap state the user benefits from glancing at without prompting.
+
+Examples that earned an entry: news items in the daily store (`NEWS N`), open reminders (`REM N`), local server health (`SRV port`). Examples that don't: "current PRD being drafted", "last research query" — these are session-scoped, not durable.
+
+If the persona qualifies:
+
+1. Register the status under an existing companion extension if there is one (e.g. trader could extend `.pi/extensions/trade-journal/`); otherwise add a session-start handler in whichever extension owns the underlying state.
+2. Use `ctx.ui.setStatus("<key>", "<label N>")`. Pick a key that sorts where you want it to appear (footer reads alphabetically left → right; existing keys are `1news`, `2rem`, `3srv`).
+3. Keep the label tight: `LABEL N` or `LABEL value`, all-caps, no trailing pipe (the statusline extension handles dividers).
+4. Always emit the entry — including the zero state — so the row stays visually stable between sessions.
+
+If the persona does **not** qualify, skip this step entirely. Adding pointless status entries clutters the footer and burns horizontal space the other entries need.
+
+### Step 6 — Verify
 
 Run the smoke tests from AGENTS.md (`## Verification`) — Pi should discover the new component without errors:
 
