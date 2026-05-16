@@ -169,52 +169,6 @@ function readById(id: number): NewsItem | null {
 	return load().items.find((it) => it.id === id) ?? null;
 }
 
-function lastFetchedAt(): Date | null {
-	// Don't purge before reading — if today's run hasn't happened yet we still
-	// want to report yesterday's last scrape (and flag it stale).
-	let max = Number.NEGATIVE_INFINITY;
-	for (const it of load().items) {
-		const t = Date.parse(it.fetched_at);
-		if (!Number.isNaN(t) && t > max) max = t;
-	}
-	if (max === Number.NEGATIVE_INFINITY) return null;
-	return new Date(max);
-}
-
-function topicsCount(): number {
-	return load().items.length;
-}
-
-// ---------- Time formatting ----------
-
-function pad2(n: number): string {
-	return n < 10 ? `0${n}` : String(n);
-}
-
-function formatLocal(d: Date): string {
-	return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function formatRelative(d: Date, now: Date = new Date()): string {
-	const diffMs = now.getTime() - d.getTime();
-	if (diffMs < 0) return "just now";
-	const sec = Math.floor(diffMs / 1000);
-	if (sec < 60) return "just now";
-	const min = Math.floor(sec / 60);
-	if (min < 60) return `${min}m ago`;
-	const hr = Math.floor(min / 60);
-	if (hr < 24) return `${hr}h ago`;
-	const day = Math.floor(hr / 24);
-	if (day < 7) return `${day}d ago`;
-	return `${day}d ago`;
-}
-
-function isStale(last: Date, now: Date = new Date()): boolean {
-	// Stale = the last fetch was on a prior local-calendar day.
-	const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-	return last < startOfToday;
-}
-
 // ---------- Sources ----------
 
 function loadSources(): Record<string, string[]> {
@@ -755,23 +709,6 @@ function surface(pi: ExtensionAPI, text: string, details?: object): void {
 	);
 }
 
-function buildStatusLine(): { text: string; details: object } {
-	const last = lastFetchedAt();
-	if (!last) {
-		return {
-			text: "No news",
-			details: { last: null, stale: true, total_items: 0 },
-		};
-	}
-	return {
-		text: `News Last Update: ${formatLocal(last)}`,
-		details: {
-			last: last.toISOString(),
-			stale: isStale(last),
-			total_items: topicsCount(),
-		},
-	};
-}
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(fetchTopic);
@@ -853,15 +790,5 @@ export default function (pi: ExtensionAPI): void {
 				process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "http://localhost:8080";
 			surface(pi, `news: ${base}/news`);
 		},
-	});
-
-	pi.on("session_start", async (event, _ctx) => {
-		if (event.reason !== "startup" && event.reason !== "resume") return;
-		try {
-			const { text, details } = buildStatusLine();
-			surface(pi, text, details);
-		} catch {
-			// Status surface must never break startup.
-		}
 	});
 }
