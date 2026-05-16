@@ -2,7 +2,9 @@
  * server — Pi extension that lifecycle-manages the local Next.js / Nextra
  * server that serves renders and exports.
  *
- * On `session_start` (startup or resume):
+ * On `session_start` (startup or resume), the handler returns immediately
+ * and runs the bring-up in the background — Pi's TUI stays interactive while
+ * Next.js comes up. Background work, in order:
  *   1. Probe the configured port. If it's already bound, skip — another Pi
  *      session (or an orphan from a crash) is serving. The bound process is
  *      authoritative; we don't try to take over.
@@ -18,7 +20,9 @@
  *      with a fetch — production start is fast but the warm-up still
  *      cheap-insures the first user request.
  *   5. Stay silent on the happy path; only surface a TUI line when something
- *      needs attention (missing build, spawn error, 15s timeout).
+ *      needs attention (missing build, spawn error, 15s timeout). Surfaces
+ *      can land *after* the TUI is already interactive — that's the point of
+ *      detaching.
  *
  * On Pi exit (`exit` / SIGINT / SIGTERM):
  *   Send SIGTERM to the spawned process; SIGKILL fallback after 2s.
@@ -125,10 +129,7 @@ export default function (pi: ExtensionAPI): void {
 
 	let child: ChildProcess | null = null;
 
-	pi.on("session_start", async (event, _ctx) => {
-		// Only on real launches/resumes — not internal reloads, forks, etc.
-		if (event.reason !== "startup" && event.reason !== "resume") return;
-
+	async function bringUp(): Promise<void> {
 		if (!existsSync(SERVER_ROOT)) {
 			surface(pi, `server: ${SERVER_ROOT} not found — run setup first`);
 			return;
@@ -187,15 +188,28 @@ export default function (pi: ExtensionAPI): void {
 		for (let i = 0; i < 30; i++) {
 			if (await isPortBound(SERVER_PORT)) {
 				await preWarm(SERVER_PORT);
-				// Came up cleanly — stay silent on the happy path.
 				return;
 			}
 			await new Promise((r) => setTimeout(r, 500));
 		}
-		surface(
-			pi,
-			`server: failed to start within 15s — tail ${LOG_PATH}`,
-		);
+		surface(pi, `server: failed to start within 15s — tail ${LOG_PATH}`);
+	}
+
+	pi.on("session_start", (event, _ctx) => {
+		// Only on real launches/resumes — not internal reloads, forks, etc.
+		if (event.reason !== "startup" && event.reason !== "resume") return;
+
+		// Fire-and-forget: detach the bring-up so Pi's TUI is interactive
+		// immediately. Without this, the handler awaits up to 15s of port
+		// polling before session_start resolves, freezing the TUI. Surfaces
+		// from bringUp() can land after the user is already typing — fine.
+		// Errors must not escape: an unhandled rejection on a detached
+		// promise can crash the Pi process. Swallow here and route the
+		// message through `surface` so it shows up in the TUI.
+		bringUp().catch((err: unknown) => {
+			const message = err instanceof Error ? err.message : String(err);
+			surface(pi, `server: bring-up crashed — ${message}`);
+		});
 	});
 
 	// Best-effort cleanup. Pi's TUI Ctrl-C can kill the parent before the
