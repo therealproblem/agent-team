@@ -155,8 +155,7 @@ class TwoLineFooter implements Component {
 }
 
 export default function (pi: ExtensionAPI): void {
-	pi.on("session_start", (event, ctx) => {
-		if (event.reason !== "startup" && event.reason !== "resume") return;
+	pi.on("session_start", (_event, ctx) => {
 		// Always start personaless. Adoption only happens via the agent
 		// reading SKILL.md within the current session (handler below).
 		activePersona = null;

@@ -709,8 +709,11 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerTool(refreshAllTopics);
 	pi.registerMessageRenderer("news", createBoxRenderer());
 
-	pi.on("session_start", (event, ctx) => {
-		if (event.reason !== "startup" && event.reason !== "resume") return;
+	pi.on("session_start", (_event, ctx) => {
+		// Pi clears the extension-status map on every session_start, so the
+		// NEWS cell must be re-published for every reason — otherwise it
+		// disappears from the footer after /new or /reload. updateStatus is
+		// a pure read (purge + count + setStatus), safe to re-run.
 		updateStatus(ctx);
 	});
 

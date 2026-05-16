@@ -494,10 +494,15 @@ export default function (pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (event, ctx) => {
-		// Only surface on real launches and resumes — not internal reload
-		// events, forks, or new-session-during-existing-pi.
-		if (event.reason !== "startup" && event.reason !== "resume") return;
+		// Pi clears the extension-status map on every session_start, so the
+		// REM cell must be re-published on every reason (startup/resume/new/
+		// reload/fork) or it disappears from the footer after /new or /reload.
 		await updateStatus(ctx);
+
+		// The surface toast, by contrast, should only appear on real launches
+		// and resumes — not internal reload events, forks, or
+		// new-session-during-existing-pi.
+		if (event.reason !== "startup" && event.reason !== "resume") return;
 		if (!existsSync(REMINDERS_PATH)) return;
 
 		try {

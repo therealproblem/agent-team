@@ -98,6 +98,11 @@ function surface(pi: ExtensionAPI, text: string, details?: object): void {
 const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 let pendingTimer: ReturnType<typeof setInterval> | null = null;
 let pendingFrame = 0;
+// Remembered across session_start events so /new and /reload (which clear
+// Pi's status map) can re-publish the SRV cell without re-running bringUp.
+// "pending" is the right initial value: it's what bringUp emits first too,
+// so a re-publish before bringUp resolves shows the same animation.
+let lastSrv: "ready" | "down" | "pending" = "pending";
 
 function stopPendingAnimation(): void {
 	if (pendingTimer) {
@@ -107,6 +112,7 @@ function stopPendingAnimation(): void {
 }
 
 function setSrv(ctx: ExtensionContext | null, value: "ready" | "down" | "pending"): void {
+	lastSrv = value;
 	if (!ctx) return;
 	try {
 		if (value === "pending") {
@@ -217,13 +223,21 @@ export default function (pi: ExtensionAPI): void {
 	}
 
 	pi.on("session_start", (event, ctx) => {
-		// Only on real launches/resumes — not internal reloads, forks, etc.
-		if (event.reason !== "startup" && event.reason !== "resume") return;
+		// Pi clears the extension-status map on every session_start, so the
+		// SRV cell must be re-published for every reason — otherwise it
+		// disappears from the footer after /new or /reload. Republishing the
+		// remembered state is safe: on a real launch it's "pending" (matches
+		// what bringUp emits next), and on subsequent session_start events
+		// it's whatever the already-running server settled on.
+		setSrv(ctx, lastSrv);
 
-		// Show SRV in the footer immediately. bringUp() will flip this
-		// to ready/down as the probe resolves — until then `…` signals
-		// that we're still checking rather than implying a hard down.
-		setSrv(ctx, "pending");
+		// Server lifetime spans the pi process across /new, /resume, and
+		// /fork — once spawned, leave it. /reload and /startup re-run bringUp
+		// (its isPortBound check makes the reload case a cheap no-op when the
+		// server is still alive). Cleanup ties the child to the pi process via
+		// SIGINT/SIGTERM/exit below.
+		if (event.reason !== "startup" && event.reason !== "reload") return;
+		if (child && !child.killed) return;
 
 		// Fire-and-forget: detach the bring-up so Pi's TUI is interactive
 		// immediately. Without this, the handler awaits up to 15s of port

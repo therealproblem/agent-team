@@ -45,8 +45,11 @@ async function update(ctx: ExtensionContext): Promise<void> {
 }
 
 export default function (pi: ExtensionAPI): void {
-	pi.on("session_start", (event, ctx) => {
-		if (event.reason !== "startup" && event.reason !== "resume") return;
+	pi.on("session_start", (_event, ctx) => {
+		// Pi clears the extension-status map on every session_start, so the
+		// BAT cell must be re-published for every reason — otherwise it
+		// disappears from the footer after /new or /reload. The `if (!timer)`
+		// guard keeps the 30s poll a singleton across reloads.
 		if (process.platform !== "darwin") return;
 		void update(ctx);
 		if (!timer) {
