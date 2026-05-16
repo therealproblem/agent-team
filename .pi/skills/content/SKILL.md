@@ -1,5 +1,6 @@
 ---
 description: Educator collaborative skill. Use when writing the actual lesson body for a curriculum module.
+disable-model-invocation: true
 ---
 
 # Content Authoring

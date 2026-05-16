@@ -1,5 +1,6 @@
 ---
 description: Cross-persona inner skill (pm, educator, trader). Define explicit evaluation criteria for an artifact BEFORE evaluating it. Invoke before scoring a PRD, grading a lesson response, judging a trade setup, or any "is this good?" question. Forces the bar to be stated in writing — prevents post-hoc rationalisation.
+disable-model-invocation: true
 ---
 
 # Rubric

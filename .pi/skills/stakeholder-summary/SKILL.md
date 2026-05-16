@@ -1,5 +1,6 @@
 ---
 description: PM collaborative skill. Use when writing status updates, exec briefs, or cross-team summaries. Outcome-led, not activity-led.
+disable-model-invocation: true
 ---
 
 # Stakeholder Summary

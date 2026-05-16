@@ -1,5 +1,6 @@
 ---
 description: Engineer collaborative skill. Use when implementing or evaluating UI behaviour with design intent in mind.
+disable-model-invocation: true
 ---
 
 # UI/UX

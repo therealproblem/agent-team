@@ -1,5 +1,6 @@
 ---
 description: Engineer inner skill. Plan and execute structural code changes WITHOUT altering observable behaviour. Invoke for rename, extract, inline, move, split-module, collapse-duplication, change-data-shape, etc. Test-anchored, diff-aware, minimum-step. Refusing-to-fix-bugs-and-add-features-in-the-same-diff is the point.
+disable-model-invocation: true
 ---
 
 # Refactor

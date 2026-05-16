@@ -1,5 +1,6 @@
 ---
 description: Language collaborative skill. Use for kanji-focused study — on/kun readings, components, mnemonics, compound words.
+disable-model-invocation: true
 ---
 
 # Kanji Study

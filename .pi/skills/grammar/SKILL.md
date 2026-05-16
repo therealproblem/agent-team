@@ -1,5 +1,6 @@
 ---
 description: Language collaborative skill. Use for JLPT grammar pattern practice and explanation, including drilling modes.
+disable-model-invocation: true
 ---
 
 # Grammar Drills

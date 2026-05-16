@@ -1,5 +1,6 @@
 ---
 description: Language inner skill. Extract new vocabulary from a Japanese passage, score by usefulness + JLPT level, and queue selected items into the SRS deck via the `add_item` tool. Invoke when the user reads a passage and wants the new words captured for future review, or when they paste any chunk of Japanese and say "mine this for vocab".
+disable-model-invocation: true
 ---
 
 # Vocab mining

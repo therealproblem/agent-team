@@ -1,5 +1,6 @@
 ---
 description: Educator collaborative skill. Use when sequencing topics into a learning path with prerequisites and active-recall prompts.
+disable-model-invocation: true
 ---
 
 # Curriculum Design

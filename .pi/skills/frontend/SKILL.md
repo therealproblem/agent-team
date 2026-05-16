@@ -1,5 +1,6 @@
 ---
 description: Engineer collaborative skill. Use for UI implementation — components, state management, styling, accessibility, browser performance.
+disable-model-invocation: true
 ---
 
 # Frontend

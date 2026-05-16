@@ -1,5 +1,6 @@
 ---
 description: Cross-persona inner skill (educator, engineer, pm). Compressed-mastery method for learning a new field/domain from sources. The user assembles a corpus (textbooks + papers + lecture transcripts), then runs THREE specific questions over it to extract the intellectual landscape, then loops through active-recall using Feynman-style explanation. Invoke for "teach me X from scratch", "ramp me up on this field", "I need to master Y in N days", or any new-subject deep-dive. Default learning method for the educator persona.
+disable-model-invocation: true
 ---
 
 # Corpus learning

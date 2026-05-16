@@ -1,5 +1,6 @@
 ---
 description: Cross-persona inner skill (pm, engineer, trader). Non-blind constructive review of ONE artifact — code, PR, PRD, design doc, trade decision, lesson plan. The caller can see full context (unlike the blind reviewer sub-agents `prd-critic`, `uat-tester`, `red-team`, `assessment-grader`). Invoke for "review this code", "look over this PRD", "is this ready", "what would you change". Produces severity-tagged findings.
+disable-model-invocation: true
 ---
 
 # Review (artifact)

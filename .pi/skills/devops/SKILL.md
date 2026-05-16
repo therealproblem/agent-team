@@ -1,5 +1,6 @@
 ---
 description: Engineer collaborative skill. Use for CI/CD, deployment, infrastructure, observability, environment config.
+disable-model-invocation: true
 ---
 
 # DevOps

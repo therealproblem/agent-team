@@ -1,5 +1,6 @@
 ---
 description: Engineer collaborative skill. Use for APIs, services, data modeling, auth, async and queue work.
+disable-model-invocation: true
 ---
 
 # Backend

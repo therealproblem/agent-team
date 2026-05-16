@@ -1,5 +1,6 @@
 ---
 description: PM collaborative skill. Use when drafting or revising a Product Requirements Document. Structured problem-led template.
+disable-model-invocation: true
 ---
 
 # PRD Authoring

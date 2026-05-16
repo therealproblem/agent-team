@@ -1,5 +1,6 @@
 ---
 description: Cross-persona inner skill (engineer, trader). Hypothesis-driven bug localisation in any deterministic system — code, scripts, configs, tooling. Invoke when something is broken and the cause isn't yet known. Forces minimum-reproducer first, then narrows by binary search rather than guessing.
+disable-model-invocation: true
 ---
 
 # Debugger

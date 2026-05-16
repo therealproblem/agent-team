@@ -1,5 +1,6 @@
 ---
 description: Language collaborative skill. Use to present graded JLPT reading passages and comprehension questions tuned to the learner level.
+disable-model-invocation: true
 ---
 
 # Reading Practice

@@ -1,5 +1,6 @@
 ---
 description: Trader collaborative skill. Convert a pattern-watch hypothesis into a single Socratic question for the user. Traders only way to surface patterns — never as findings, always as questions.
+disable-model-invocation: true
 ---
 
 # Question Generator

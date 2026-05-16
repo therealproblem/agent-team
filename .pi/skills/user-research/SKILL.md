@@ -1,5 +1,6 @@
 ---
 description: PM inner skill. Synthesize qualitative user data — interview notes, support tickets, survey free-text, user-quoted feedback — into a small number of VALIDATED user problems. Invoke before drafting a PRD (problem-discovery phase), after a batch of customer interviews, or whenever the user is staring at a pile of raw qualitative input and wants signal extracted.
+disable-model-invocation: true
 ---
 
 # User research synthesis

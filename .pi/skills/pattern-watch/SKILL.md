@@ -1,5 +1,6 @@
 ---
 description: Trader internal skill. Scan the trade journal corpus for recurring user-side patterns. Produces hypotheses for question-generator; not user-facing.
+disable-model-invocation: true
 ---
 
 # Pattern Watch

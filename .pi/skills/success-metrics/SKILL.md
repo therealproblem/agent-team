@@ -1,5 +1,6 @@
 ---
 description: PM inner skill. Define observable, testable success metrics for a product change BEFORE building. Invoke after a PRD's problem statement is clear, before scope is locked, or any time the user asks "how will we know this worked?" / "what does success look like?" / "what should we measure?". Produces 3-5 named metrics with baselines, targets, and measurement sources.
+disable-model-invocation: true
 ---
 
 # Success metrics

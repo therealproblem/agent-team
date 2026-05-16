@@ -1,5 +1,6 @@
 ---
 description: Trader collaborative skill. Use to ask follow-up questions that fill gaps in a trade journal entry. One question at a time.
+disable-model-invocation: true
 ---
 
 # Clarifier

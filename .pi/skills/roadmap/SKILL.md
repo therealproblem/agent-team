@@ -1,5 +1,6 @@
 ---
 description: PM collaborative skill. Use when building a quarterly or themed roadmap with measurable success signals.
+disable-model-invocation: true
 ---
 
 # Roadmap Construction

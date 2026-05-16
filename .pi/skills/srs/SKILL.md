@@ -1,5 +1,6 @@
 ---
 description: Language collaborative skill. Use to run spaced-repetition reviews on vocab, kanji, or grammar items via the srs extension state store.
+disable-model-invocation: true
 ---
 
 # SRS Reviews

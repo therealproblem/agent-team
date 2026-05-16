@@ -1,5 +1,6 @@
 ---
 description: Cross-persona inner skill (trader, educator). Periodic retrospective over N units of activity (trades, lessons, study sessions) — surfaces patterns, asks questions, proposes profile updates. Invoke for "weekly review", "monthly retro", "let's look back at the last X", or whenever the user wants to step back from doing and reflect on a window of past work.
+disable-model-invocation: true
 ---
 
 # Session retro

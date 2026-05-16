@@ -1,5 +1,6 @@
 ---
 description: Meta-skill for adding new agent components to this repo — a new persona (top-level skill), an inner skill under an existing persona, an isolated reviewer (subagent), or a tool extension. Use when the user says "add a persona", "create a new skill", "scaffold a sub-skill", "wire up a new tool / extension", "make a new reviewer", or anything shaped like extending the agents-team itself. Produces the right files in the right places with conformant frontmatter, profile-loading blocks, profile-update sections, and AGENTS.md / SYSTEM.md cross-references so the new component is discoverable by Pi on next session start.
+disable-model-invocation: true
 ---
 
 # Persona-creator

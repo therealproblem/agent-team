@@ -1,5 +1,6 @@
 ---
 description: Trader collaborative skill. Use to capture a single trade — structured fields (setup, entry, exit, P&L) plus narrated reasoning in the user voice.
+disable-model-invocation: true
 ---
 
 # Trade Journal
