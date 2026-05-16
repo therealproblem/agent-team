@@ -17,6 +17,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import BookmarkButton from "./BookmarkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,15 @@ const STATE_ROOT = process.env.AGENTS_TEAM_STATE_PATH
   : resolve(process.cwd(), "..", "state");
 const STORE_PATH = join(STATE_ROOT, "news.json");
 const SOURCES_PATH = join(STATE_ROOT, "news-sources.json");
+const BOOKMARKS_PATH = join(STATE_ROOT, "news-bookmarks.json");
+
+interface BookmarkRecord {
+  vault_path: string;
+  title: string;
+  source: string;
+  topic: string;
+  bookmarked_at: string;
+}
 
 const HIGHLIGHTS_PER_TOPIC = 3;
 
@@ -87,6 +97,7 @@ export default async function NewsPage({
 
   const store = readJson<{ items: NewsItem[] }>(STORE_PATH, { items: [] });
   const sources = readJson<Record<string, string[]>>(SOURCES_PATH, {});
+  const bookmarks = readJson<Record<string, BookmarkRecord>>(BOOKMARKS_PATH, {});
   const topics = Object.keys(sources);
 
   const itemsByTopic = new Map<string, NewsItem[]>();
@@ -151,6 +162,39 @@ export default async function NewsPage({
           .news-tab[aria-selected="true"]:hover {
             background: #04407c;
           }
+          .news-bookmark-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            padding: 0;
+            margin-right: 0.4rem;
+            border: none;
+            background: transparent;
+            color: var(--color-slate-gray);
+            cursor: pointer;
+            vertical-align: -0.25rem;
+            border-radius: 4px;
+            transition: color 120ms ease, background-color 120ms ease;
+          }
+          .news-bookmark-btn:hover:not(:disabled) {
+            color: #032F62;
+            background: rgba(3, 47, 98, 0.08);
+          }
+          .news-bookmark-btn.is-on {
+            color: #032F62;
+          }
+          .news-bookmark-btn.is-on:hover:not(:disabled) {
+            color: #04407c;
+          }
+          .news-bookmark-btn:disabled {
+            opacity: 0.5;
+            cursor: progress;
+          }
+          .news-bookmark-btn.is-error {
+            color: #c0392b;
+          }
         `}</style>
         <nav className="news-tabs" role="tablist" aria-label="View">
           <a
@@ -203,12 +247,16 @@ export default async function NewsPage({
                 </p>
               ) : (
                 <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {items.map((item) => (
+                  {items.map((item) => {
+                    const bookmark = item.url ? bookmarks[item.url] : undefined;
+                    return (
                     <li key={item.id} style={{ marginBottom: "1rem" }}>
                       <div>
-                        <span style={{ color: "var(--color-slate-gray)", fontFamily: "monospace" }}>
-                          [{item.id}]
-                        </span>{" "}
+                        <BookmarkButton
+                          id={item.id}
+                          initialBookmarked={Boolean(bookmark)}
+                          initialVaultPath={bookmark?.vault_path ?? null}
+                        />
                         {item.url ? (
                           <a href={item.url} target="_blank" rel="noopener noreferrer">
                             {item.title || "(untitled)"}
@@ -236,7 +284,8 @@ export default async function NewsPage({
                         </div>
                       ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ol>
               )}
             </section>
