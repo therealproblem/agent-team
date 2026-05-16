@@ -1,5 +1,6 @@
 {
   "packages": [
     "npm:@the-forge-flow/camoufox-pi"
-  ]
+  ],
+  "enableSkillCommands": false
 }
