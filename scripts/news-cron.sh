@@ -35,6 +35,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_FILE="/tmp/agents-team-news-cron.log"
 
+# Belt-and-braces opt-out: the tmux-host extension already skips re-exec when
+# it sees `--no-session` in argv, but cron has no TTY so a future change that
+# drops the flag must never accidentally try to spawn tmux. Sentinel is read
+# at module-load time by .pi/extensions/tmux-host/index.ts.
+export AGENTS_TEAM_NO_TMUX_REEXEC=1
+
 cd "${REPO_ROOT}"
 
 # Make `pi` resolvable in cron's stripped PATH. nvm is the common case;

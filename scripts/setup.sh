@@ -147,7 +147,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Pi project-local packages (restore from .pi/settings.json)
+# 5. leaf (TUI markdown viewer used by the show-md skill)
+#
+# `leaf` is invoked by .pi/extensions/show-md/ in a tmux side pane to display
+# vault markdown next to the Pi pane. Upstream ships an npm wrapper around
+# its Rust binary — same install pattern as Pi above. The published binary is
+# fetched on `npm install`, no Cargo toolchain required.
+# ---------------------------------------------------------------------------
+
+if have leaf; then
+	ok "leaf already installed ($(leaf --version 2>&1 | head -1 || echo unknown))"
+else
+	info "installing @rivolink/leaf globally…"
+	npm install -g @rivolink/leaf
+	if have leaf; then
+		ok "leaf installed ($(leaf --version 2>&1 | head -1 || echo unknown))"
+	else
+		warn "leaf install completed but \`leaf\` is not on PATH — check 'npm bin -g' is in your PATH"
+	fi
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Pi project-local packages (restore from .pi/settings.json)
 #
 # Pi records project-local extension installs in .pi/settings.json. The
 # .pi/npm/ tree is gitignored (regenerable), so on a fresh clone we replay
@@ -188,7 +209,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Local patches against .pi/npm/ packages
+# 7. Local patches against .pi/npm/ packages
 #
 # Some upstream playwright bugs bite us mid-research (Firefox uncaughtError
 # with no source location crashes the entire Node process — see
@@ -204,7 +225,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. .env scaffold (preserves existing .env)
+# 8. .env scaffold (preserves existing .env)
 # ---------------------------------------------------------------------------
 
 ENV_FILE="${REPO_ROOT}/.env"
@@ -222,7 +243,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. exports/ root
+# 9. exports/ root
 #
 # `write_export_pdf` writes PDFs to <repo>/exports/. The Next.js server
 # serves them at /p/<slug>.pdf via a route handler at
@@ -239,7 +260,7 @@ mkdir -p "$EXPORT_ROOT"
 ok "exports/ root in place"
 
 # ---------------------------------------------------------------------------
-# 9. Nextra server npm install
+# 10. Nextra server npm install
 #
 # .pi/server/ is the local Next.js + Nextra app that serves rendered
 # presentations (/v/...) and exported PDFs (/p/...). Its node_modules/ is
@@ -290,7 +311,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Nextra server production build
+# 11. Nextra server production build
 #
 # Pre-build the Next.js app so `pi` (or any caller) can start it via
 # `next start` in production mode instead of `next dev`. Production mode
@@ -325,7 +346,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. Legacy artifact cleanup
+# 12. Legacy artifact cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # experiments — old frontend attempts (pi-rpc-shim, Open WebUI, piclaw) and

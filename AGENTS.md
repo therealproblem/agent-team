@@ -16,7 +16,7 @@ Layer 1   ROOT SESSION        single Pi session — adopts personas inline
               blind by isolation — spawned via `subagent` when the active persona
               needs adversarial review
 Layer 3   SHARED SERVICES     skills any persona can call inline
-                              note-taker · render-html · export · news · scribe · research · summary · reminders
+                              note-taker · show-md · render-html · export · news · scribe · research · summary · reminders
 ```
 
 The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
@@ -29,7 +29,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 | Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
-| Layer 3 services (note-taker, render-html, export, news, scribe, research, summary, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
+| Layer 3 services (note-taker, show-md, render-html, export, news, scribe, research, summary, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 
 ## Specialization rule
@@ -65,6 +65,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── trader/SKILL.md        PERSONA
 │   │
 │   ├── note-taker/SKILL.md    Layer 3 (DEFAULT vault writer — markdown only, Obsidian-strict)
+│   ├── show-md/SKILL.md       Layer 3 (DEFAULT display surface — opens vault markdown in a tmux side pane via `leaf`. Called after note-taker on every reply that names a vault md path.)
 │   ├── render-html/SKILL.md   Layer 3 (md → Nextra HTML page served at /v/<YYYY-MM-DD>-<slug> on :8080)
 │   ├── export/SKILL.md        Layer 3 (md → Kami-styled PDF served at /p/<YYYY-MM-DD>-<slug>-<epoch>.pdf on :8080; each regeneration gets a fresh epoch suffix to defeat CDN caching, and prior PDFs for the same title — across all dates — are auto-pruned after the new one is on disk)
 │   ├── news/SKILL.md          Layer 3
@@ -93,6 +94,8 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── question-generator/SKILL.md    inner (trader)
 │   └── meta-review/SKILL.md   Layer 0 — cross-profile synthesis
 ├── extensions/                TypeScript extensions (auto-loaded by Pi)
+│   ├── tmux-host/             At module-load (before any session_start handler), re-execs the process as `tmux new-session -A -s pi pi <argv>` when `$TMUX` is unset and the invocation is interactive (no `--no-session`/`-p`/`--prompt`). Result: every interactive Pi session runs inside the `pi` tmux session, which the `show-md` skill's side-pane viewer depends on. Sentinel env var `AGENTS_TEAM_NO_TMUX_REEXEC=1` disables the re-exec (set automatically on the inner pi after re-exec; set manually in cron / CI / embedded contexts).
+│   ├── show-md/               Registers `show_md` — opens a vault markdown file in a tmux side pane via `leaf` (`tmux split-window -h 'leaf <abs path>'`). The new pane takes focus; `q` closes leaf (and the pane), `Ctrl-b o` cycles back to Pi without closing, `Ctrl-b x` kills the pane outright. Silent no-op when `$TMUX` is unset.
 │   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
 │   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_html_render` (md → Nextra content/v/<date>-<slug>.mdx), `write_export_pdf` (Kami HTML → PDF → <repo>/exports/<date>-<slug>-<epoch>.pdf, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time; each regeneration appends a fresh Unix-epoch suffix so the URL is never reused).
 │   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `npm run build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
@@ -112,6 +115,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 - **Server title.** Default: `agents-team`. Override with `AGENTS_TEAM_SERVER_TITLE` — appears as the wordmark in the top-left navbar and as the suffix on every page's `<title>`. **Read at build time**, not runtime: `layout.tsx` is statically pre-rendered, so the value is baked into `.pi/server/.next/`. Change the var, then re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for the new title to take effect. `scripts/setup.sh` auto-sources `.env` for the build.
 - **Public URL.** Default: `http://localhost:8080`. Override with `AGENTS_TEAM_SERVER_PUBLIC_URL` — set this to your **named** cloudflared tunnel hostname so HTML render / PDF URLs returned by tools are share-ready across sessions. (Quick tunnels rotate URLs on every restart; named tunnels are persistent.) Read at runtime, so a Pi restart is enough — no rebuild needed.
 - **Chrome binary.** PDF export uses headless Chrome. Auto-detected on macOS (`/Applications/Google Chrome.app`), Linux, and Windows. Override with `AGENTS_TEAM_CHROME_PATH` if Chrome is installed elsewhere.
+- **Disable auto-tmux.** Set `AGENTS_TEAM_NO_TMUX_REEXEC=1` to skip the `tmux-host` extension's re-exec into tmux. Required in cron / CI / embedded contexts where there's no TTY for tmux to attach to. Belt-and-braces only — the extension already detects `--no-session`/`-p`/`--prompt` and skips. `scripts/news-cron.sh` exports this var by default.
 - **Pi auto-discovers** everything in `.pi/agents/`, `.pi/skills/`, and `.pi/extensions/` — no `settings.json` entry needed for in-repo code.
 - **Installed npm packages** (recorded in `.pi/settings.json`, dropped into `.pi/npm/node_modules/`):
   - `@the-forge-flow/camoufox-pi` — stealth web fetcher + DuckDuckGo search via Camoufox (fingerprint-resistant Firefox fork). Backs the `research` skill. First call downloads the Camoufox binary (~500 MB). Install: `pi install -l npm:@the-forge-flow/camoufox-pi`.
@@ -259,6 +263,7 @@ These apply to every agent:
 3. **Tune outward-facing prose via Scribe.** When output is for a non-default audience, route through `scribe` rather than rephrasing inline.
 4. **Trader is a student.** Never prescribes; only questions.
 5. **Memory ops are quiet.** Operations on `.pi/state/` (reminders, profile updates, any other state) must not surface thinking blocks, diff visualizations, or prose summaries. Use purpose-built tools where they exist (`reminder_add` / `reminder_resolve` / `reminder_list` for reminders) instead of `read` + `edit`, so the TUI shows a one-line tool result rather than a diff. For profile updates: surface the `PROFILE_UPDATE` proposal text to the user for approval, then apply silently — no narration of what just changed.
+6. **Markdown surfaces open in tmux side panes by default.** When a persona's reply names a vault markdown file the user is meant to read, it also calls `show-md` to open the file in a tmux side pane via `leaf`. The agent's reply still names the file path — `show-md` is *additive*, not a substitute. Skip for agent-to-agent output (reviewers, sub-sessions), headless runs (`--no-session`, cron), and replies that don't surface a file path. The `tmux-host` extension guarantees the Pi session is inside tmux for every interactive run, so the split-pane is reliably available; on the rare headless paths the tool silently no-ops. `show-md` is independent of `render-html` and `export` — call any combination when warranted.
 
 ## Build status
 
@@ -277,6 +282,9 @@ These apply to every agent:
 | ext | srs | Functional SM-2 scheduler; needs deck seeding |
 | ext | news-ingest | Functional. Plain-fetch RSS/Atom from feeds listed per topic in `.pi/state/news-sources.json`. Hand-rolled RSS 2.0 + Atom 1.0 parser. Persists into `.pi/state/news.json` (plain JSON file), `(topic, url)` dedup, daily-purge on next write past local-day rollover. Four tools: `fetch_topic` (single topic, live fetch + write, 1h freshness cache), `query_today` (store-only read, no network), `get_item` (lookup by id, used by bookmark flow), `refresh_all_topics` (cron-driven full sweep). Topics with no registry entry return `fallback_hint: "no_rss_source"` so the `news` skill can delegate to `research`. On `session_start` surfaces `news: last scrape <date> (<relative>), <N> items in store` (or `No news` when empty). Slash commands: `/news-refresh` (manual full sweep, in-extension, no agent turn), `/show-news` (returns the `/news` page URL — Next.js route at `app/news/page.tsx` reads `news.json` on each request and offers a Highlights / All tab toggle). |
 | ext | reminders | Functional. Surfaces a numbered list from `.pi/state/reminders.md` on `session_start` via `pi.sendMessage`. Registers `/clear <N>` slash command — clears reminder by index directly from the extension, no agent turn. Tools: `reminder_add`, `reminder_resolve` (fallback for natural-language resolves), `reminder_list`. |
+| ext | tmux-host | Re-execs Pi as `tmux new-session -A -s pi pi <argv>` at module-load time when `$TMUX` is unset and the invocation is interactive. No tools, no session_start hook — all logic is top-level so it runs before any other extension's handlers can fire. Skip conditions: `$TMUX` set, `AGENTS_TEAM_NO_TMUX_REEXEC=1`, argv contains `--no-session`/`-p`/`--prompt`. |
+| ext | show-md | Registers `show_md`. Opens a vault markdown file in a tmux side pane via `leaf` (`tmux split-window -h 'leaf <abs path>'`). The new pane takes focus; tool result text reminds the user that `q` closes leaf, `Ctrl-b x` kills the pane, `Ctrl-b o` cycles back to Pi. Returns silent no-op (`opened: false, reason: "not_in_tmux"`) when `$TMUX` is unset. Vault root resolved from `AGENTS_TEAM_VAULT_PATH` or `<repo>/vault`. |
+| 3 | show-md | Skill present. Default display surface — called after `note-taker` on every reply that surfaces a vault markdown path the user is meant to read. Additive (the reply still names the path). |
 
 ## Verification
 

@@ -6,6 +6,8 @@ description: Layer 3 shared skill — renders an existing markdown note from the
 
 `render-html` is the **markdown → Nextra web page** skill. It takes an already-saved note in the Obsidian vault and emits a markdown body that the local Nextra server publishes at `/v/<YYYY-MM-DD>-<slug>`.
 
+> Terminal-side reading lives in a different skill: `show-md` opens the vault markdown in a tmux side pane via `leaf`. `show-md` runs by default on every reply that names a vault markdown path; `render-html` is opt-in on top of that when an interactive *web* read is worth the work. The two are independent — call both when the artifact deserves both surfaces.
+
 > If you would otherwise paste a multi-section markdown doc inline as the agent's reply, **stop**. Save it via `note-taker` first (the vault is markdown-canonical), then call `render-html` to give the user a URL to read.
 
 ## Output is markdown body only

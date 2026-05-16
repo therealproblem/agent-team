@@ -47,13 +47,23 @@ If `folder` is omitted, default to `inbox` and surface a follow-up: *"Saved to i
 - A persona finishes a meaningful artifact (PRD draft, ADR, trade entry, lesson plan, post-mortem, retro)
 - Periodic snapshots of long-running state (Trader's pattern hypotheses, Language's SRS queue)
 
-## What to do AFTER saving — optional HTML render
+## What to do AFTER saving
 
-The vault is markdown. If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona can follow up with the `render-html` skill. **Render reads the saved markdown and writes an HTML file outside the vault** (in `renders/`) so the vault stays graph-clean.
+### Default — open in tmux side pane via `show-md`
+
+Every persona that calls `note-taker` follows up with `show-md({ md_path })` so the user sees the saved file in a side pane via `leaf`. This is the default display behaviour (see `AGENTS.md` global rule #6). The Pi session always runs inside tmux (enforced by the `tmux-host` extension), so the split-pane is reliably available; on headless invocations the tool silently no-ops and the reply is unchanged.
 
 ```
 1. note-taker.save({...})                →  vault/pm/prd/2026-05-15-foo.md         (canonical)
-2. render-html({md_path: "..."})         →  http://localhost:8080/v/<slug>         (HTML render only)
+2. show-md({md_path: "..."})             →  tmux side pane rendering the file       (default display)
+```
+
+### Opt-in — also render to HTML
+
+If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona additionally calls the `render-html` skill. **Render reads the saved markdown and writes an HTML file outside the vault** (in `renders/`) so the vault stays graph-clean. `show-md` and `render-html` are independent — when both are warranted, call both.
+
+```
+3. render-html({md_path: "..."})         →  http://localhost:8080/v/<slug>         (HTML render — opt-in)
 ```
 
 The markdown is always the source of truth. The HTML render is a one-way derivative, regeneratable from the markdown. Personas decide whether to render — there is no global "always render" rule.
