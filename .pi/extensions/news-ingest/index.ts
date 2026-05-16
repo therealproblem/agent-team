@@ -28,9 +28,9 @@ import { Type } from "@earendil-works/pi-ai";
 import {
 	defineTool,
 	type ExtensionAPI,
-	type MessageRenderer,
+	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 
 interface NewsItem {
 	id?: number;
@@ -524,7 +524,7 @@ const fetchTopic = defineTool({
 		"Fetch recent news items for a topic from configured RSS feeds, persist into the daily JSON store, and return them. Reads from cache if rows for the topic were fetched within the last hour. Returns `fallback_hint: 'no_rss_source'` when the topic has no entry in `.pi/state/news-sources.json` — the `news` skill should fall back to `research` in that case.",
 	parameters: FetchTopicParams,
 
-	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 		const window = params.window ?? "today";
 		const count = params.count ?? 5;
 		try {
@@ -537,6 +537,7 @@ const fetchTopic = defineTool({
 								? ` (${result.errors.length} feed error${result.errors.length === 1 ? "" : "s"})`
 								: ""
 						}.`;
+			updateStatus(ctx);
 			return {
 				content: [{ type: "text", text: summary }],
 				details: {
@@ -637,7 +638,7 @@ const refreshAllTopics = defineTool({
 		"Fetch every topic in `.pi/state/news-sources.json` and write into the daily JSON store. Designed for the morning cron — single tool call to populate the day's news. Bypasses the in-process freshness cache (the cron is the source of truth for daily refresh).",
 	parameters: RefreshAllParams,
 
-	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 		const window = params.window ?? "today";
 		const count = params.count_per_topic ?? 20;
 		const sources = loadSources();
@@ -664,6 +665,7 @@ const refreshAllTopics = defineTool({
 			}
 		}
 
+		updateStatus(ctx);
 		const total = refreshed.reduce((a, r) => a + r.count, 0);
 		return {
 			content: [
@@ -681,32 +683,22 @@ const refreshAllTopics = defineTool({
 
 // ---------- TUI surface (status line + /news-refresh) ----------
 
-const newsRenderer: MessageRenderer = (message, _options, theme) => {
-	const container = new Container();
-	container.addChild(new Spacer(1));
-	const box = new Box(1, 1, (t: string) => theme.bg("customMessageBg", t));
-	const text =
-		typeof message.content === "string"
-			? message.content
-			: message.content
-					.filter((c): c is { type: "text"; text: string } => c.type === "text")
-					.map((c) => c.text)
-					.join("\n");
-	box.addChild(new Text(theme.fg("customMessageText", text), 0, 0));
-	container.addChild(box);
-	return container;
-};
-
 function surface(pi: ExtensionAPI, text: string, details?: object): void {
-	pi.sendMessage(
-		{
-			customType: "news",
-			content: text,
-			display: true,
-			details,
-		},
-		{ triggerTurn: false },
-	);
+	surfaceShared(pi, "news", text, details);
+}
+
+/**
+ * Push current store count into the footer statusline. Failures are
+ * swallowed — a status-line update must never crash the agent.
+ */
+function updateStatus(ctx: ExtensionContext): void {
+	try {
+		purgeOld();
+		const count = load().items.length;
+		ctx.ui.setStatus("1news", `NEWS ${count}`);
+	} catch {
+		// best-effort
+	}
 }
 
 
@@ -715,7 +707,12 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerTool(queryToday);
 	pi.registerTool(getItem);
 	pi.registerTool(refreshAllTopics);
-	pi.registerMessageRenderer("news", newsRenderer);
+	pi.registerMessageRenderer("news", createBoxRenderer());
+
+	pi.on("session_start", (event, ctx) => {
+		if (event.reason !== "startup" && event.reason !== "resume") return;
+		updateStatus(ctx);
+	});
 
 	/**
 	 * `/news-refresh` — manually trigger a full refresh of every topic in
@@ -731,7 +728,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("news-refresh", {
 		description: "Manually refresh the news store (replaces a skipped cron run)",
 
-		async handler(_args, _ctx) {
+		async handler(_args, ctx) {
 			if (refreshInFlight) {
 				surface(pi, "news: refresh already in progress — ignoring duplicate.");
 				return;
@@ -772,6 +769,7 @@ export default function (pi: ExtensionAPI): void {
 				surface(pi, `news: refresh failed — ${(e as Error).message}`);
 			} finally {
 				refreshInFlight = false;
+				updateStatus(ctx);
 			}
 		},
 	});

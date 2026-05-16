@@ -48,12 +48,12 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import {
-	type ExtensionAPI,
-	type MessageRenderer,
+import type {
+	ExtensionAPI,
+	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { loadDotenv } from "../../lib/dotenv";
+import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 
 loadDotenv();
 
@@ -89,49 +89,64 @@ async function preWarm(port: number): Promise<void> {
 	}
 }
 
-/**
- * Custom renderer for the `server` custom message type. Pi's default
- * renders a colored box with a bold `[customType]` label; we drop the label
- * (the "server: …" line already carries the context) and keep the box.
- */
-const serverRenderer: MessageRenderer = (message, _options, theme) => {
-	const container = new Container();
-	container.addChild(new Spacer(1));
-	const box = new Box(1, 1, (t: string) => theme.bg("customMessageBg", t));
-	const text =
-		typeof message.content === "string"
-			? message.content
-			: message.content
-					.filter(
-						(c): c is { type: "text"; text: string } => c.type === "text",
-					)
-					.map((c) => c.text)
-					.join("\n");
-	box.addChild(new Text(theme.fg("customMessageText", text), 0, 0));
-	container.addChild(box);
-	return container;
-};
-
 function surface(pi: ExtensionAPI, text: string, details?: object): void {
-	pi.sendMessage(
-		{
-			customType: "server",
-			content: text,
-			display: true,
-			details,
-		},
-		{ triggerTurn: false },
-	);
+	surfaceShared(pi, "server", text, details);
+}
+
+// Standard 10-frame braille spinner — same sequence used by `ora`, `cli-spinners`,
+// and Pi's own working indicator default. Renders cleanly in dim text.
+const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+let pendingTimer: ReturnType<typeof setInterval> | null = null;
+let pendingFrame = 0;
+
+function stopPendingAnimation(): void {
+	if (pendingTimer) {
+		clearInterval(pendingTimer);
+		pendingTimer = null;
+	}
+}
+
+function setSrv(ctx: ExtensionContext | null, value: "ready" | "down" | "pending"): void {
+	if (!ctx) return;
+	try {
+		if (value === "pending") {
+			const tick = () => {
+				const glyph = BRAILLE_FRAMES[pendingFrame % BRAILLE_FRAMES.length];
+				pendingFrame++;
+				try {
+					ctx.ui.setStatus("3srv", `| SRV ${glyph}`);
+				} catch {
+					// status update failure must not kill the interval loop
+				}
+			};
+			tick();
+			if (!pendingTimer) {
+				pendingTimer = setInterval(tick, 100);
+				// Don't keep the Node process alive solely for this animation.
+				pendingTimer.unref?.();
+			}
+			return;
+		}
+		stopPendingAnimation();
+		// On "ready" the port number is the clearest signal — it doubles as
+		// "the server is up" and "here's where to reach it". `✗` covers the
+		// failure modes (no port to show then).
+		const label = value === "ready" ? String(SERVER_PORT) : "✗";
+		ctx.ui.setStatus("3srv", `| SRV ${label}`);
+	} catch {
+		// best-effort
+	}
 }
 
 export default function (pi: ExtensionAPI): void {
-	pi.registerMessageRenderer("server", serverRenderer);
+	pi.registerMessageRenderer("server", createBoxRenderer());
 
 	let child: ChildProcess | null = null;
 
-	async function bringUp(): Promise<void> {
+	async function bringUp(ctx: ExtensionContext): Promise<void> {
 		if (!existsSync(SERVER_ROOT)) {
 			surface(pi, `server: ${SERVER_ROOT} not found — run setup first`);
+			setSrv(ctx, "down");
 			return;
 		}
 		if (!existsSync(NEXT_BIN)) {
@@ -139,6 +154,7 @@ export default function (pi: ExtensionAPI): void {
 				pi,
 				`server: next binary missing — run \`cd ${SERVER_ROOT} && npm install\` first`,
 			);
+			setSrv(ctx, "down");
 			return;
 		}
 		if (!IS_DEV && !existsSync(NEXT_BUILD_DIR)) {
@@ -146,11 +162,13 @@ export default function (pi: ExtensionAPI): void {
 				pi,
 				`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && npm run build\`) first`,
 			);
+			setSrv(ctx, "down");
 			return;
 		}
 
 		if (await isPortBound(SERVER_PORT)) {
 			// Already running — stay silent on the happy path.
+			setSrv(ctx, "ready");
 			return;
 		}
 
@@ -180,6 +198,7 @@ export default function (pi: ExtensionAPI): void {
 		child.stderr?.pipe(log);
 		child.on("error", (err) => {
 			surface(pi, `server: spawn error — ${err.message}`);
+			setSrv(ctx, "down");
 		});
 
 		// Poll up to 15s for the port to come up. With `next start` serving
@@ -188,16 +207,23 @@ export default function (pi: ExtensionAPI): void {
 		for (let i = 0; i < 30; i++) {
 			if (await isPortBound(SERVER_PORT)) {
 				await preWarm(SERVER_PORT);
+				setSrv(ctx, "ready");
 				return;
 			}
 			await new Promise((r) => setTimeout(r, 500));
 		}
 		surface(pi, `server: failed to start within 15s — tail ${LOG_PATH}`);
+		setSrv(ctx, "down");
 	}
 
-	pi.on("session_start", (event, _ctx) => {
+	pi.on("session_start", (event, ctx) => {
 		// Only on real launches/resumes — not internal reloads, forks, etc.
 		if (event.reason !== "startup" && event.reason !== "resume") return;
+
+		// Show SRV in the footer immediately. bringUp() will flip this
+		// to ready/down as the probe resolves — until then `…` signals
+		// that we're still checking rather than implying a hard down.
+		setSrv(ctx, "pending");
 
 		// Fire-and-forget: detach the bring-up so Pi's TUI is interactive
 		// immediately. Without this, the handler awaits up to 15s of port
@@ -206,15 +232,17 @@ export default function (pi: ExtensionAPI): void {
 		// Errors must not escape: an unhandled rejection on a detached
 		// promise can crash the Pi process. Swallow here and route the
 		// message through `surface` so it shows up in the TUI.
-		bringUp().catch((err: unknown) => {
+		bringUp(ctx).catch((err: unknown) => {
 			const message = err instanceof Error ? err.message : String(err);
 			surface(pi, `server: bring-up crashed — ${message}`);
+			setSrv(ctx, "down");
 		});
 	});
 
 	// Best-effort cleanup. Pi's TUI Ctrl-C can kill the parent before the
 	// `exit` handler runs synchronously, so we also catch SIGINT/SIGTERM.
 	const cleanup = () => {
+		stopPendingAnimation();
 		if (child && !child.killed) {
 			child.kill("SIGTERM");
 			setTimeout(() => {

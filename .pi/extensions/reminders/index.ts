@@ -24,9 +24,9 @@ import { Type } from "@earendil-works/pi-ai";
 import {
 	defineTool,
 	type ExtensionAPI,
-	type MessageRenderer,
+	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 
 const REPO_ROOT = resolve(process.cwd());
 const REMINDERS_PATH = join(REPO_ROOT, ".pi", "state", "reminders.md");
@@ -225,8 +225,8 @@ const reminderAdd = defineTool({
 		}),
 	}),
 
-	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		return withFileLock(async () => {
+	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		const result = await withFileLock(async () => {
 			try {
 				await ensureFile();
 				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
@@ -246,6 +246,8 @@ const reminderAdd = defineTool({
 				};
 			}
 		});
+		await updateStatus(ctx);
+		return result;
 	},
 });
 
@@ -261,8 +263,8 @@ const reminderResolve = defineTool({
 		}),
 	}),
 
-	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		return withFileLock(async () => {
+	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		const result = await withFileLock(async () => {
 			try {
 				await ensureFile();
 				const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
@@ -318,6 +320,8 @@ const reminderResolve = defineTool({
 				};
 			}
 		});
+		await updateStatus(ctx);
+		return result;
 	},
 });
 
@@ -357,51 +361,37 @@ const reminderList = defineTool({
 });
 
 /**
- * Custom renderer for the `reminders` custom message type.
- *
- * Pi's default renders a colored box with a bold `[customType]` label
- * followed by the content. We keep the colored box (so the message is
- * visually distinct as a system surface) but drop the label — the
- * "Open reminder(s) (N):" header inside the content carries the
- * meaning, and `[reminders]` reads like redundant scaffolding.
- */
-const remindersRenderer: MessageRenderer = (message, _options, theme) => {
-	const container = new Container();
-	container.addChild(new Spacer(1));
-	const box = new Box(1, 1, (t: string) => theme.bg("customMessageBg", t));
-	const text =
-		typeof message.content === "string"
-			? message.content
-			: message.content
-					.filter((c): c is { type: "text"; text: string } => c.type === "text")
-					.map((c) => c.text)
-					.join("\n");
-	box.addChild(new Text(theme.fg("customMessageText", text), 0, 0));
-	container.addChild(box);
-	return container;
-};
-
-/**
  * Surface a status message in the TUI without spending an agent turn.
- * Reuses the `reminders` customType so it picks up our renderer.
+ * Forwards to the shared helper with `reminders` as the customType so
+ * Pi routes through the box renderer we register below.
  */
 function surface(pi: ExtensionAPI, text: string, details?: object): void {
-	pi.sendMessage(
-		{
-			customType: "reminders",
-			content: text,
-			display: true,
-			details,
-		},
-		{ triggerTurn: false },
-	);
+	surfaceShared(pi, "reminders", text, details);
+}
+
+/**
+ * Push the current open-reminder count into the footer statusline.
+ * Called on session_start and after every mutation. Failures are
+ * swallowed — a status-line update must never crash the agent.
+ */
+async function updateStatus(ctx: ExtensionContext): Promise<void> {
+	try {
+		let count = 0;
+		if (existsSync(REMINDERS_PATH)) {
+			const md = await readFile(REMINDERS_PATH, { encoding: "utf8" });
+			count = parseOpenItems(md).length;
+		}
+		ctx.ui.setStatus("2rem", `| REM ${count}`);
+	} catch {
+		// best-effort
+	}
 }
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(reminderAdd);
 	pi.registerTool(reminderResolve);
 	pi.registerTool(reminderList);
-	pi.registerMessageRenderer("reminders", remindersRenderer);
+	pi.registerMessageRenderer("reminders", createBoxRenderer());
 
 	/**
 	 * `/clear <N>` — delete reminder #N (1-indexed against the numbered list
@@ -435,7 +425,7 @@ export default function (pi: ExtensionAPI): void {
 			}
 		},
 
-		async handler(args, _ctx) {
+		async handler(args, ctx) {
 			const trimmed = args.trim();
 			if (trimmed === "") {
 				surface(pi, "Usage: /clear <N>  — N is the index shown in the list.");
@@ -499,13 +489,15 @@ export default function (pi: ExtensionAPI): void {
 					surface(pi, `Failed to clear: ${message}`);
 				}
 			});
+			await updateStatus(ctx);
 		},
 	});
 
-	pi.on("session_start", async (event, _ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		// Only surface on real launches and resumes — not internal reload
 		// events, forks, or new-session-during-existing-pi.
 		if (event.reason !== "startup" && event.reason !== "resume") return;
+		await updateStatus(ctx);
 		if (!existsSync(REMINDERS_PATH)) return;
 
 		try {
