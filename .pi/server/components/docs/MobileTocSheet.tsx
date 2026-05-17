@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -11,24 +13,36 @@ interface MobileTocSheetProps {
 }
 
 /*
- * Mobile hamburger + slide-in drawer holding the TOC. Replaces the
- * CSS-only checkbox drawer from the Nextra-era layout.tsx.
+ * Mobile TOC drawer. The trigger button portals into SiteHeader's left
+ * slot (`#site-header-mobile-slot`) so it doesn't overlap the sticky
+ * brand text. The sheet itself renders at document root via Radix.
  */
 export function MobileTocSheet({ entries }: MobileTocSheetProps) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setSlot(document.getElementById("site-header-mobile-slot"));
+  }, []);
+
   if (entries.filter((e) => e.depth >= 2).length === 0) return null;
-  return (
-    <div className="fixed top-3 left-3 z-50 md:hidden">
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Open table of contents">
-            <Menu className="size-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-72 overflow-y-auto bg-background p-6">
-          <SheetTitle className="sr-only">Table of contents</SheetTitle>
-          <Toc entries={entries} />
-        </SheetContent>
-      </Sheet>
-    </div>
+  if (!slot) return null;
+
+  return createPortal(
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label="Open table of contents"
+        >
+          <Menu className="size-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-72 overflow-y-auto bg-background p-6">
+        <SheetTitle className="sr-only">Table of contents</SheetTitle>
+        <Toc entries={entries} />
+      </SheetContent>
+    </Sheet>,
+    slot,
   );
 }

@@ -14,8 +14,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
 import BookmarkButton from "./BookmarkButton";
+import RefreshButton from "./RefreshButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "News · agents-team" };
@@ -149,15 +149,9 @@ export default async function NewsPage({
                 News
               </h1>
             </div>
-            <form action="/news/refresh" method="POST" className="shrink-0 pt-1">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 h-11 px-4 rounded-[12px] bg-transparent border border-muted-stone text-deep-cognac hover:bg-cloud-fog hover:border-deep-cognac font-sans font-medium text-[15px] transition-colors"
-              >
-                <RefreshCw className="size-4" strokeWidth={1.75} />
-                Refresh
-              </button>
-            </form>
+            <div className="shrink-0 pt-1">
+              <RefreshButton />
+            </div>
           </div>
           <p className="font-sans text-[15px] leading-[1.4] tracking-[-0.01em] text-muted-stone">
             {lastFetchLine(store.items)} &middot; {totalShown} item
