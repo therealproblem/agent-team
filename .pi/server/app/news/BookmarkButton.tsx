@@ -1,13 +1,9 @@
 "use client";
 
-/*
- * BookmarkButton — icon-only bookmark toggle for a single /news item.
- *
- * Replaces the [id] badge slot in the news list. Outlined ribbon when not
- * bookmarked, filled when bookmarked. POSTs / DELETEs against /news/bookmark.
- */
-
 import { useState } from "react";
+import { Bookmark } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Props {
   id: number;
@@ -17,6 +13,11 @@ interface Props {
 
 type Status = "idle" | "loading" | "error";
 
+/*
+ * BookmarkButton — icon-only bookmark toggle for a single /news item.
+ * Outlined ribbon when not bookmarked, filled when bookmarked. POSTs /
+ * DELETEs against /news/bookmark.
+ */
 export default function BookmarkButton({ id, initialBookmarked, initialVaultPath }: Props) {
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [vaultPath, setVaultPath] = useState<string | null>(initialVaultPath);
@@ -59,30 +60,23 @@ export default function BookmarkButton({ id, initialBookmarked, initialVaultPath
       ? `Bookmarked → vault/${vaultPath} (click to remove)`
       : "Bookmark to vault";
 
-  const ariaLabel = bookmarked ? "Remove bookmark" : "Bookmark article";
-
   return (
-    <button
+    <Button
       type="button"
       onClick={toggle}
       disabled={status === "loading"}
+      variant="ghost"
+      size="icon"
       aria-pressed={bookmarked}
-      aria-label={ariaLabel}
+      aria-label={bookmarked ? "Remove bookmark" : "Bookmark article"}
       title={title}
-      className={`news-bookmark-btn${bookmarked ? " is-on" : ""}${status === "error" ? " is-error" : ""}`}
+      className={cn(
+        "h-7 w-7 text-muted-foreground hover:text-primary",
+        bookmarked && "text-primary",
+        status === "error" && "text-destructive",
+      )}
     >
-      <svg
-        width="14"
-        height="16"
-        viewBox="0 0 14 16"
-        fill={bookmarked ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M2.5 1.5h9a1 1 0 0 1 1 1V14.5L7 11.25 1.5 14.5V2.5a1 1 0 0 1 1-1Z" />
-      </svg>
-    </button>
+      <Bookmark className="size-4" fill={bookmarked ? "currentColor" : "none"} />
+    </Button>
   );
 }

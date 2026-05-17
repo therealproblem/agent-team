@@ -1,10 +1,10 @@
 ---
-description: Layer 3 shared skill — renders an existing markdown note from the Obsidian vault into an interactive Nextra-served HTML page at `/v/<YYYY-MM-DD>-<slug>`. Reads the markdown source via the core `read` tool, emits a markdown body (NOT full HTML), and calls the `write_html_render` tool. Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, callouts, and the parchment styling. The page is served at `http://localhost:8080/v/{slug}` by the local Nextra server (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. Returns the http URL. The rendered HTML is a one-way derivative; the markdown is always the source of truth. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work — short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
+description: Layer 3 shared skill — renders an existing markdown note from the Obsidian vault into an interactive HTML page at `/v/<YYYY-MM-DD>-<slug>`. Reads the markdown source via the core `read` tool, emits a markdown body (NOT full HTML), and calls the `write_html_render` tool. The renderer (shadcn + Tailwind v4 DocLayout) owns layout, theme, syntax highlighting, TOC, callouts, and the parchment styling. The page is served at `http://localhost:8080/v/{slug}` by the local server (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. Returns the http URL. The rendered HTML is a one-way derivative; the markdown is always the source of truth. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work — short captures, agent-to-agent output, and PR-review artifacts stay markdown-only.
 ---
 
 # Render HTML
 
-`render-html` is the **markdown → Nextra web page** skill. It takes an already-saved note in the Obsidian vault and emits a markdown body that the local Nextra server publishes at `/v/<YYYY-MM-DD>-<slug>`.
+`render-html` is the **markdown → web page** skill. It takes an already-saved note in the Obsidian vault and emits a markdown body that the local server (shadcn + Tailwind v4 DocLayout, served by Next.js) publishes at `/v/<YYYY-MM-DD>-<slug>`.
 
 > Terminal-side reading lives in a different skill: `show-md` opens the vault markdown in a tmux side pane via `leaf`. `show-md` runs by default on every reply that names a vault markdown path; `render-html` is opt-in on top of that when an interactive *web* read is worth the work. The two are independent — call both when the artifact deserves both surfaces.
 
@@ -12,14 +12,14 @@ description: Layer 3 shared skill — renders an existing markdown note from the
 
 ## Output is markdown body only
 
-**This is the single most important constraint.** Nextra owns the chrome. The agent emits only the markdown body. Do **NOT** include any of:
+**This is the single most important constraint.** The renderer owns the chrome. The agent emits only the markdown body. Do **NOT** include any of:
 
 - `<!doctype html>`, `<html>`, `<head>`, or `<body>` tags
 - `<style>` or `<script>` tags
 - Inline CSS, fonts, or theme switching
-- Hand-rolled HTML for tabs / callouts / TOC / copy buttons / dark-mode toggle
+- Hand-rolled HTML for tabs / callouts / TOC / dark-mode toggle
 
-Nextra provides all of those. You write the markdown; Nextra renders it inside the parchment-styled layout.
+The DocLayout provides all of those. You write the markdown; the renderer compiles it inside the parchment-styled layout.
 
 If you find yourself authoring CSS, you are writing the wrong artifact.
 
@@ -30,7 +30,7 @@ Two separate concerns:
 | Concern | Owner | Format | Location |
 |---|---|---|---|
 | **Storage / knowledge graph** | `note-taker` | Markdown | Obsidian vault (`vault/…/<slug>.md`) |
-| **Reading experience** | `render-html` (this skill) | Nextra-served page | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
+| **Reading experience** | `render-html` (this skill) | DocLayout-served page | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 
 The vault is an Obsidian vault: it must stay markdown so frontmatter, `[[wiki-links]]`, inline `#tags`, and graph view continue to work. HTML / MDX files in the vault break that — they're not indexed, links inside aren't traced.
 
@@ -44,7 +44,7 @@ The local server hides discovery vectors that would let someone enumerate paths:
 
 - `/` returns a generic landing page, no enumeration
 - `/v` (no slug) returns 404
-- Nextra's sidebar is hidden for `/v/*`
+- The listing sidebar is hidden for `/v/*`
 - Search index (`/_pagefind/*`) is not built at all
 - 404 page is bare — no enumeration of top-level routes
 
@@ -81,7 +81,7 @@ render-html({
 
 A markdown body, written as an `.mdx` file under `.pi/server/content/v/<YYYY-MM-DD>-<slug>.mdx`. The tool injects frontmatter (`title`, `sidebar: false`) — **do not include frontmatter in the markdown you emit**.
 
-The page is served by Nextra at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to).
+The page is served at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to) by the local Next.js server using a shadcn-based DocLayout.
 
 **Returning the URL to the user.** The URL is the entire response. Do NOT:
 
@@ -123,14 +123,14 @@ The default-AI failure mode is markdown-as-prose: paragraphs, bullets, code bloc
 | Sequenced steps ("first X, then Y, finally Z"), numbered lists of >3 procedural steps | **`sequenceDiagram`** (when actors hand off) or **`flowchart LR`** (when the path branches) |
 | Decisions / branching logic ("if X then A, else B") | **`flowchart TD`** with diamond decision nodes |
 | State transitions ("draft → review → approved → published") | **`stateDiagram-v2`** |
-| Time-based progression (dates, phases, milestones) | **`gantt`** or **`timeline`** |
+| Time-based progression — **with real dates / years on each event** | **`gantt`** or **`timeline`**. If the "time axis" is just vague era labels like *Historical / Recent / Current* with no actual dates, **use a table** instead — the timeline diagram adds vertical droppers and an axis arrow that don't help when nothing is anchored to a real point in time. |
 | Hierarchical relationships (taxonomy, org chart) | **`mindmap`** or **`classDiagram`** |
 | Architecture / module relationships | **`flowchart`** with subgraphs per system |
 | User journey / funnel | **`journey`** or **`flowchart LR`** |
 | Database / data-model entities and relationships | **`erDiagram`** |
 | Distribution / proportion (numeric breakdown of a whole) | **`pie`** |
 | Numbers over time (metrics, scores, trends) | Inline SVG sparkline as an MDX expression |
-| Comparison of N independent options (no edges between them) | **Not** a diagram — use a markdown table or a `<Cards>` block. Forcing a diagram on independent options is worse than the table. |
+| Comparison of N independent options (no edges between them) | **Not** a diagram — use a markdown table. Forcing a diagram on independent options is worse than the table. |
 
 The same source often has more than one diagrammable shape — pick the most informative, or include two if they show different facets. **A rendered page with two well-chosen diagrams usually beats one with five prose sections.**
 
@@ -215,7 +215,7 @@ The renderer scales diagrams to article width, then preserves aspect ratio. A di
 | `mindmap` | Radial hierarchies with a single center | Sequential / time-ordered content |
 | `sequenceDiagram` | 2–6 actors with finite message exchanges | More than 8 actors |
 | `stateDiagram-v2` | ≤ 8 states with clear transitions | Dense state machines |
-| `timeline` | ≤ 10 dated events | Continuous metrics |
+| `timeline` | ≤ 10 events, **each with a real date / year** | Continuous metrics, OR era buckets without dates (use a table) |
 | `gantt` | ≤ 8 workstreams over a bounded period | Single-task durations |
 
 **Hard caps before falling back:**
@@ -225,9 +225,9 @@ The renderer scales diagrams to article width, then preserves aspect ratio. A di
 
 **Subgraphs are your friend.** When categories matter, wrap related nodes in Mermaid `subgraph`s — they read as boxed clusters and the layout engine treats them as units, keeping the diagram compact.
 
-**When the data is a categorical breakdown** (parent → 5 categories → 3 items each), a 3-column table almost always beats a wide `flowchart LR`. Reach for the table.
+**When the data is a categorical breakdown** (parent → N categories → M items each), a small table almost always beats a wide `flowchart LR` *or* a `timeline` with non-dated era labels. Reach for the table. Heuristic: if every "node" in the candidate diagram would become a row or cell in a table, and there are no real edges/dates connecting them, the table is the correct shape. The diagram chrome (arrows, axis lines, droppers) adds visual noise without information density.
 
-## Markdown idioms Nextra supports
+## Markdown idioms the renderer supports
 
 | Idiom | Markdown |
 |---|---|
@@ -244,35 +244,7 @@ The renderer scales diagrams to article width, then preserves aspect ratio. A di
 | **Footnotes** | `[^1]` reference + `[^1]: text` definition |
 | **Math (inline / block)** | `$x^2$` / `$$ \int_0^1 f $$` (KaTeX) |
 
-For richer components (`<Tabs>`, `<Steps>`, `<Cards>`), see the next section — they require switching that one file to MDX expressions. The default is plain markdown.
-
-## When MDX expressions are worth it
-
-The render tool always writes `.mdx` files, so you *can* drop in inline JSX components when a markdown idiom doesn't fit. Use sparingly — most rendered pages should be pure markdown.
-
-Nextra ships these MDX components ready to use:
-
-| Component | When |
-|---|---|
-| `<Tabs>` / `<Tab>` | Parallel content (multi-language code, before/after) |
-| `<Steps>` | Numbered procedural sequences with visual separators |
-| `<Cards>` / `<Card>` | Comparison grid of independent options with optional links |
-| `<FileTree>` | Directory structure visualization |
-| `<Callout>` | Same as GFM alerts but with custom icons/types |
-
-Example:
-
-```mdx
-import { Tabs } from 'nextra/components'
-
-<Tabs items={['npm', 'pnpm', 'yarn']}>
-  <Tabs.Tab>npm install</Tabs.Tab>
-  <Tabs.Tab>pnpm install</Tabs.Tab>
-  <Tabs.Tab>yarn</Tabs.Tab>
-</Tabs>
-```
-
-If you don't need any of these, **don't import them**. Pure markdown is the default.
+The renderer compiles plain markdown + a small set of remark plugins (GFM, Mermaid via fenced ```mermaid blocks, GFM alert callouts via `> [!NOTE]`). Custom inline MDX JSX components (`<Tabs>`, `<Steps>`, `<Cards>`, `<FileTree>`) are **not** provided — express parallel content as side-by-side tables or sequential headings, and procedural sequences as ordered lists. Pure markdown is the only authoring surface.
 
 ## Pattern picker by document type
 
@@ -282,18 +254,18 @@ The note's frontmatter (or folder) usually tells you the type. Match:
 |---|---|
 | **PRD / spec** | Mermaid `sequenceDiagram` or `flowchart` · GFM callouts for warnings · tables for status (P0/P1/P2) |
 | **Roadmap / quarterly plan** | Mermaid `timeline` or `gantt` · status callouts · tables per workstream |
-| **ADR / design doc** | Side-by-side via `<Tabs>` for alternatives · callout for the decision · Mermaid `flowchart` |
-| **Post-mortem / incident** | Mermaid `timeline` · color-coded severity callouts · `<Steps>` for contributing factors |
-| **Code review / explainer** | `<Tabs>` for multi-language code · callouts beside lines · code blocks with `{line}` highlights |
+| **ADR / design doc** | Side-by-side tables for alternatives · callout for the decision · Mermaid `flowchart` |
+| **Post-mortem / incident** | Mermaid `timeline` · color-coded severity callouts · ordered list for contributing factors |
+| **Code review / explainer** | Sequential headings for multi-language code · callouts beside lines · code blocks with `{line}` highlights |
 | **Research / corpus-learning map** | Mermaid `mindmap` for concept hierarchy · callouts for "where experts disagree" |
-| **Lesson plan / study guide** | `<Steps>` for procedural · `<Tabs>` for examples · sparkline for progress trend |
-| **JLPT mock-exam result** | Score table · sparkline of trend across attempts · `<Tabs>` for correct/incorrect |
+| **Lesson plan / study guide** | Ordered list for procedural · table for examples · sparkline for progress trend |
+| **JLPT mock-exam result** | Score table · sparkline of trend across attempts · two-column table for correct/incorrect |
 | **Trader pattern-watch summary** | Mermaid `timeline` of trade events · status callouts · sparkline equity curve |
 | **Stakeholder / exec brief** | Status table · 3-column comparison · timeline of milestones (no `<details>` — execs read top-to-bottom) |
 | **Design system note / palette** | Color swatch table · type-scale table · Mermaid `flowchart` for token relationships |
-| **Spike / fan-out** | `<Cards>` for candidate approaches · trade-offs in tables · callout for the recommendation |
+| **Spike / fan-out** | Table comparing candidate approaches · trade-offs in tables · callout for the recommendation |
 | **Module map** | Mermaid `flowchart` with subgraphs |
-| **Concept explainer** | Callout for TL;DR · Mermaid `mindmap` · `<Tabs>` for example variants |
+| **Concept explainer** | Callout for TL;DR · Mermaid `mindmap` · table for example variants |
 
 If the type isn't above, scan the *idioms* table and pick 2–3 that fit the content.
 
@@ -302,7 +274,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 1. **Read the markdown.** Use the core `read` tool on `md_path` (resolved against the vault root). Parse out the frontmatter (title, tags, source_agent, etc.) and the body.
 2. **Scan for diagrammable shapes FIRST.** Run the markdown through the "Content patterns that should be a diagram" table above. Identify at least one — ideally two — diagrams to include. If your honest scan finds zero diagrammable shapes, an HTML render may not be worth the work; tell the caller so.
 3. **Decide the rest of the pattern set.** Look at the note's type (folder or frontmatter `type:`). From the pattern picker above, pick 2–3 *other* idioms that fit alongside the diagram(s).
-4. **Generate the markdown body** — convert the source markdown, lift sections that should become callouts, insert Mermaid blocks where shapes were identified, use `<Tabs>` / `<Steps>` / `<Cards>` only where pure markdown can't express it.
+4. **Generate the markdown body** — convert the source markdown, lift sections that should become callouts, insert Mermaid blocks where shapes were identified. Pure markdown only — no inline JSX.
 5. **Call `write_html_render`** with the assembled `markdown` body, the original `title`, and the `source_md_path` (so the response records both paths together). The body must NOT contain a "Source:" footer or any provenance line — provenance lives in the chat reply, not in the rendered artifact.
 6. **Return** `{ id, url, path, title, source_md_path }` to the caller.
 7. **The agent's user-facing reply** is then:
@@ -313,7 +285,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 
 ## Don't
 
-- **Don't write HTML / CSS / JS.** Nextra owns the chrome. Emit markdown body only.
+- **Don't write HTML / CSS / JS.** The renderer owns the chrome. Emit markdown body only.
 - **Don't include frontmatter** in the markdown you pass to `write_html_render` — the tool prepends it for you.
 - **Don't write HTML to the vault.** Use `write_html_render`. HTML / MDX in the vault breaks Obsidian's graph.
 - **Don't auto-render.** Personas (or the user) explicitly trigger the skill. There is no global "save and render" hook.
@@ -324,7 +296,7 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 - **Don't ship a render with zero diagrams** unless you've honestly scanned the markdown against the "Content patterns that should be a diagram" table and found nothing. A page whose only visual signal is callouts and tables is leaving the medium's biggest lever unpulled. If you cannot find a diagrammable shape, that's a signal the doc doesn't need an HTML render — say so.
 - **Don't ship an unreadable diagram.** A `flowchart LR` squashed into a 30px-tall strip helps no one — readability beats diagram-purity. If the layout would be too wide / too dense to read at the article's column width (see "Diagram shape and density"), use a table or split into multiple diagrams. The diagrams-first rule does not override the readability rule.
 - **Don't use ASCII diagrams.** Write Mermaid for named types. Never ASCII.
-- **Don't ship the "default-AI aesthetic."** No gradients, no glass morphism, no neon glow, no emoji headers, no purple-to-pink branding. Nextra's parchment theme is the only theme.
+- **Don't ship the "default-AI aesthetic."** No gradients, no glass morphism, no neon glow, no emoji headers, no purple-to-pink branding. The DESIGN-2 parchment theme is the only theme.
 - **Don't paste the rendered body inline** in the chat reply. The URL is the deliverable.
 - **Don't list multiple render URLs proactively.** The URL-secrecy model means each URL is shared deliberately. Never volunteer "here are your recent renders".
 - **Don't include the markdown source as a code block** in the rendered markdown — the source path goes in the response metadata, the file lives in the vault.

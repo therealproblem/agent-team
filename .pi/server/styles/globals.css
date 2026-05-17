@@ -1,318 +1,292 @@
+/* Delphi font substitutes from Google Fonts (must precede all other rules):
+ *   Martina Plantijn Light → Source Serif 4 (weights 300/400/700)
+ *   Inter                  → Inter (400/500)
+ *   Roboto Mono            → Roboto Mono (400)
+ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Roboto+Mono:wght@400&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,700&display=swap");
 @import "tailwindcss";
-@import "nextra-theme-docs/style.css";
+@import "tw-animate-css";
 
 /*
- * DESIGN-2 — OpenWeb editorial parchment palette. Light theme only.
+ * Delphi — Cognac-Stained Parchment.
+ * A sense of aged wisdom and quiet authority. Warm parchment background,
+ * deep cognac text, Source Serif Light at whisper-weight for display,
+ * Inter sans for body. 12px button radii, 16-20px card radii, 70px for
+ * testimonial avatars. Light theme only. Compact density (4px base).
  */
 @theme {
-  --color-parchment-white: #f1e9e7;
-  --color-midnight-ink: #000000;
-  --color-arctic-frost: #ffffff;
-  --color-slate-gray: #7b7f83;
-  --color-dark-navy: #032F62;
+  /* Delphi colors */
+  --color-parchment-white: #fdf6ee;
+  --color-deep-cognac: #2b180a;
+  --color-muted-stone: #94877c;
+  --color-pressed-cacao: #7f6e60;
+  --color-burnt-umber: #3e2407;
+  --color-warm-ash: #a99d93;
+  --color-cloud-fog: #f0e6dc;
+  --color-fire-opal: #f65726;
+  --color-sunset-orange: #ff5c00;
+  --color-white: #ffffff;
+  --color-dark-charcoal: #21201c;
+
+  /* shadcn token slots → Delphi */
+  --color-background: var(--color-parchment-white);
+  --color-foreground: var(--color-deep-cognac);
+  --color-card: var(--color-parchment-white);
+  --color-card-foreground: var(--color-deep-cognac);
+  --color-popover: var(--color-parchment-white);
+  --color-popover-foreground: var(--color-deep-cognac);
+  --color-primary: var(--color-burnt-umber);
+  --color-primary-foreground: var(--color-white);
+  --color-secondary: var(--color-cloud-fog);
+  --color-secondary-foreground: var(--color-deep-cognac);
+  --color-muted: var(--color-cloud-fog);
+  --color-muted-foreground: var(--color-muted-stone);
+  --color-accent: var(--color-cloud-fog);
+  --color-accent-foreground: var(--color-deep-cognac);
+  --color-destructive: var(--color-fire-opal);
+  --color-destructive-foreground: var(--color-white);
+  --color-border: rgba(148, 135, 124, 0.4); /* muted-stone @ 40% */
+  --color-input: var(--color-muted-stone);
+  --color-ring: var(--color-deep-cognac);
+  --color-chart-1: var(--color-burnt-umber);
+  --color-chart-2: var(--color-muted-stone);
+  --color-chart-3: var(--color-pressed-cacao);
+  --color-chart-4: var(--color-warm-ash);
+  --color-chart-5: var(--color-fire-opal);
+
+  /* Radii — small geometry, 12px buttons, 16px cards. shadcn-card uses
+   * rounded-xl so we set --radius-xl to 16px (Feature Card spec). */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Fonts — Source Serif 4 substitutes for Martina Plantijn Light. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Source Serif 4", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Type scale */
+  --text-caption: 10px;
+  --text-body: 15px;
+  --text-subheading: 20px;
+  --text-heading-sm: 24px;
+  --text-heading: 40px;
+  --text-heading-lg: 56px;
+  --text-display: 64px;
 }
 
-:root,
-:root.light,
-:root.dark {
-  --color-parchment-white: #f1e9e7;
-  --color-midnight-ink: #000000;
-  --color-arctic-frost: #ffffff;
-  --color-slate-gray: #7b7f83;
-  --color-dark-navy: #032F62;
+:root {
+  /* Light Delphi — shadcn CSS variables mirrored on :root. */
+  --background: var(--color-parchment-white);
+  --foreground: var(--color-deep-cognac);
+  --card: var(--color-parchment-white);
+  --card-foreground: var(--color-deep-cognac);
+  --popover: var(--color-parchment-white);
+  --popover-foreground: var(--color-deep-cognac);
+  --primary: var(--color-burnt-umber);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-cloud-fog);
+  --secondary-foreground: var(--color-deep-cognac);
+  --muted: var(--color-cloud-fog);
+  --muted-foreground: var(--color-muted-stone);
+  --accent: var(--color-cloud-fog);
+  --accent-foreground: var(--color-deep-cognac);
+  --destructive: var(--color-fire-opal);
+  --destructive-foreground: var(--color-white);
+  --border: rgba(148, 135, 124, 0.4);
+  --input: var(--color-muted-stone);
+  --ring: var(--color-deep-cognac);
+  --radius: 12px;
 
-  /* Wire Nextra's accent (hue triplet) to DESIGN-2 dark-navy #032F62 ≈ HSL(212°, 94%, 20%) */
-  --nextra-primary-hue: 212deg;
-  --nextra-primary-saturation: 94%;
-  --nextra-primary-lightness: 20%;
+  /* shadcn sidebar slots */
+  --sidebar: var(--color-parchment-white);
+  --sidebar-foreground: var(--color-deep-cognac);
+  --sidebar-primary: var(--color-burnt-umber);
+  --sidebar-primary-foreground: var(--color-white);
+  --sidebar-accent: var(--color-cloud-fog);
+  --sidebar-accent-foreground: var(--color-deep-cognac);
+  --sidebar-border: rgba(148, 135, 124, 0.4);
+  --sidebar-ring: var(--color-deep-cognac);
 }
 
-/* Force light scheme — DESIGN-2 has no dark variant. */
-html,
-html.dark,
-html.light {
-  color-scheme: light !important;
-  background: #f1e9e7 !important;
-  color: #000000 !important;
-}
-
-body {
-  background: #f1e9e7 !important;
-  color: #000000 !important;
-}
-
-/* Nextra's prose / typography classes set their own text colors via Tailwind
- * utility classes baked into compiled components. Override every common one
- * back to midnight-ink so body copy is actually readable on parchment.
+/* Dark Delphi — "Candlelit Cognac". The cognac/parchment relationship is
+ * preserved by inversion: the deep cognac becomes the room (background),
+ * and the cream parchment becomes the page-within-the-room (card surfaces).
  *
- * Excludes `svg *` — Mermaid renders accent-node labels inside
- * `<foreignObject>` with its own `color:#ffffff`, and a blanket `main * {
- * color:#000 }` rule would clobber the white label to black on navy. */
-main,
-main :not(svg, svg *),
-article,
-article :not(svg, svg *),
-.nextra-content,
-.nextra-content :not(svg, svg *) {
-  color: #000000;
+ * Brand-named tokens are REMAPPED in dark mode so every utility that uses
+ * a Delphi role-name (`bg-parchment-white`, `text-deep-cognac`,
+ * `bg-burnt-umber`, etc.) inverts automatically — no class refactor needed
+ * across the gallery and news pages. The role of each token stays stable
+ * (background / primary text / primary CTA / muted text), only the rendered
+ * pigment changes.
+ *
+ * Trade-off: the Palette demo section's swatch labels ("Burnt Umber",
+ * "Cloud Fog") describe their LIGHT-mode pigment by name; the inline-hex
+ * swatches still render the literal color, so the documentation reads
+ * correctly when viewed in light mode (the default). */
+.dark {
+  /* Brand tokens remapped for dark mode (same role, different pigment).
+   * Surface stack pushed one step darker — page reads as near-black with
+   * a warm cognac undertone rather than mid-espresso. */
+  --color-parchment-white: #0d0805;   /* page background → near-black, warm cast */
+  --color-deep-cognac: #f0e6dc;       /* primary text → warm cream */
+  --color-burnt-umber: #f0e6dc;       /* primary CTA bg → cream (parchment-in-lamplight) */
+  --color-cloud-fog: #251910;         /* secondary surface → low-elevation dark */
+  --color-pressed-cacao: #d8ccbe;     /* tertiary text → soft cream */
+  --color-muted-stone: #a99d93;       /* muted text → warm gray (same value, works on dark) */
+  --color-warm-ash: #948880;          /* subtle border accent */
+  --color-dark-charcoal: #f0e6dc;     /* alt deep-text slot → cream */
+  --color-white: #0d0805;             /* "white"-on-cream becomes "espresso"-on-cream — primary-foreground anchor */
+
+  /* shadcn slot mirrors — derive from the remapped brand tokens above.
+   * Card / popover are progressive elevation steps above background. */
+  --background: var(--color-parchment-white);
+  --foreground: var(--color-deep-cognac);
+  --card: #15100a;                    /* one step above near-black */
+  --card-foreground: var(--color-deep-cognac);
+  --popover: #1f1710;                 /* two steps above */
+  --popover-foreground: var(--color-deep-cognac);
+  --primary: var(--color-burnt-umber);
+  --primary-foreground: var(--color-parchment-white);
+  --secondary: var(--color-cloud-fog);
+  --secondary-foreground: var(--color-deep-cognac);
+  --muted: var(--color-cloud-fog);
+  --muted-foreground: var(--color-muted-stone);
+  --accent: var(--color-cloud-fog);
+  --accent-foreground: var(--color-deep-cognac);
+  --destructive: var(--color-fire-opal);
+  --destructive-foreground: var(--color-parchment-white);
+  --border: rgba(240, 230, 220, 0.10);
+  --input: rgba(240, 230, 220, 0.16);
+  --ring: var(--color-deep-cognac);
+
+  /* shadcn sidebar slots — dark */
+  --sidebar: #15100a;
+  --sidebar-foreground: var(--color-deep-cognac);
+  --sidebar-primary: var(--color-burnt-umber);
+  --sidebar-primary-foreground: var(--color-parchment-white);
+  --sidebar-accent: var(--color-cloud-fog);
+  --sidebar-accent-foreground: var(--color-deep-cognac);
+  --sidebar-border: rgba(240, 230, 220, 0.10);
+  --sidebar-ring: var(--color-deep-cognac);
 }
 
-/* Headings — DESIGN-2 prefers serif at editorial scale. */
-h1, h2, h3, h4, h5, h6,
-main h1, main h2, main h3, main h4, main h5, main h6,
-article h1, article h2, article h3, article h4, article h5, article h6 {
-  color: #000000 !important;
-  font-family: "Copernicus", "Charter", "Charter BT", Georgia, "Times New Roman", serif !important;
-  letter-spacing: -0.01em;
+/* In dark mode, GFM alert callouts use the card surface and the warm
+ * cream foreground for body copy. Variant tints stay scaled-down. */
+.dark .markdown-alert {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.dark .markdown-alert * { color: var(--foreground); }
+.dark .markdown-alert .markdown-alert-title { color: var(--muted-foreground); }
+.dark .markdown-alert.markdown-alert-note { background: var(--popover); border-left-color: var(--foreground); }
+.dark .markdown-alert.markdown-alert-note .markdown-alert-title { color: var(--foreground); }
+.dark .markdown-alert.markdown-alert-tip { background: var(--popover); border-left-color: var(--muted-foreground); }
+.dark .markdown-alert.markdown-alert-tip .markdown-alert-title { color: var(--muted-foreground); }
+.dark .markdown-alert.markdown-alert-important { background: var(--popover); border-left-color: var(--foreground); }
+.dark .markdown-alert.markdown-alert-important .markdown-alert-title { color: var(--foreground); }
+.dark .markdown-alert.markdown-alert-warning { background: rgba(255, 92, 0, 0.12); border-left-color: var(--color-sunset-orange); }
+.dark .markdown-alert.markdown-alert-warning .markdown-alert-title { color: var(--color-sunset-orange); }
+.dark .markdown-alert.markdown-alert-caution { background: rgba(246, 87, 38, 0.12); border-left-color: var(--color-fire-opal); }
+.dark .markdown-alert.markdown-alert-caution .markdown-alert-title { color: var(--color-fire-opal); }
+
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Body copy — neutral sans for utilitarian readability. */
+/* Body baseline — Inter sans by default. Source Serif lives on headings. */
 body {
-  font-family: "Helvetica", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01" on, "cv11" on; /* Inter optical refinements */
+  color: var(--color-deep-cognac);
+  background: var(--color-parchment-white);
 }
 
-/* Inline code & code blocks — parchment-aware backgrounds. */
-code:not(pre code) {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #000000 !important;
-}
-/* Background lives only on the outer <pre> — `pre code` stays transparent so
- * the rgba tint doesn't stack on itself (which read as two backgrounds: 6%
- * in the padding strip, 12% under the code). */
-pre {
-  background: rgba(0, 0, 0, 0.06) !important;
-}
-pre code {
-  background: transparent !important;
-  color: #000000 !important;
+/* Mermaid timeline title — rendered as a bare <text> element with inline
+ * font-size="4ex" font-weight="bold" (no class, no CSS hook). Without an
+ * override it reads as a heavy sans-serif slab that fights Delphi's Source
+ * Serif editorial typography. Pull it onto the same heading scale as the
+ * surrounding prose (heading-sm: 24px / weight 400 / -0.48px tracking). */
+svg[aria-roledescription="timeline"] > text[font-size="4ex"][font-weight="bold"] {
+  font-family: "Source Serif 4", ui-serif, Georgia, "Times New Roman", serif !important;
+  font-size: 24px !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.48px !important;
 }
 
-/* Body links — dark navy (the only accent). */
-main a:not([data-no-style]),
-article a:not([data-no-style]),
-.nextra-content a:not([data-no-style]) {
-  color: #032F62 !important;
+/* Mermaid timeline emits dotted vertical "guide lines" that drop from each
+ * era header down past the events. Each one has a marker-end arrowhead
+ * that lands in empty space below the last event — reads as arrows
+ * pointing to nothing. The guide line itself is useful (era→events
+ * visual flow); only the dangling tips are noise. Strip the markers. */
+svg[aria-roledescription="timeline"] .lineWrapper line {
+  marker-end: none !important;
 }
 
-/* Blockquotes / GFM callouts — keep readable, kill the muted-gray default. */
-blockquote,
-blockquote * {
-  color: #000000 !important;
-}
-
-/* GFM alert callouts — remark-github-blockquote-alert rewrites
- * `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`
- * blockquotes into `<div class="markdown-alert markdown-alert-{type}">` with
- * a `<p class="markdown-alert-title">` header. Paint a parchment-friendly
- * tint and a 4px left rail per type. */
+/* GFM alert callouts — restyled to Delphi: 16px radius, Cloud Fog tint
+ * for NOTE, Muted Stone border by default. Soft, scholarly, never harsh. */
 .markdown-alert {
-  background: #f1e9e7 !important;
-  border: 1px solid #000000 !important;
-  border-left-width: 4px !important;
-  color: #000000 !important;
-  border-radius: 0 !important;
-  padding: 12px 16px !important;
-  margin: 1em 0 !important;
+  background: var(--color-parchment-white);
+  border: 1px solid rgba(148, 135, 124, 0.4);
+  border-left-width: 3px;
+  color: var(--color-deep-cognac);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin: 1.5em 0;
 }
-.markdown-alert * { color: #000000 !important; }
+.markdown-alert * { color: var(--color-deep-cognac); }
 .markdown-alert .markdown-alert-title {
   display: flex;
   align-items: center;
-  font-weight: 600;
-  margin: 0 0 4px 0 !important;
-  text-transform: uppercase;
+  font-weight: 500;
+  margin: 0 0 6px 0;
+  font-size: 10px;
   letter-spacing: 0.04em;
-  font-size: 0.85em;
+  text-transform: uppercase;
+  color: var(--color-pressed-cacao);
 }
 .markdown-alert .markdown-alert-title svg.octicon {
   margin-right: 8px;
   fill: currentColor;
 }
-.markdown-alert > p:last-child { margin-bottom: 0 !important; }
+.markdown-alert > p:last-child { margin-bottom: 0; }
 
-/* NOTE — dark-navy (theme accent) */
 .markdown-alert.markdown-alert-note {
-  background: rgba(3, 47, 98, 0.06) !important;
-  border-left-color: #032F62 !important;
+  background: var(--color-cloud-fog);
+  border-left-color: var(--color-burnt-umber);
 }
-.markdown-alert.markdown-alert-note .markdown-alert-title { color: #032F62 !important; }
+.markdown-alert.markdown-alert-note .markdown-alert-title { color: var(--color-burnt-umber); }
 
-/* TIP — forest green */
 .markdown-alert.markdown-alert-tip {
-  background: rgba(10, 127, 63, 0.06) !important;
-  border-left-color: #0a7f3f !important;
+  background: var(--color-cloud-fog);
+  border-left-color: var(--color-pressed-cacao);
 }
-.markdown-alert.markdown-alert-tip .markdown-alert-title { color: #0a7f3f !important; }
+.markdown-alert.markdown-alert-tip .markdown-alert-title { color: var(--color-pressed-cacao); }
 
-/* IMPORTANT — deep violet */
 .markdown-alert.markdown-alert-important {
-  background: rgba(111, 66, 193, 0.06) !important;
-  border-left-color: #6f42c1 !important;
+  background: var(--color-cloud-fog);
+  border-left-color: var(--color-deep-cognac);
 }
-.markdown-alert.markdown-alert-important .markdown-alert-title { color: #6f42c1 !important; }
+.markdown-alert.markdown-alert-important .markdown-alert-title { color: var(--color-deep-cognac); }
 
-/* WARNING — amber */
 .markdown-alert.markdown-alert-warning {
-  background: rgba(181, 137, 0, 0.08) !important;
-  border-left-color: #b58900 !important;
+  background: rgba(255, 92, 0, 0.06);
+  border-left-color: var(--color-sunset-orange);
 }
-.markdown-alert.markdown-alert-warning .markdown-alert-title { color: #b58900 !important; }
+.markdown-alert.markdown-alert-warning .markdown-alert-title { color: var(--color-sunset-orange); }
 
-/* CAUTION — red */
 .markdown-alert.markdown-alert-caution {
-  background: rgba(176, 0, 32, 0.06) !important;
-  border-left-color: #b00020 !important;
+  background: rgba(246, 87, 38, 0.06);
+  border-left-color: var(--color-fire-opal);
 }
-.markdown-alert.markdown-alert-caution .markdown-alert-title { color: #b00020 !important; }
-
-/* Tables */
-table, th, td {
-  border-color: rgba(0, 0, 0, 0.15) !important;
-}
-table td {
-  color: #000000 !important;
-}
-table th {
-  background: #032F62 !important;
-  color: #ffffff !important;
-  border-color: #032F62 !important;
-}
-table th * {
-  color: #ffffff !important;
-}
-
-/* Nextra chrome — navbar, sidebar, TOC. Match the parchment surface. */
-.nextra-navbar,
-.nextra-navbar-blur,
-.nextra-sidebar,
-.nextra-sidebar-container,
-.nextra-toc,
-nav.nextra-toc,
-aside.nextra-sidebar-container {
-  background: #f1e9e7 !important;
-  color: #000000 !important;
-  border-color: #000000 !important;
-}
-
-.nextra-navbar { border-bottom: 1px solid #000000 !important; }
-
-/* Hide the Nextra footer. Nextra 4 ships the footer as a `<footer>` inside a
- * gray-100 wrapper (no semantic class hook), so target the wrapper via `:has()`. */
-body div:has(> footer) {
-  display: none !important;
-}
-
-/* TOC text — visible. Active item gets the dark-navy accent. */
-.nextra-toc a,
-.nextra-sidebar a {
-  color: #000000 !important;
-}
-.nextra-toc a[aria-selected="true"],
-.nextra-toc a.nextra-focus,
-.nextra-sidebar a[aria-current="page"],
-.nextra-sidebar .active {
-  color: #032F62 !important;
-}
-
-/* Sharp corners — DESIGN-2 enforces 0px radius on UI elements. */
-button, input, select, textarea, .nextra-button {
-  border-radius: 0 !important;
-}
-
-/* Search input is hidden (search: false in next.config.mjs disables index)
- * but the slot can still render — hide any stray ⌘K box. */
-.nextra-search { display: none !important; }
-
-/* Renders are URL-only standalone pages — there's no inter-page nav. The
- * left sidebar stays hidden on desktop (it would just be empty); on mobile,
- * the TOC takes its place via the mobile drawer. */
-.nextra-sidebar,
-aside.nextra-sidebar-container > .nextra-sidebar {
-  display: none !important;
-}
-
-/* Move TOC from the right to the left, and force it visible at every
- * breakpoint (Nextra hides it below xl by default). */
-nav.nextra-toc[aria-label="table of contents"] {
-  order: -1 !important;
-  display: block !important;
-}
-
-/* CSS-only mobile TOC drawer.
- *
- * The checkbox + label pattern: tapping the hamburger toggles the checkbox;
- * a sibling-combinator selector slides the TOC in from the left. The
- * backdrop label closes the drawer when tapped outside. No JS.
- */
-.toc-toggle-input { display: none !important; }
-.toc-toggle-label,
-.toc-toggle-backdrop { display: none; }
-
-@media (max-width: 767px) {
-  /* Hide Nextra's built-in mobile hamburger — we use our own (below) so
-   * the same toggle controls our TOC drawer rather than Nextra's empty
-   * page-tree drawer. */
-  .nextra-hamburger,
-  button.nextra-hamburger {
-    display: none !important;
-  }
-
-  /* Hamburger button — fixed top-left, above everything else. */
-  .toc-toggle-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 0.75rem;
-    left: 0.75rem;
-    z-index: 60;
-    width: 2.5rem;
-    height: 2.5rem;
-    background: #f1e9e7;
-    color: #000;
-    border: 1px solid #000;
-    cursor: pointer;
-    font-size: 1.6rem;
-    line-height: 1;
-    user-select: none;
-  }
-
-  /* Push the navbar's content over so the wordmark doesn't sit beneath the
-   * hamburger button. */
-  .nextra-navbar nav {
-    padding-left: 3.75rem !important;
-  }
-
-  /* Backdrop — only visible while drawer is open; tapping closes it. */
-  .toc-toggle-input:checked ~ .toc-toggle-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 54;
-  }
-
-  /* TOC becomes a fixed slide-out drawer from the left (matching the
-   * left-side hamburger position); off-screen by default. */
-  nav.nextra-toc[aria-label="table of contents"] {
-    position: fixed !important;
-    top: 0 !important;
-    left: -100% !important;
-    right: auto !important;
-    width: 80% !important;
-    max-width: 320px !important;
-    height: 100vh !important;
-    background: #f1e9e7 !important;
-    border-right: 1px solid #000 !important;
-    z-index: 55 !important;
-    overflow-y: auto !important;
-    padding: 4rem 1rem 2rem !important;
-    transition: left 0.2s ease !important;
-    margin: 0 !important;
-  }
-  /* When checkbox is checked, slide TOC into view. The `~ *` reaches into
-   * the Layout subtree where the TOC lives. */
-  .toc-toggle-input:checked ~ * nav.nextra-toc[aria-label="table of contents"] {
-    left: 0 !important;
-  }
-}
+.markdown-alert.markdown-alert-caution .markdown-alert-title { color: var(--color-fire-opal); }

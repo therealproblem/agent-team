@@ -1,25 +1,24 @@
 /*
- * /news — view today's news store as an HTML page.
+ * /news — view today's news store, restyled to the Delphi design language.
  *
  * Reads .pi/state/news.json and .pi/state/news-sources.json directly from
  * disk on each request (force-dynamic) so the page always reflects the
  * latest scrape — including writes from the cron, /news-refresh, and the
  * news-ingest extension's tools.
  *
- * Toggle is link-based (?view=highlights|all) so no client JS needed:
- *   highlights → top 3 items per topic
- *   all        → every item per topic
- *
- * Topic order follows the source registry. Topics with zero items in the
- * store are still listed so absences are visible (helps spot a feed that
- * silently broke).
+ * Each topic shows HIGHLIGHTS_PER_TOPIC items by default with a per-topic
+ * "Show all" toggle. Expanded topics are tracked via the `all=` query param
+ * (comma-separated topic names) — link-based, no client JS, no global mode.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import BookmarkButton from "./BookmarkButton";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "News · agents-team" };
 
 const STATE_ROOT = process.env.AGENTS_TEAM_STATE_PATH
   ? resolve(process.env.AGENTS_TEAM_STATE_PATH)
@@ -87,13 +86,33 @@ function lastFetchLine(items: NewsItem[]): string {
   return `last scrape ${formatRelative(new Date(max).toISOString())}`;
 }
 
+function parseAllParam(raw: string | string[] | undefined): Set<string> {
+  if (!raw) return new Set();
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return new Set(
+    value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
+/** Toggle a topic in/out of the `all=` set and return the next URL. */
+function toggleTopicUrl(expanded: Set<string>, topic: string): string {
+  const next = new Set(expanded);
+  if (next.has(topic)) next.delete(topic);
+  else next.add(topic);
+  const list = [...next].join(",");
+  return list ? `/news?all=${encodeURIComponent(list)}` : "/news";
+}
+
 export default async function NewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ all?: string | string[] }>;
 }) {
-  const { view } = await searchParams;
-  const mode: "highlights" | "all" = view === "all" ? "all" : "highlights";
+  const params = await searchParams;
+  const expanded = parseAllParam(params.all);
 
   const store = readJson<{ items: NewsItem[] }>(STORE_PATH, { items: [] });
   const sources = readJson<Record<string, string[]>>(SOURCES_PATH, {});
@@ -109,189 +128,143 @@ export default async function NewsPage({
   for (const arr of itemsByTopic.values()) arr.sort(comparePublishedDesc);
 
   const orderedTopics =
-    topics.length > 0
-      ? topics
-      : [...itemsByTopic.keys()].sort();
+    topics.length > 0 ? topics : [...itemsByTopic.keys()].sort();
 
   const totalShown = orderedTopics.reduce((acc, topic) => {
     const all = itemsByTopic.get(topic) ?? [];
-    return acc + (mode === "highlights" ? Math.min(all.length, HIGHLIGHTS_PER_TOPIC) : all.length);
+    return acc + (expanded.has(topic) ? all.length : Math.min(all.length, HIGHLIGHTS_PER_TOPIC));
   }, 0);
 
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: "48rem", margin: "0 auto" }}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ margin: 0, fontSize: "1.5rem" }}>News</h1>
-        <p style={{ margin: "0.25rem 0 0", color: "var(--color-slate-gray)", fontSize: "0.875rem" }}>
-          {lastFetchLine(store.items)} · {totalShown} item{totalShown === 1 ? "" : "s"} shown
-        </p>
-        {/*
-         * Inline <style> for the segmented control. Two reasons we can't
-         * just use inline styles on the <a>: (1) Nextra's global anchor
-         * styling sets a blue link color with high specificity that beat
-         * our inline `color`, which is why "Highlights" was rendering as
-         * blue-on-black; (2) we want a real :hover state. Scoped class
-         * names keep this from leaking elsewhere.
-         */}
-        <style>{`
-          .news-tabs {
-            display: inline-flex;
-            margin-top: 1rem;
-            padding: 2px;
-            background: rgba(0, 0, 0, 0.04);
-            border: 1px solid rgba(0, 0, 0, 0.12);
-            border-radius: 999px;
-            font-size: 0.875rem;
-            font-weight: 500;
-          }
-          .news-tab {
-            padding: 0.4rem 1rem;
-            border-radius: 999px;
-            text-decoration: none !important;
-            color: #032F62 !important;
-            background: transparent;
-            transition: background-color 120ms ease, color 120ms ease;
-          }
-          .news-tab:hover {
-            background: rgba(3, 47, 98, 0.08);
-          }
-          .news-tab[aria-selected="true"] {
-            background: #032F62;
-            color: #ffffff !important;
-          }
-          .news-tab[aria-selected="true"]:hover {
-            background: #04407c;
-          }
-          .news-bookmark-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.5rem;
-            height: 1.5rem;
-            padding: 0;
-            margin-right: 0.4rem;
-            border: none;
-            background: transparent;
-            color: var(--color-slate-gray);
-            cursor: pointer;
-            vertical-align: -0.25rem;
-            border-radius: 4px;
-            transition: color 120ms ease, background-color 120ms ease;
-          }
-          .news-bookmark-btn:hover:not(:disabled) {
-            color: #032F62;
-            background: rgba(3, 47, 98, 0.08);
-          }
-          .news-bookmark-btn.is-on {
-            color: #032F62;
-          }
-          .news-bookmark-btn.is-on:hover:not(:disabled) {
-            color: #04407c;
-          }
-          .news-bookmark-btn:disabled {
-            opacity: 0.5;
-            cursor: progress;
-          }
-          .news-bookmark-btn.is-error {
-            color: #c0392b;
-          }
-        `}</style>
-        <nav className="news-tabs" role="tablist" aria-label="View">
-          <a
-            href="/news?view=highlights"
-            role="tab"
-            aria-selected={mode === "highlights"}
-            className="news-tab"
-          >
-            Highlights
-          </a>
-          <a
-            href="/news?view=all"
-            role="tab"
-            aria-selected={mode === "all"}
-            className="news-tab"
-          >
-            All
-          </a>
-        </nav>
-      </header>
-
-      {orderedTopics.length === 0 ? (
-        <p>No news.</p>
-      ) : (
-        orderedTopics.map((topic) => {
-          const all = itemsByTopic.get(topic) ?? [];
-          const items = mode === "highlights" ? all.slice(0, HIGHLIGHTS_PER_TOPIC) : all;
-          return (
-            <section key={topic} style={{ marginBottom: "2rem" }}>
-              <h2
-                style={{
-                  fontSize: "1rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--color-slate-gray)",
-                  paddingBottom: "0.25rem",
-                  margin: "0 0 0.75rem",
-                }}
+    <main className="bg-background min-h-screen">
+      <div className="mx-auto max-w-3xl px-6 md:px-10 py-12 md:py-16">
+        {/* Header */}
+        <header className="space-y-4 mb-12">
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-3 min-w-0">
+              <p className="font-sans text-[10px] leading-[1.2] tracking-[0.1em] uppercase font-medium text-pressed-cacao">
+                Today &middot; The Briefing
+              </p>
+              <h1 className="font-serif font-light text-[56px] leading-[1.1] tracking-[-1.23px] text-deep-cognac">
+                News
+              </h1>
+            </div>
+            <form action="/news/refresh" method="POST" className="shrink-0 pt-1">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-[12px] bg-transparent border border-muted-stone text-deep-cognac hover:bg-cloud-fog hover:border-deep-cognac font-sans font-medium text-[15px] transition-colors"
               >
-                {topic}
-                {mode === "highlights" && all.length > HIGHLIGHTS_PER_TOPIC ? (
-                  <span style={{ float: "right", fontWeight: "normal", fontSize: "0.75rem", color: "var(--color-slate-gray)" }}>
-                    {items.length} of {all.length}
-                  </span>
-                ) : null}
-              </h2>
-              {items.length === 0 ? (
-                <p style={{ color: "var(--color-slate-gray)", fontSize: "0.875rem", margin: 0 }}>
-                  No items.
-                </p>
-              ) : (
-                <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {items.map((item) => {
-                    const bookmark = item.url ? bookmarks[item.url] : undefined;
-                    return (
-                    <li key={item.id} style={{ marginBottom: "1rem" }}>
-                      <div>
-                        <BookmarkButton
-                          id={item.id}
-                          initialBookmarked={Boolean(bookmark)}
-                          initialVaultPath={bookmark?.vault_path ?? null}
-                        />
-                        {item.url ? (
-                          <a href={item.url} target="_blank" rel="noopener noreferrer">
-                            {item.title || "(untitled)"}
-                          </a>
-                        ) : (
-                          <span>{item.title || "(untitled)"}</span>
-                        )}
-                      </div>
-                      {item.summary ? (
-                        <p
-                          style={{
-                            margin: "0.25rem 0 0",
-                            fontSize: "0.875rem",
-                            lineHeight: "1.4",
-                            color: "var(--color-midnight-ink)",
-                          }}
-                        >
-                          {item.summary}
-                        </p>
+                <RefreshCw className="size-4" strokeWidth={1.75} />
+                Refresh
+              </button>
+            </form>
+          </div>
+          <p className="font-sans text-[15px] leading-[1.4] tracking-[-0.01em] text-muted-stone">
+            {lastFetchLine(store.items)} &middot; {totalShown} item
+            {totalShown === 1 ? "" : "s"} shown. Each topic shows {HIGHLIGHTS_PER_TOPIC} highlights —
+            expand below for the rest.
+          </p>
+        </header>
+
+        {/* Topics */}
+        {orderedTopics.length === 0 ? (
+          <p className="font-sans text-[15px] text-muted-stone">No news.</p>
+        ) : (
+          <div className="space-y-10">
+            {orderedTopics.map((topic) => {
+              const all = itemsByTopic.get(topic) ?? [];
+              const isExpanded = expanded.has(topic);
+              const hasMore = all.length > HIGHLIGHTS_PER_TOPIC;
+              const items = isExpanded ? all : all.slice(0, HIGHLIGHTS_PER_TOPIC);
+              const toggleHref = toggleTopicUrl(expanded, topic);
+
+              return (
+                <section key={topic} className="rounded-[16px] bg-card border border-border p-5 md:p-6">
+                  {/* Topic header */}
+                  <header className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <h2 className="font-sans text-[10px] leading-[1.2] tracking-[0.1em] uppercase font-medium text-pressed-cacao">
+                        {topic}
+                      </h2>
+                      {all.length > 0 ? (
+                        <span className="font-mono text-[10px] tracking-[0.05em] uppercase text-muted-stone">
+                          {isExpanded ? all.length : Math.min(all.length, HIGHLIGHTS_PER_TOPIC)} / {all.length}
+                        </span>
                       ) : null}
-                      {item.source ? (
-                        <div style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "var(--color-slate-gray)" }}>
-                          {item.source}
-                          {item.published_at ? ` · ${formatRelative(item.published_at)}` : ""}
-                        </div>
-                      ) : null}
-                    </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </section>
-          );
-        })
-      )}
+                    </div>
+                  </header>
+
+                  {/* Items */}
+                  {items.length === 0 ? (
+                    <p className="font-sans text-[15px] text-muted-stone">No items.</p>
+                  ) : (
+                    <ol className="divide-y divide-border/60">
+                      {items.map((item) => {
+                        const bookmark = item.url ? bookmarks[item.url] : undefined;
+                        return (
+                          <li key={item.id} className="flex gap-3 py-4 first:pt-0 last:pb-0">
+                            <BookmarkButton
+                              id={item.id}
+                              initialBookmarked={Boolean(bookmark)}
+                              initialVaultPath={bookmark?.vault_path ?? null}
+                            />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              {item.url ? (
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-serif font-normal text-[20px] leading-[1.2] tracking-[-0.48px] text-deep-cognac hover:text-burnt-umber underline-offset-4 hover:underline decoration-burnt-umber/40"
+                                >
+                                  {item.title || "(untitled)"}
+                                </a>
+                              ) : (
+                                <span className="font-serif font-normal text-[20px] leading-[1.2] tracking-[-0.48px] text-deep-cognac">
+                                  {item.title || "(untitled)"}
+                                </span>
+                              )}
+                              {item.summary ? (
+                                <p className="font-sans text-[15px] leading-[1.4] tracking-[-0.01em] text-pressed-cacao">
+                                  {item.summary}
+                                </p>
+                              ) : null}
+                              {item.source ? (
+                                <div className="font-sans text-[10px] leading-[1.2] tracking-[0.1em] uppercase font-medium text-muted-stone pt-1">
+                                  {item.source}
+                                  {item.published_at
+                                    ? ` · ${formatRelative(item.published_at)}`
+                                    : ""}
+                                </div>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+
+                  {/* Per-topic toggle */}
+                  {hasMore ? (
+                    <div className="pt-5 mt-5 border-t border-border/60">
+                      <Link
+                        href={toggleHref}
+                        scroll={false}
+                        className="inline-flex items-center gap-1.5 font-sans text-[13px] font-medium text-burnt-umber hover:text-deep-cognac"
+                        data-no-style
+                      >
+                        {isExpanded
+                          ? `Show highlights only`
+                          : `Show all ${all.length}`}
+                        <span aria-hidden="true">{isExpanded ? "↑" : "↓"}</span>
+                      </Link>
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </main>
   );
 }
