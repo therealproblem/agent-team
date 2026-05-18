@@ -184,6 +184,14 @@ function Pre({ className, children, ...rest }: ComponentProps<"pre">) {
 }
 
 function InlineCode({ className, ...rest }: ComponentProps<"code">) {
+  const isBlock =
+    "data-language" in rest ||
+    (typeof className === "string" && className.includes("language-"));
+
+  if (isBlock) {
+    return <code className={cn("font-mono", className)} {...rest} />;
+  }
+
   return (
     <code
       className={cn(
