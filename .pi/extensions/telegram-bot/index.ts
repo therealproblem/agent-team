@@ -51,7 +51,7 @@ import { api } from "./api";
 import { parseAllowedChats, type DispatcherContext } from "./dispatcher";
 import * as loop from "./loop";
 import * as receiver from "./receiver";
-import { onAgentEnd, onBeforeAgentStart, setCtx } from "./driver";
+import { onAgentEnd, onBeforeAgentStart, setCtx, shutdown as shutdownDriver } from "./driver";
 
 loadDotenv();
 
@@ -62,7 +62,6 @@ const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 
 type TgState = "pending" | "ready" | "errored" | "off";
 
-let lastTg: TgState = "off";
 let pendingTimer: ReturnType<typeof setInterval> | null = null;
 let pendingFrame = 0;
 
@@ -74,7 +73,6 @@ function stopPending(): void {
 }
 
 function setTg(ctx: ExtensionContext | undefined, value: TgState): void {
-	lastTg = value;
 	if (!ctx) return;
 	try {
 		if (value === "off") {
@@ -155,8 +153,12 @@ function writeEnvVar(key: string, value: string): boolean {
 export default function (pi: ExtensionAPI): void {
 	pi.registerMessageRenderer("telegram-bot", createBoxRenderer());
 
-	let booted = false;
 	let dctx: DispatcherContext | undefined;
+	// Flipped to false when this module's runner is torn down (session_shutdown).
+	// Guards against the race where session_start fires bringUp, /reload comes
+	// in mid-flight, and the in-flight bringUp wakes up after tear-down and
+	// starts a transport against an invalid `pi`.
+	let alive = true;
 
 	async function configureBot(): Promise<{
 		ok: boolean;
@@ -182,18 +184,17 @@ export default function (pi: ExtensionAPI): void {
 	 *
 	 *   /start    — bot-only: bootstrap reply with the chat id
 	 *   /stop     — bot-only: cancel the in-flight agent turn
-	 *   /command  — bot-only: opens an inline keyboard of pi's commands
 	 *
-	 * We don't try to mirror pi's full command list here because Telegram's
-	 * bot command names are constrained to `[a-z0-9_]{1,32}` (no hyphens or
-	 * colons) and pi commands can't be executed remotely via the extension
-	 * API anyway — `/command` is the discovery surface for them instead.
+	 * We don't surface pi's slash commands (/new, /resume, /fork, /export …)
+	 * here. Pi's extension API has no path for triggering them from outside
+	 * the TUI editor: `pi.sendUserMessage()` hard-codes
+	 * `expandPromptTemplates: false`, so any injected "/foo" reaches the
+	 * agent as raw text and never invokes pi's command handler.
 	 */
 	function buildBotCommands(): { command: string; description: string }[] {
 		return [
 			{ command: "start", description: "show this chat's id / onboarding info" },
 			{ command: "stop", description: "cancel the in-flight agent turn" },
-			{ command: "command", description: "list pi commands as buttons" },
 		];
 	}
 
@@ -224,9 +225,15 @@ export default function (pi: ExtensionAPI): void {
 
 		dctx = { allowedChats, botUsername };
 
+		if (!alive) return { ok: false, message: "torn down mid-bring-up" };
+
 		if (isWebhookMode()) {
 			try {
 				await receiver.start(pi, dctx);
+				if (!alive) {
+					await receiver.stop();
+					return { ok: false, message: "torn down mid-bring-up" };
+				}
 				await api.setWebhook(
 					webhookUrl(),
 					process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
@@ -245,6 +252,7 @@ export default function (pi: ExtensionAPI): void {
 		// Long-poll mode.
 		try {
 			await api.deleteWebhook().catch(() => undefined);
+			if (!alive) return { ok: false, message: "torn down mid-bring-up" };
 			if (!loop.isRunning()) {
 				void loop.start(pi, dctx, (h) => setTg(ctx, h === "running" ? "ready" : "errored"));
 			}
@@ -354,7 +362,6 @@ export default function (pi: ExtensionAPI): void {
 				surface(pi, `telegram-connect: ${result.message ?? "failed"}`);
 				return;
 			}
-			booted = true;
 
 			await surfaceConnected(ctx, cfg.username ?? "?");
 		},
@@ -463,14 +470,18 @@ export default function (pi: ExtensionAPI): void {
 
 	// ---------- lifecycle ----------
 
-	pi.on("session_start", (event, ctx) => {
+	// Pi re-evaluates extension JS modules on every session swap (/reload,
+	// /new, /resume, /fork). That means module-level state (dctx, the loop's
+	// `running` flag, the driver's `latestCtx`, etc.) resets on every
+	// transition. To keep the bot alive across these, we:
+	//
+	//   - On session_start (any reason): connect afresh if a token is set.
+	//   - On session_shutdown (any reason): cleanly stop *this* module's loop
+	//     / webhook BEFORE the runtime is invalidated, so the dying module's
+	//     dispatcher doesn't fire against a stale pi. The next module's
+	//     session_start starts a fresh loop with the new pi.
+	pi.on("session_start", (_event, ctx) => {
 		setCtx(ctx);
-
-		// Re-publish whatever footer state we remembered (handles /new /reload).
-		setTg(ctx, lastTg);
-
-		if (event.reason !== "startup" && event.reason !== "reload") return;
-		if (booted && event.reason !== "reload") return;
 
 		// Silent fast-path: no token → stay completely dormant. Slash commands
 		// stay registered so the user can /telegram-setup later.
@@ -479,7 +490,6 @@ export default function (pi: ExtensionAPI): void {
 			return;
 		}
 
-		booted = true;
 		setTg(ctx, "pending");
 
 		void (async () => {
@@ -504,6 +514,23 @@ export default function (pi: ExtensionAPI): void {
 		})();
 	});
 
+	// Fires on *this* module's runner before pi tears it down (for any reason:
+	// quit, reload, new, resume, fork). The dispatcher captures `pi` in its
+	// closure, so leaving the loop running after invalidation makes
+	// `pi.sendUserMessage` throw on the next incoming update. Stop cleanly
+	// here. We don't bother with `deleteWebhook` — the next module's
+	// `setWebhook` (or `getUpdates` switch to long-poll) overwrites Telegram's
+	// state, and skipping the HTTP round-trip keeps /reload snappy.
+	pi.on("session_shutdown", async () => {
+		alive = false;
+		stopPending();
+		loop.stop();
+		shutdownDriver();
+		if (isWebhookMode()) {
+			await receiver.stop();
+		}
+	});
+
 	// Hook agent loop events so we can route Telegram-originated turns back.
 	pi.on("before_agent_start", (event) => {
 		onBeforeAgentStart(event.prompt);
@@ -513,17 +540,26 @@ export default function (pi: ExtensionAPI): void {
 		void onAgentEnd((event.messages as never) ?? []);
 	});
 
-	// Cleanup. Same belt-and-braces pattern as the server extension.
-	const cleanup = (): void => {
-		stopPending();
-		if (isWebhookMode()) {
-			void api.deleteWebhook().catch(() => undefined);
-			void receiver.stop();
-		} else {
+	// Process-level cleanup as belt-and-braces for abrupt exits (Ctrl-C, kill
+	// -9). Registered once per node process via a globalThis sentinel —
+	// otherwise every module reload would stack another listener. The handler
+	// reads `loop` and `receiver` from this module's bindings; that's fine
+	// because the latest module instance is the one whose transports are
+	// actually live (previous instances stopped themselves in
+	// session_shutdown).
+	const CLEANUP_SENTINEL = Symbol.for("agents-team-telegram-bot-process-cleanup");
+	if (!(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL]) {
+		(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL] = true;
+		const cleanup = (): void => {
+			stopPending();
 			loop.stop();
-		}
-	};
-	process.on("exit", cleanup);
-	process.on("SIGINT", cleanup);
-	process.on("SIGTERM", cleanup);
+			if (isWebhookMode()) {
+				void api.deleteWebhook().catch(() => undefined);
+				void receiver.stop();
+			}
+		};
+		process.on("exit", cleanup);
+		process.on("SIGINT", cleanup);
+		process.on("SIGTERM", cleanup);
+	}
 }
