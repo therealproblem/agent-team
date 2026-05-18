@@ -71,11 +71,12 @@ export async function start(
 				running = false;
 				break;
 			}
-			// 409 Conflict happens if a webhook is still registered. Try to
-			// clear it once before backing off — defensive against a stale
-			// webhook from a previous run/mode.
+			// 409 Conflict happens if a webhook is still registered with
+			// Telegram from any source (older build that supported webhook
+			// mode, a manual setWebhook call, etc.). Clear it once before
+			// backing off so polling can take over.
 			if (/409|Conflict/.test(msg)) {
-				surface(pi, "telegram-bot: getUpdates conflict (webhook still active?) — calling deleteWebhook");
+				surface(pi, "telegram-bot: getUpdates conflict (stale webhook?) — calling deleteWebhook");
 				try {
 					await api.deleteWebhook();
 				} catch {

@@ -1,9 +1,9 @@
 /**
- * dispatch — single entry point both transports call.
+ * dispatch — single entry point the transport calls.
  *
- * Long-poll (loop.ts) and webhook (receiver.ts) both produce a
- * `TelegramUpdate` and call `dispatch(update, pi, ctx)`. The split between
- * decide() (pure) and the per-kind handlers (impure) makes this very thin.
+ * Long-poll (loop.ts) produces a `TelegramUpdate` and calls
+ * `dispatch(update, pi, ctx)`. The split between decide() (pure) and the
+ * per-kind handlers (impure) makes this very thin.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

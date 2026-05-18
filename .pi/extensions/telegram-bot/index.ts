@@ -15,11 +15,10 @@
  *
  *   Connect always: validates the token via getMe → registers the bot's
  *   slash commands and Menu button with Telegram (setMyCommands +
- *   setChatMenuButton, idempotent) → starts the transport (webhook or
- *   long-poll based on AGENTS_TEAM_SERVER_PUBLIC_URL) → surfaces status. If
- *   TELEGRAM_ALLOWED_CHATS is empty after the bot is live, surfaces a
- *   bootstrap hint telling the user to DM the bot /start to get their
- *   chat_id.
+ *   setChatMenuButton, idempotent) → starts the long-poll transport →
+ *   surfaces status. If TELEGRAM_ALLOWED_CHATS is empty after the bot is
+ *   live, surfaces a bootstrap hint telling the user to DM the bot /start
+ *   to get their chat_id.
  *
  * Boot policy:
  *   - On `session_start`, if TELEGRAM_BOT_TOKEN is not set, the extension
@@ -28,11 +27,6 @@
  *     stays registered so the user can opt in any time via
  *     /telegram-connect <token>.
  *   - If a token IS set, the extension brings itself up automatically.
- *
- * Transport choice:
- *   - AGENTS_TEAM_SERVER_PUBLIC_URL set → webhook mode: loopback receiver +
- *     setWebhook against the public URL.
- *   - Unset → long-poll mode: getUpdates loop.
  *
  * Pi event subscriptions:
  *   - before_agent_start: claim the loop if the prompt carries our sigil.
@@ -50,7 +44,6 @@ import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 import { api } from "./api";
 import { parseAllowedChats, type DispatcherContext } from "./dispatcher";
 import * as loop from "./loop";
-import * as receiver from "./receiver";
 import { onAgentEnd, onBeforeAgentStart, setCtx, shutdown as shutdownDriver } from "./driver";
 
 loadDotenv();
@@ -109,15 +102,6 @@ function setTg(ctx: ExtensionContext | undefined, value: TgState): void {
 
 function surface(pi: ExtensionAPI, text: string, details?: object): void {
 	surfaceShared(pi, "telegram-bot", text, details);
-}
-
-function isWebhookMode(): boolean {
-	return Boolean(process.env.AGENTS_TEAM_SERVER_PUBLIC_URL);
-}
-
-function webhookUrl(): string {
-	const base = (process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "").replace(/\/$/, "");
-	return `${base}/telegram/webhook`;
 }
 
 function envPath(): string {
@@ -227,30 +211,8 @@ export default function (pi: ExtensionAPI): void {
 
 		if (!alive) return { ok: false, message: "torn down mid-bring-up" };
 
-		if (isWebhookMode()) {
-			try {
-				await receiver.start(pi, dctx);
-				if (!alive) {
-					await receiver.stop();
-					return { ok: false, message: "torn down mid-bring-up" };
-				}
-				await api.setWebhook(
-					webhookUrl(),
-					process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
-					["message", "callback_query"],
-				);
-				setTg(ctx, "ready");
-				return { ok: true, message: `webhook registered at ${webhookUrl()}` };
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err);
-				setTg(ctx, "errored");
-				await receiver.stop();
-				return { ok: false, message: `webhook setup failed — ${msg}` };
-			}
-		}
-
-		// Long-poll mode.
 		try {
+			// Clear any stale webhook registered by an earlier build that supported webhook mode.
 			await api.deleteWebhook().catch(() => undefined);
 			if (!alive) return { ok: false, message: "torn down mid-bring-up" };
 			if (!loop.isRunning()) {
@@ -433,8 +395,8 @@ export default function (pi: ExtensionAPI): void {
 		}
 
 		// Push the new allowlist into the live dispatcher context so the change
-		// takes effect without a /telegram-connect retry. The receiver / loop
-		// hold the same dctx object by reference; mutating in place is enough.
+		// takes effect without a /telegram-connect retry. The loop holds the
+		// same dctx object by reference; mutating in place is enough.
 		const next = parseAllowedChats(merged);
 		if (dctx) {
 			dctx.allowedChats.clear();
@@ -477,9 +439,9 @@ export default function (pi: ExtensionAPI): void {
 	//
 	//   - On session_start (any reason): connect afresh if a token is set.
 	//   - On session_shutdown (any reason): cleanly stop *this* module's loop
-	//     / webhook BEFORE the runtime is invalidated, so the dying module's
-	//     dispatcher doesn't fire against a stale pi. The next module's
-	//     session_start starts a fresh loop with the new pi.
+	//     BEFORE the runtime is invalidated, so the dying module's dispatcher
+	//     doesn't fire against a stale pi. The next module's session_start
+	//     starts a fresh loop with the new pi.
 	pi.on("session_start", (_event, ctx) => {
 		setCtx(ctx);
 
@@ -517,18 +479,12 @@ export default function (pi: ExtensionAPI): void {
 	// Fires on *this* module's runner before pi tears it down (for any reason:
 	// quit, reload, new, resume, fork). The dispatcher captures `pi` in its
 	// closure, so leaving the loop running after invalidation makes
-	// `pi.sendUserMessage` throw on the next incoming update. Stop cleanly
-	// here. We don't bother with `deleteWebhook` — the next module's
-	// `setWebhook` (or `getUpdates` switch to long-poll) overwrites Telegram's
-	// state, and skipping the HTTP round-trip keeps /reload snappy.
-	pi.on("session_shutdown", async () => {
+	// `pi.sendUserMessage` throw on the next incoming update. Stop cleanly here.
+	pi.on("session_shutdown", () => {
 		alive = false;
 		stopPending();
 		loop.stop();
 		shutdownDriver();
-		if (isWebhookMode()) {
-			await receiver.stop();
-		}
 	});
 
 	// Hook agent loop events so we can route Telegram-originated turns back.
@@ -542,21 +498,15 @@ export default function (pi: ExtensionAPI): void {
 
 	// Process-level cleanup as belt-and-braces for abrupt exits (Ctrl-C, kill
 	// -9). Registered once per node process via a globalThis sentinel —
-	// otherwise every module reload would stack another listener. The handler
-	// reads `loop` and `receiver` from this module's bindings; that's fine
-	// because the latest module instance is the one whose transports are
-	// actually live (previous instances stopped themselves in
-	// session_shutdown).
+	// otherwise every module reload would stack another listener. The latest
+	// module instance is the one whose loop is actually live (previous
+	// instances stopped themselves in session_shutdown).
 	const CLEANUP_SENTINEL = Symbol.for("agents-team-telegram-bot-process-cleanup");
 	if (!(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL]) {
 		(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL] = true;
 		const cleanup = (): void => {
 			stopPending();
 			loop.stop();
-			if (isWebhookMode()) {
-				void api.deleteWebhook().catch(() => undefined);
-				void receiver.stop();
-			}
 		};
 		process.on("exit", cleanup);
 		process.on("SIGINT", cleanup);

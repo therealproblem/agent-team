@@ -1,11 +1,9 @@
 /**
  * state — on-disk persistence for the telegram-bot extension.
  *
- * Three kinds of files in `.pi/state/telegram/`:
+ * Two kinds of files in `.pi/state/telegram/`:
  *   - `<chat_id>.json` — per-chat metadata. Created lazily on first contact.
  *   - `_offset.json`   — long-poll cursor (last seen update_id + 1).
- *   - `_loopback.json` — webhook-mode rendezvous: { port, token } the Next.js
- *                        route handler reads to forward updates into pi.
  *
  * All writes are atomic via tmpfile + rename. The read paths tolerate missing
  * files and corrupt JSON (treated as "no state").
@@ -82,32 +80,4 @@ export function loadOffset(): number {
 
 export function saveOffset(offset: number): void {
 	writeJson(OFFSET_PATH, { offset });
-}
-
-// ---------- webhook loopback rendezvous ----------
-
-export interface LoopbackInfo {
-	port: number;
-	token: string;
-	pid: number;
-}
-
-const LOOPBACK_PATH = join(STATE_DIR, "_loopback.json");
-
-export function loadLoopback(): LoopbackInfo | undefined {
-	return readJson<LoopbackInfo>(LOOPBACK_PATH);
-}
-
-export function saveLoopback(info: LoopbackInfo): void {
-	writeJson(LOOPBACK_PATH, info);
-}
-
-export function clearLoopback(): void {
-	try {
-		// Atomic-ish: write an empty marker so the Next.js route handler sees
-		// "no loopback" (rather than racing on file removal).
-		writeJson(LOOPBACK_PATH, {});
-	} catch {
-		// best-effort
-	}
 }

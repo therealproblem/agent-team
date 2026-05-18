@@ -118,7 +118,7 @@ The Layer 3 skills are usable from any persona without a swap:
 
 ## Telegram channel
 
-You can be invoked from Telegram via the `telegram-bot` extension (long-poll or webhook mode, picked automatically by env var). When that channel is wired up, user turns from Telegram arrive in your context prefixed like:
+You can be invoked from Telegram via the `telegram-bot` extension. When that channel is wired up, user turns from Telegram arrive in your context prefixed like:
 
 ```
 [From Telegram @alice] the demo isn't ready though
