@@ -62,7 +62,7 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { loadDotenv } from "../../lib/dotenv";
+import { loadDotenv, reloadDotenv } from "../../lib/dotenv";
 
 loadDotenv();
 
@@ -77,8 +77,14 @@ const SERVER_ROOT = resolve(
 const EXPORT_ROOT = resolve(
 	process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
 );
-const SERVER_PUBLIC_URL =
-	process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "http://localhost:8080";
+
+// Resolve fresh per call so a `.env` edit after pi launches is picked up
+// without a restart. Shell-exported values still win (reloadDotenv won't
+// clobber keys it didn't originally source from `.env`).
+function serverPublicUrl(): string {
+	reloadDotenv();
+	return process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ?? "http://localhost:8080";
+}
 
 function resolveChromeBinary(): string | null {
 	if (process.env.AGENTS_TEAM_CHROME_PATH) return process.env.AGENTS_TEAM_CHROME_PATH;
@@ -244,7 +250,7 @@ const writeHtmlRender = defineTool({
 		const slug = `${todayIso()}-${slugify(params.title)}`;
 		const dir = join(SERVER_ROOT, "content", "v");
 		const path = join(dir, `${slug}.mdx`);
-		const url = `${SERVER_PUBLIC_URL}/v/${slug}`;
+		const url = `${serverPublicUrl()}/v/${slug}`;
 
 		try {
 			if (!existsSync(dir)) {
@@ -318,7 +324,7 @@ const writeExportPdf = defineTool({
 		const tmpDir = join(SERVER_ROOT, ".export-tmp");
 		const htmlPath = join(tmpDir, `${slug}.html`);
 		const pdfPath = join(pdfDir, `${slug}.pdf`);
-		const pdfUrl = `${SERVER_PUBLIC_URL}/p/${slug}.pdf`;
+		const pdfUrl = `${serverPublicUrl()}/p/${slug}.pdf`;
 
 		try {
 			if (!existsSync(pdfDir)) await mkdir(pdfDir, { recursive: true });
