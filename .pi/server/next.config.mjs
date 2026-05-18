@@ -8,6 +8,12 @@ export default {
   reactStrictMode: true,
   // Don't leak local filesystem paths in production source maps.
   productionBrowserSourceMaps: false,
+  // `@terrastruct/d2` ships a 21MB WASM blob + a 100k-line ELK bundle.
+  // Letting webpack pull all of that into the server bundle on every dev
+  // request takes minutes per page. Externalizing it makes Next.js
+  // require() the package from node_modules at runtime — D2's own
+  // compile/render then runs in ~25ms per diagram (see scripts/d2-bench.mjs).
+  serverExternalPackages: ["@terrastruct/d2"],
   // Alias `@theguild/remark-mermaid/mermaid` → our local component so any
   // legacy import path still resolves to the DESIGN-2-themed Mermaid
   // renderer. The new MDX pipeline (remark-mermaid-jsx + mdx-components)

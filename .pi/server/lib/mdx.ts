@@ -6,6 +6,7 @@ import rehypePrettyCode from "rehype-pretty-code";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import { remarkMermaidJsx } from "@/lib/remark-mermaid-jsx";
+import { remarkD2Jsx } from "@/lib/remark-d2-jsx";
 import { mdxComponents } from "@/components/docs/mdx-components";
 import { extractToc, type TocEntry } from "@/lib/toc";
 
@@ -37,7 +38,7 @@ export async function compileMdxFile(slug: string): Promise<CompiledMdx | null> 
     options: {
       parseFrontmatter: true,
       mdxOptions: {
-        remarkPlugins: [remarkGfm, remarkMermaidJsx, remarkAlert],
+        remarkPlugins: [remarkGfm, remarkMermaidJsx, remarkD2Jsx, remarkAlert],
         rehypePlugins: [
           rehypeSlug,
           [
