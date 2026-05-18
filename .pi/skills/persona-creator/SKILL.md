@@ -79,7 +79,25 @@ If the persona qualifies:
 
 If the persona does **not** qualify, skip this step entirely. Adding pointless status entries clutters the footer and burns horizontal space the other entries need.
 
-### Step 6 — Verify
+### Step 6 — Command-list check (mostly tool extensions)
+
+Tool extensions can register slash commands via `pi.registerCommand("<name>", { ... })`. Personas, inner skills, and reviewers don't — skip this step for those.
+
+Ask: **does this extension warrant a slash command at all?** Slash commands are for explicit user invocations from the TUI command palette. If the action is something the *agent* calls during a turn, register it as a tool (`pi.registerTool`) only — don't add a parallel slash command just because it's possible. Examples already in the repo:
+
+- `news-ingest` — registers `/news-refresh` (manual refresh by the user) AND `refresh_all_topics` (tool the agent calls). Both warranted.
+- `obsidian-vault` — tools only (`write_note`, etc.). The agent uses them during a turn; no user-facing slash command.
+- `reminders` — `/clear <N>` is user-facing; the tool surface lets the agent capture reminders.
+
+If you do add a slash command, three follow-ons:
+
+1. **Naming.** Lowercase, ≤32 chars. Hyphens are fine for the pi-side name (`news-refresh`); the Telegram surface preserves them.
+2. **Description.** The `description:` field on `registerCommand` is what shows up in pi's palette AND in the Telegram `/command` inline keyboard via `pi.getCommands()`. Write it for an end user, not for the agent.
+3. **Telegram visibility.** By default, every extension command surfaces in the bot's `/command` keyboard automatically — `.pi/extensions/telegram-bot/driver.ts:listPiCommands` enumerates `pi.getCommands()` and renders one button per command. Tapping the button forwards the literal `/<name>` text as a user prompt to the agent (pi doesn't execute slash commands from extension-injected input — only TUI-typed). So:
+   - If the command's intent is reproducible by the agent via existing tools (e.g. "refresh the news"), Telegram exposure is useful — the tap lands as input and the agent fulfills it.
+   - If the command is purely a TUI affordance (opens an interactive picker, manipulates session state), tapping it from Telegram won't do anything meaningful. Opt out by adding the name to the `SKIP` set in `.pi/extensions/telegram-bot/driver.ts:listPiCommands`. Mention this in the PR / commit so the exclusion is intentional, not forgotten.
+
+### Step 7 — Verify
 
 Run the smoke tests from AGENTS.md (`## Verification`) — Pi should discover the new component without errors:
 
