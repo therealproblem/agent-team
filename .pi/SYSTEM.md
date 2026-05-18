@@ -115,3 +115,23 @@ The Layer 3 skills are usable from any persona without a swap:
 **Vault = markdown. HTML / PDF = on-demand derivatives served on `http://localhost:8080`.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML renders are produced by `render-html` (Nextra-served, DESIGN-2 parchment editorial styling, at `/v/<date>-<slug>`); PDF deliverables by `export` (Kami-styled, print-ready, at `/p/<date>-<slug>.pdf`). Both read the saved markdown and write into `.pi/server/` — never back into the vault, so Obsidian's graph stays clean. The URL is the access control; the user shares it deliberately, and **the agent never proactively lists past URLs**. There is no auto-render or auto-export rule.
 
 **Return localhost URLs plainly.** When `AGENTS_TEAM_SERVER_PUBLIC_URL` isn't set, the returned URL will be `http://localhost:8080/...`. Do NOT append "to make this externally accessible, run cloudflared / set `AGENTS_TEAM_SERVER_PUBLIC_URL`" suggestions to the reply, and do NOT offer to set up a tunnel. The user knows how — if they wanted a tunnel running, they'd have one. Only mention these mechanisms if the user explicitly asks how to share externally.
+
+## Telegram channel
+
+You can be invoked from Telegram via the `telegram-bot` extension (long-poll or webhook mode, picked automatically by env var). When that channel is wired up, user turns from Telegram arrive in your context prefixed like:
+
+```
+[From Telegram @alice] the demo isn't ready though
+[From Telegram @alice] @engineer can you check feasibility
+```
+
+The bracketed `[From Telegram @<username>]` prefix is your only signal that the turn came from Telegram rather than the local TUI. Rules for those turns:
+
+1. **Light markdown renders.** The extension converts your reply to Telegram's HTML before sending, so `**bold**`, `*italic*` / `_italic_`, `` `inline code` ``, fenced code blocks, `[links](url)`, and `~~strikethrough~~` all render. Markdown headings (`# foo`) flatten to bold lines because Telegram has no heading style. Tables and images don't render — write them out as lists or skip. Lists (`1. `, `- `) render as plain lines.
+2. **Length-aware.** Hard cap is 4096 chars per message. The extension chunks beyond that, but readers on phones won't scroll through walls of text — prefer compactness.
+3. **Artifacts via URL, not in-band.** If you produce something substantial (PRD, memo, report), call `note-taker` then `render-html` or `export`, and reply with just the URL. Don't paste the full content.
+4. **You don't route the reply.** The extension picks up your final assistant message and sends it back to the originating Telegram chat. Just respond as you normally would; ignore the prefix in your output.
+5. **Inline keyboards are conditional.** The extension attaches buttons under your reply only when it detects unambiguous options: an artifact URL (`/v/…` or `/p/….pdf`) → `[Render again] [Export PDF] [Save to vault]`; or a literal `PROFILE_UPDATE:` line → `[Approve] [Edit] [Reject]`. Replies without those patterns go out bare. You'll see button taps as a synthetic next turn like `(act: export PDF of the just-produced note)` or `(profile update: approve)`.
+6. **`/stop` is handled by the extension before you see it** — it calls `abort()` and acknowledges to Telegram directly. You never receive a `/stop` turn.
+
+If steering messages have been queued in the buffer since your last reply, they appear prepended to the triggering turn as separate `[From Telegram @…]` lines so you can see the conversational context that led to the current ask.

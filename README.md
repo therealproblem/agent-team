@@ -2,7 +2,7 @@
 
 A personal **team of AI agents** built on the [Pi coding-agent harness](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). One terminal session, many roles — product manager, engineer, educator, language coach, trading student — each with its own skills, reviewers, and memory of who you are in that domain.
 
-The aim is a long-running personal operating layer: you talk to it from the CLI, it writes to your Obsidian vault, renders artifacts as web pages or PDFs, and learns your preferences across sessions.
+The aim is a long-running personal operating layer: you talk to it from the CLI or from Telegram, it writes to your Obsidian vault, renders artifacts as web pages or PDFs, and learns your preferences across sessions.
 
 ## What this project is
 
@@ -68,6 +68,21 @@ Personas read their profile at adoption time. Reviewers only get `_global.md` �
 
 The URL is the access control. No auth, no listing, no search index, no sitemap. To share externally, run cloudflared yourself (see below).
 
+### Telegram channel
+
+The same Pi session is reachable from a Telegram bot. Two transports, picked automatically by env:
+
+- **Long-poll** (default): the extension runs a `getUpdates` loop inside Pi. No public URL needed; works from a laptop with no inbound networking.
+- **Webhook**: if `AGENTS_TEAM_SERVER_PUBLIC_URL` is set, the extension instead registers a Telegram webhook against that base URL. The Next.js server has a route at `/telegram/webhook` that forwards incoming updates to a loopback HTTP receiver inside Pi.
+
+Either way, **when Pi exits the bot goes offline** (the long-poll loop stops or the webhook is deleted). There's exactly one Pi session backing all chats — DMs and groups share context. Each turn arrives in Pi prefixed `[From Telegram @<username>] …` so the agent knows the origin; replies route back to the originating chat automatically.
+
+Setup is a single slash command inside Pi: `/telegram-connect`. The first invocation prompts for a bot token from `@BotFather` (or accepts it as `/telegram-connect <token>`), registers slash commands + the Menu button with Telegram, brings the bot online, and — if the allowlist is empty — opens a prompt for the chat id(s) you want to allow. To discover a chat id, DM the bot `/start`: it replies with the chat's id even when not allowlisted (the only message it sends to non-allowlisted chats).
+
+The bot listens "always" in groups (every message enters the context as steering) but only triggers a turn when `@<persona>` is mentioned, `/<persona>` is used, or a user replies to one of the bot's own messages. In DMs every message triggers a turn — no `@` needed. `/stop` cancels the in-flight agent turn from any chat. Long replies are converted from markdown to Telegram-flavored HTML (`<b>`, `<i>`, `<code>`, `<pre>`, `<a>`) and chunked at the 4096-char limit. Inline keyboards attach only when the reply contains an artifact URL or a `PROFILE_UPDATE:` proposal — no default persona switcher.
+
+The footer in Pi grows a `| TG ●` cell next to `| SRV …` when the bot is online. See `.pi/SYSTEM.md` § "Telegram channel" for the rules the agent follows on Telegram-originated turns.
+
 ### A note on Trader
 
 Trader runs in **student mode**. It never prescribes a trade. It surfaces patterns from your journal as Socratic questions, reflects "should I do X?" back at you, and refuses to call directional decisions. The point is to sharpen your own judgement, not to outsource it.
@@ -78,7 +93,7 @@ The current shape is the second iteration. The first ("Distributor") spawned eve
 
 Where it's heading:
 
-- **Web frontend** — not currently wired in; being rebuilt from scratch. The CLI (`pi` from the repo root) is the only entry point today.
+- **Web frontend** — not currently wired in; being rebuilt from scratch. Entry points today are the CLI (`pi` from the repo root) and the Telegram bot (see § Telegram channel above).
 - **Layer 0 meta-review** — surfacing cross-domain patterns and contradictions across profiles as the system accumulates a real model of you.
 - **Richer service surface** — `news-ingest` is stubbed; SRS decks need seeding; the trade-journal accessor is read-only for now.
 
@@ -159,18 +174,27 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 | `AGENTS_TEAM_SERVER_TITLE` | `agents-team` | Wordmark in the navbar + suffix on every page's `<title>`. **Read at build time** — re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for changes to take effect. |
 | `AGENTS_TEAM_SERVER_PUBLIC_URL` | `http://localhost:8080` | Base URL the `render-html` / `export` tools return. Set to your named cloudflared tunnel so URLs are share-ready across sessions. Quick-tunnel URLs rotate on every restart — use a named tunnel. Read at runtime, so a Pi restart is enough. |
 | `AGENTS_TEAM_CHROME_PATH` | auto-detected | Override the Chrome binary used for PDF export. Auto-detection covers `/Applications/Google Chrome.app` on macOS plus the standard Linux and Windows locations. Set this only if Chrome lives somewhere unusual. |
+| `TELEGRAM_BOT_TOKEN` | _unset_ | Bot token from `@BotFather`. Unset → the `telegram-bot` extension stays dormant (no footer cell, no surfaces). Set by `/telegram-connect <token>` in Pi, or pasted into `.env` directly. |
+| `TELEGRAM_ALLOWED_CHATS` | _unset_ | Comma-separated chat ids the bot will respond in. Hard allowlist; anything else is silently dropped. `/start` from any chat bypasses the allowlist to reply with that chat's id. Populated via the interactive prompt that follows `/telegram-connect` when empty. |
+| `TELEGRAM_WEBHOOK_SECRET` | _unset_ | Shared secret Telegram includes on every webhook call. Required only when `AGENTS_TEAM_SERVER_PUBLIC_URL` is set (webhook mode). Generate with `openssl rand -hex 32`. |
+| `TELEGRAM_LONG_POLL_TIMEOUT` | `50` | Long-poll mode only. Seconds to hold each `getUpdates` call open; Telegram caps at 50. |
+| `TELEGRAM_INLINE_KEYBOARDS` | `on` | Set to `off` to disable inline keyboards (artifact actions, profile-update approve/reject). |
 
 ## Repository layout
 
 ```
 .pi/
-├── SYSTEM.md            Root agent — persona-adoption rules
+├── SYSTEM.md            Root agent — persona-adoption + Telegram rules
 ├── agents/              Reviewers (spawned as sub-Pi processes)
 ├── skills/              Personas + inner skills + shared services
 ├── extensions/          TypeScript tool surfaces (auto-loaded by Pi)
+│   ├── server/             Lifecycle for the Next.js server
+│   ├── telegram-bot/       Telegram bridge (long-poll or webhook)
+│   └── …                   battery, news-ingest, reminders, srs, etc.
 ├── server/              Next.js 16 + Nextra 4 app on :8080
-├── state/               profiles/, reminders.md, meta-logs/
-├── lib/                 dotenv loader shared by extensions
+│   └── app/telegram/webhook/  forwards Telegram webhook updates to Pi
+├── state/               profiles/, reminders.md, telegram/, meta-logs/
+├── lib/                 dotenv loader + shared TUI primitives
 └── settings.json        Declares project-local npm packages
 scripts/
 ├── setup.sh             Idempotent bootstrap
