@@ -177,48 +177,24 @@ export default function (pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * Build the list of slash commands to register with Telegram. Mirror what
-	 * pi.getCommands() reports so the bot's menu reflects what's actually
-	 * available in this pi session. Filters:
-	 *   - Skill commands are excluded (source === "skill") — they're an
-	 *     in-pi composition mechanism, not a Telegram surface.
-	 *   - Personas are excluded — they're invocation tokens (@<name>), not
-	 *     commands.
-	 *   - Names with characters Telegram rejects (`:`, etc.) are skipped.
-	 *   - /start and /stop are bot-only and always included up front.
+	 * Telegram's bot-level slash command menu (the Menu pill in the input
+	 * bar). Kept intentionally minimal:
 	 *
-	 * Telegram constraints: command names are lowercased a–z, 0–9, _ with
-	 * length 1–32; max 100 commands per registration.
+	 *   /start    — bot-only: bootstrap reply with the chat id
+	 *   /stop     — bot-only: cancel the in-flight agent turn
+	 *   /command  — bot-only: opens an inline keyboard of pi's commands
+	 *
+	 * We don't try to mirror pi's full command list here because Telegram's
+	 * bot command names are constrained to `[a-z0-9_]{1,32}` (no hyphens or
+	 * colons) and pi commands can't be executed remotely via the extension
+	 * API anyway — `/command` is the discovery surface for them instead.
 	 */
 	function buildBotCommands(): { command: string; description: string }[] {
-		const PERSONA_NAMES = new Set(["pm", "engineer", "educator", "language", "trader"]);
-		const NAME_RE = /^[a-z][a-z0-9_]{0,31}$/;
-
-		const entries: { command: string; description: string }[] = [
+		return [
 			{ command: "start", description: "show this chat's id / onboarding info" },
 			{ command: "stop", description: "cancel the in-flight agent turn" },
+			{ command: "command", description: "list pi commands as buttons" },
 		];
-		const seen = new Set(entries.map((e) => e.command));
-
-		try {
-			for (const c of pi.getCommands()) {
-				if (c.source === "skill") continue;
-				const name = c.name.toLowerCase();
-				if (!NAME_RE.test(name)) continue;
-				if (PERSONA_NAMES.has(name)) continue;
-				if (seen.has(name)) continue;
-				entries.push({
-					command: name,
-					description: (c.description ?? `pi /${name}`).slice(0, 256),
-				});
-				seen.add(name);
-				if (entries.length >= 100) break;
-			}
-		} catch {
-			// pi.getCommands() failure is best-effort; ship just /start /stop.
-		}
-
-		return entries;
 	}
 
 	async function bringUp(ctx: ExtensionContext): Promise<{ ok: boolean; message?: string }> {

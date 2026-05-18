@@ -24,7 +24,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { api, type InlineKeyboardMarkup, type TelegramUpdate } from "./api";
+import { api, type InlineKeyboardButton, type InlineKeyboardMarkup, type TelegramUpdate } from "./api";
 import type { Decision, Persona } from "./dispatcher";
 import { PERSONAS } from "./dispatcher";
 import { loadChatState, saveChatState } from "./state";
@@ -244,6 +244,113 @@ export async function handleStart(d: Decision & { kind: "start" }): Promise<void
 	);
 }
 
+// ---------- /command — list pi commands as buttons ----------
+
+/**
+ * /command in Telegram opens an inline keyboard listing pi's available
+ * commands. Tapping a button enqueues the command text as a synthetic user
+ * message via the normal invoke path — pi receives e.g. `/news-refresh` and
+ * the agent interprets it (calling tools where it can, surfacing
+ * pi-internal commands as text where it can't).
+ *
+ * Mirrors what the user would see if they ran `/help` or scrolled pi's
+ * command palette in the TUI: built-in commands + extension commands +
+ * prompt templates. Skill commands and personas are excluded.
+ */
+export async function handleCommands(
+	d: Decision & { kind: "commands" },
+	pi: ExtensionAPI,
+): Promise<void> {
+	const cmds = listPiCommands(pi);
+	if (cmds.length === 0) {
+		await safeSend(d.chatId, "(no pi commands available)", {
+			replyToMessageId: d.replyToMessageId,
+		});
+		return;
+	}
+	// Two buttons per row. Telegram allows up to 100 buttons total per
+	// keyboard; pi's command list is well under that.
+	const rows: InlineKeyboardButton[][] = [];
+	for (let i = 0; i < cmds.length; i += 2) {
+		const row: InlineKeyboardButton[] = [
+			{ text: `/${cmds[i].name}`, callback_data: `cmd:${cmds[i].name}` },
+		];
+		if (cmds[i + 1]) {
+			row.push({ text: `/${cmds[i + 1].name}`, callback_data: `cmd:${cmds[i + 1].name}` });
+		}
+		rows.push(row);
+	}
+	await safeSend(
+		d.chatId,
+		"Tap a command to send it to the agent. (Pi's built-in UI commands can't be invoked remotely; the agent will receive them as text and act where it can via its tools.)",
+		{
+			replyToMessageId: d.replyToMessageId,
+			replyMarkup: { inline_keyboard: rows },
+		},
+	);
+}
+
+/**
+ * Compose pi's available slash commands: built-ins + extension commands +
+ * prompt templates. Excludes skills, personas, and the bot-only entries
+ * (start, stop, command) — those are already on the Telegram menu and don't
+ * need to appear in the inline grid.
+ */
+function listPiCommands(pi: ExtensionAPI): { name: string; description: string }[] {
+	const SKIP = new Set<string>([
+		"start",
+		"stop",
+		"command",
+		"commands",
+		...PERSONAS,
+	]);
+
+	// Built-ins mirror pi's core/slash-commands.js BUILTIN_SLASH_COMMANDS.
+	// Kept in sync manually because the constant isn't on pi's public surface.
+	const builtins: { name: string; description: string }[] = [
+		{ name: "settings", description: "Open settings menu" },
+		{ name: "model", description: "Select model" },
+		{ name: "export", description: "Export session" },
+		{ name: "import", description: "Import a session" },
+		{ name: "share", description: "Share session as a gist" },
+		{ name: "copy", description: "Copy last agent message" },
+		{ name: "name", description: "Set session name" },
+		{ name: "session", description: "Show session info" },
+		{ name: "changelog", description: "Show changelog" },
+		{ name: "hotkeys", description: "Show shortcuts" },
+		{ name: "fork", description: "Fork from a user message" },
+		{ name: "clone", description: "Duplicate session" },
+		{ name: "tree", description: "Navigate session tree" },
+		{ name: "login", description: "Configure auth" },
+		{ name: "logout", description: "Remove auth" },
+		{ name: "new", description: "New session" },
+		{ name: "compact", description: "Compact context" },
+		{ name: "resume", description: "Resume a session" },
+		{ name: "reload", description: "Reload extensions/skills/themes" },
+		{ name: "quit", description: "Quit pi" },
+	];
+
+	const out: { name: string; description: string }[] = [];
+	const seen = new Set<string>();
+	const push = (name: string, description: string): void => {
+		if (SKIP.has(name)) return;
+		if (seen.has(name)) return;
+		seen.add(name);
+		out.push({ name, description });
+	};
+
+	for (const b of builtins) push(b.name, b.description);
+	try {
+		for (const c of pi.getCommands()) {
+			if (c.source === "skill") continue;
+			push(c.name, c.description ?? `pi /${c.name}`);
+		}
+	} catch {
+		// best-effort
+	}
+	return out;
+}
+
 // ---------- callback ----------
 
 export async function handleCallback(
@@ -284,6 +391,17 @@ export async function handleCallback(
 		}
 	} else if (prefix === "pu") {
 		line = `(profile update: ${value})`;
+		const state = loadChatState(d.chatId, d.chatTitle);
+		if (state.lastAssistantPersona && (PERSONAS as readonly string[]).includes(state.lastAssistantPersona)) {
+			persona = state.lastAssistantPersona as Persona;
+		}
+	} else if (prefix === "cmd") {
+		// Tap from the /command keyboard. Send the literal slash command as
+		// the agent's next prompt; the agent reads it as "the user wants
+		// /<name> to run" and either does the equivalent via its tools or
+		// surfaces that the command is pi-internal and can't run from chat.
+		if (!/^[a-z][a-z0-9_-]{0,31}$/i.test(value)) return;
+		line = `/${value}`;
 		const state = loadChatState(d.chatId, d.chatTitle);
 		if (state.lastAssistantPersona && (PERSONAS as readonly string[]).includes(state.lastAssistantPersona)) {
 			persona = state.lastAssistantPersona as Persona;

@@ -54,6 +54,13 @@ export type Decision =
 			isAllowed: boolean;
 	  }
 	| {
+			kind: "commands";
+			chatId: number;
+			chatTitle: string;
+			fromUsername: string;
+			replyToMessageId: number;
+	  }
+	| {
 			kind: "callback";
 			chatId: number;
 			chatTitle: string;
@@ -73,7 +80,8 @@ const PERSONA_RE = new RegExp(`^/(${PERSONAS.join("|")})\\b`, "i");
 const PERSONA_MENTION_RE = new RegExp(`@(${PERSONAS.join("|")})\\b`, "i");
 const STOP_RE = /^\/stop\b/i;
 const START_RE = /^\/start\b/i;
-const CALLBACK_PREFIXES = ["persona:", "act:", "pu:"];
+const COMMAND_RE = /^\/commands?\b/i;
+const CALLBACK_PREFIXES = ["persona:", "act:", "pu:", "cmd:"];
 
 function chatTitle(update: TelegramUpdate["message"] | NonNullable<TelegramUpdate["callback_query"]>["message"]): string {
 	if (!update) return "";
@@ -150,6 +158,16 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 	if (STOP_RE.test(text)) {
 		return {
 			kind: "stop",
+			chatId,
+			chatTitle: title,
+			fromUsername: sender,
+			replyToMessageId: msg.message_id,
+		};
+	}
+
+	if (COMMAND_RE.test(text)) {
+		return {
+			kind: "commands",
 			chatId,
 			chatTitle: title,
 			fromUsername: sender,
