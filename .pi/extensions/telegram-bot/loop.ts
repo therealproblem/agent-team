@@ -40,6 +40,13 @@ export async function start(
 	const timeoutSec = Number(process.env.TELEGRAM_LONG_POLL_TIMEOUT ?? DEFAULT_TIMEOUT_SEC);
 	let offset = loadOffset();
 	let backoffMs = 1_000;
+	// Tracks whether we've already attempted the "clear webhook + drain stale
+	// long-poll" recovery since the last successful getUpdates. A 409 the first
+	// time around is almost always a session-swap leftover (Telegram still
+	// holds the prior module's long-poll lock for up to timeoutSec). A 409 that
+	// persists after that recovery means another process is polling with the
+	// same token — different problem, different message, normal backoff.
+	let recovered409 = false;
 
 	while (running) {
 		try {
@@ -50,6 +57,7 @@ export async function start(
 				abort.signal,
 			);
 			backoffMs = 1_000;
+			recovered409 = false;
 			setHealth("running");
 			for (const update of updates) {
 				try {
@@ -71,16 +79,36 @@ export async function start(
 				running = false;
 				break;
 			}
-			// 409 Conflict happens if a webhook is still registered with
-			// Telegram from any source (older build that supported webhook
-			// mode, a manual setWebhook call, etc.). Clear it once before
-			// backing off so polling can take over.
+			// 409 Conflict has two causes: a webhook is registered, OR another
+			// getUpdates is in flight server-side (most commonly a stale
+			// long-poll lock held after the previous module's abort). First
+			// time through, do both recoveries: deleteWebhook is cheap and
+			// idempotent, and a timeout=0 getUpdates with the higher offset
+			// causes Telegram to release any prior long-poll on their side.
 			if (/409|Conflict/.test(msg)) {
-				surface(pi, "telegram-bot: getUpdates conflict (stale webhook?) — calling deleteWebhook");
-				try {
-					await api.deleteWebhook();
-				} catch {
-					// best-effort
+				if (!recovered409) {
+					surface(
+						pi,
+						"telegram-bot: getUpdates conflict — clearing webhook and prior long-poll lock",
+					);
+					try {
+						await api.deleteWebhook();
+					} catch {
+						// best-effort
+					}
+					try {
+						await api.getUpdates(offset, 0, [...ALLOWED_UPDATES]);
+					} catch {
+						// The drain call may itself 409; that's fine — issuing
+						// it still nudges Telegram to drop the prior lock.
+					}
+					recovered409 = true;
+					backoffMs = 500;
+				} else {
+					surface(
+						pi,
+						`telegram-bot: getUpdates still conflicting — another instance is likely polling with the same TELEGRAM_BOT_TOKEN (retrying in ${Math.round(backoffMs / 1000)}s)`,
+					);
 				}
 			} else {
 				surface(pi, `telegram-bot: getUpdates error — ${msg} (retrying in ${Math.round(backoffMs / 1000)}s)`);

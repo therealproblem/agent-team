@@ -213,7 +213,14 @@ export default function (pi: ExtensionAPI): void {
 
 		try {
 			// Clear any stale webhook registered by an earlier build that supported webhook mode.
-			await api.deleteWebhook().catch(() => undefined);
+			// Failure is non-fatal — the loop's reactive 409 recovery will retry — but surface
+			// it so a real outage (network, auth) doesn't hide behind a silent swallow.
+			try {
+				await api.deleteWebhook();
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				surface(pi, `telegram-bot: deleteWebhook at startup failed — ${msg} (will retry on first 409)`);
+			}
 			if (!alive) return { ok: false, message: "torn down mid-bring-up" };
 			if (!loop.isRunning()) {
 				void loop.start(pi, dctx, (h) => setTg(ctx, h === "running" ? "ready" : "errored"));
@@ -455,23 +462,55 @@ export default function (pi: ExtensionAPI): void {
 		setTg(ctx, "pending");
 
 		void (async () => {
-			try {
-				const cfg = await configureBot();
-				if (!cfg.ok) {
-					surface(pi, `telegram-bot: config failed — ${cfg.error}`);
+			// Retry transient network failures: laptop wake-from-sleep, DNS not
+			// yet resolved, brief offline window. Auth and "no username" errors
+			// won't be fixed by waiting — give up on those immediately.
+			const BACKOFFS_MS = [1_000, 4_000, 16_000];
+			const isTransient = (msg: string): boolean =>
+				/fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|network|getaddrinfo|socket hang up/i.test(
+					msg,
+				);
+
+			for (let attempt = 0; ; attempt++) {
+				if (!alive) return;
+				try {
+					const cfg = await configureBot();
+					if (!cfg.ok) {
+						if (attempt < BACKOFFS_MS.length && isTransient(cfg.error ?? "")) {
+							const waitMs = BACKOFFS_MS[attempt];
+							surface(
+								pi,
+								`telegram-bot: config failed — ${cfg.error} (retrying in ${Math.round(waitMs / 1000)}s)`,
+							);
+							await new Promise((r) => setTimeout(r, waitMs));
+							continue;
+						}
+						surface(pi, `telegram-bot: config failed — ${cfg.error}`);
+						setTg(ctx, "errored");
+						return;
+					}
+					const r = await bringUp(ctx);
+					if (!r.ok) {
+						surface(pi, `telegram-bot: ${r.message ?? "bring-up failed"}`);
+						return;
+					}
+					await surfaceConnected(ctx, cfg.username ?? "?");
+					return;
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : String(err);
+					if (attempt < BACKOFFS_MS.length && isTransient(msg)) {
+						const waitMs = BACKOFFS_MS[attempt];
+						surface(
+							pi,
+							`telegram-bot: bring-up crashed — ${msg} (retrying in ${Math.round(waitMs / 1000)}s)`,
+						);
+						await new Promise((r) => setTimeout(r, waitMs));
+						continue;
+					}
+					surface(pi, `telegram-bot: bring-up crashed — ${msg}`);
 					setTg(ctx, "errored");
 					return;
 				}
-				const r = await bringUp(ctx);
-				if (!r.ok) {
-					surface(pi, `telegram-bot: ${r.message ?? "bring-up failed"}`);
-					return;
-				}
-				await surfaceConnected(ctx, cfg.username ?? "?");
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err);
-				surface(pi, `telegram-bot: bring-up crashed — ${msg}`);
-				setTg(ctx, "errored");
 			}
 		})();
 	});
