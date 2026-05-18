@@ -76,6 +76,7 @@ interface PendingInvoke {
 	persona: Persona;
 	replyToMessageId: number;
 	enqueuedAt: number;
+	triggeredBy?: "render" | "export" | "vault";
 }
 
 // Invokes we've called sendUserMessage for but haven't yet seen the matching
@@ -143,6 +144,7 @@ export async function handleInvoke(
 		persona: d.persona,
 		replyToMessageId: d.replyToMessageId,
 		enqueuedAt: now,
+		triggeredBy: d.triggeredBy,
 	};
 	pendingInvokes.push(pending);
 
@@ -281,6 +283,7 @@ export async function handleCallback(
 	const [prefix, value] = d.data.split(":", 2);
 	let line = "";
 	let persona: Persona = "engineer";
+	let triggeredBy: "render" | "export" | "vault" | undefined;
 
 	if (prefix === "persona") {
 		if (!(PERSONAS as readonly string[]).includes(value)) return;
@@ -291,6 +294,7 @@ export async function handleCallback(
 		else if (value === "export") line = "use export to produce a PDF of the just-produced note";
 		else if (value === "vault") line = "save the just-produced content to the vault via note-taker";
 		else return;
+		triggeredBy = value as "render" | "export" | "vault";
 		// Use whichever persona was last active in this chat.
 		const state = loadChatState(d.chatId, d.chatTitle);
 		if (state.lastAssistantPersona && (PERSONAS as readonly string[]).includes(state.lastAssistantPersona)) {
@@ -315,6 +319,7 @@ export async function handleCallback(
 			persona,
 			line,
 			replyToMessageId: d.messageId,
+			triggeredBy,
 		},
 		pi,
 	);
@@ -356,7 +361,7 @@ export async function onAgentEnd(messages: AgentMessageLike[]): Promise<void> {
 		return;
 	}
 
-	const keyboard = pickKeyboard(finalText);
+	const keyboard = pickKeyboard(finalText, inv.triggeredBy);
 	const ids = await safeSendOrReportError(inv.chatId, finalText, {
 		replyToMessageId: inv.replyToMessageId,
 		replyMarkup: keyboard,
@@ -488,7 +493,10 @@ function keyboardKindFor(text: string): "artifact" | "profile" | undefined {
  * proposal. No default persona switcher: persona is selected by typing /name
  * or @name in the next message, which keeps replies uncluttered.
  */
-function pickKeyboard(text: string): InlineKeyboardMarkup | undefined {
+function pickKeyboard(
+	text: string,
+	triggeredBy?: "render" | "export" | "vault",
+): InlineKeyboardMarkup | undefined {
 	if (KEYBOARDS_DISABLED()) return undefined;
 	const kind = keyboardKindFor(text);
 	if (kind === "profile") {
@@ -503,15 +511,18 @@ function pickKeyboard(text: string): InlineKeyboardMarkup | undefined {
 		};
 	}
 	if (kind === "artifact") {
-		return {
-			inline_keyboard: [
-				[
-					{ text: "Render again", callback_data: "act:render" },
-					{ text: "Export PDF", callback_data: "act:export" },
-					{ text: "Save to vault", callback_data: "act:vault" },
-				],
-			],
-		};
+		// When the response was triggered by a render or vault button, the
+		// content is by definition already in the vault — suppress the "Save
+		// to vault" button to avoid a redundant action.
+		const alreadyVaulted = triggeredBy === "render" || triggeredBy === "vault";
+		const buttons = [
+			{ text: "Render again", callback_data: "act:render" },
+			{ text: "Export PDF", callback_data: "act:export" },
+		];
+		if (!alreadyVaulted) {
+			buttons.push({ text: "Save to vault", callback_data: "act:vault" });
+		}
+		return { inline_keyboard: [buttons] };
 	}
 	return undefined;
 }
