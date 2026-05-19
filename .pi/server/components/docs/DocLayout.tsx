@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Toc } from "@/components/docs/Toc";
 import { MobileTocSheet } from "@/components/docs/MobileTocSheet";
+import { PartsNav, parsePartsFromFrontmatter } from "@/components/docs/PartsNav";
 import type { TocEntry } from "@/lib/toc";
 
 interface DocLayoutProps {
@@ -16,7 +17,11 @@ interface DocLayoutProps {
  *   Desktop (≥ md): TOC on the left, content centred (max-w-3xl).
  *   Mobile (< md): TOC behind a top-left hamburger Sheet; content full-width.
  *
- * Renders are URL-only; there is intentionally no nav between them.
+ * Single-page renders are URL-only with no cross-document nav. Multi-part
+ * renders (written by `write_html_render_multipart`) carry a `parts` array
+ * in their frontmatter; when present, a "Parts" nav block is hoisted above
+ * the on-page TOC in both the desktop sidebar and the mobile sheet so
+ * readers can jump between siblings.
  */
 export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
   // Hoist the frontmatter title into a real <h1> at the top of the article.
@@ -25,12 +30,14 @@ export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
   // accessibility (one h1 per document) and SEO. The TOC builds from `##+`
   // so this h1 is intentionally outside its scope.
   const title = typeof frontmatter?.title === "string" ? frontmatter.title : null;
+  const { parts, currentSlug } = parsePartsFromFrontmatter(frontmatter);
   return (
     <>
-      <MobileTocSheet entries={toc} />
+      <MobileTocSheet entries={toc} parts={parts} currentSlug={currentSlug} />
       <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 md:px-6 md:py-12">
         <aside className="hidden md:block md:w-56 md:shrink-0 -my-8 md:-my-12">
           <div className="sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto pr-2 py-6">
+            <PartsNav parts={parts} currentSlug={currentSlug} />
             <Toc entries={toc} />
           </div>
         </aside>

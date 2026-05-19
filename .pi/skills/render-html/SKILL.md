@@ -50,6 +50,52 @@ The local server hides discovery vectors that would let someone enumerate paths:
 
 Slugs are predictable from the title, so don't treat the URL as a secret. Don't volunteer "here are your recent renders"; share each URL only in direct response to the user who asked for it.
 
+## Splitting large markdown across pages
+
+Browsers don't render thousand-line MDX pages well — Mermaid blocks pile up, the TOC becomes a wall, and first paint stalls. Curriculum modules and long research notes routinely cross this threshold.
+
+**When to offer a split:** if the source markdown is **~2000+ lines**, or shorter docs where the single-page render visibly bloats the browser (many Mermaid blocks, dozens of `##` sections, tables that scroll horizontally for screens). When in doubt, look at the top-level `##` count — more than ~8 is a strong split signal.
+
+**Offer first; don't unilaterally split.** Before rendering, propose a split scheme to the caller — list the parts you'd carve along `##` headings — and confirm. The user can ask for a different split point or override and ship a single page.
+
+**How to choose split points:**
+
+- Split along **top-level `##` headings**. Never split mid-section.
+- Aim for **~400–800 lines per part**, with no part > 1000 lines.
+- Each part must be **self-contained enough** that arriving cold at Part 3 isn't useless — keep cross-references to other parts (`See Part 1`) lightweight but present where context is load-bearing.
+- Title each part with a short, scannable noun phrase taken from the section it leads with (e.g. *Introduction*, *Fundamentals*, *Module 3: Recursion*). The full page title is composed as `<part.title> — <overall title>` automatically.
+- Order matters — the array index sets the visible Part N number and the slug ordering.
+
+**The tool:** call `write_html_render_multipart`, not `write_html_render`.
+
+```
+write_html_render_multipart({
+  title:          "<overall title — the doc as a whole>",
+  parts: [
+    { title: "Introduction",      markdown: "<part 1 body>" },
+    { title: "Fundamentals",      markdown: "<part 2 body>" },
+    { title: "Module 3: Recursion", markdown: "<part 3 body>" },
+    …
+  ],
+  source_md_path: "<vault-relative path of the source note>",
+})
+```
+
+The tool writes one `.mdx` per part at `content/v/<YYYY-MM-DD>-<base>-part-<N>-<part-slug>.mdx`, prepends frontmatter listing every sibling, and returns one URL per part. The DocLayout reads the sibling list and renders a **"Parts" nav block in the sidebar** above the on-page TOC, with the current part marked and the rest linked — so readers can jump between pages from any part. The same nav appears in the mobile TOC sheet.
+
+**Re-running:** same overall title, same day → the entire prior set under that base slug (single-page or multi-part) is cleaned up before the fresh set is written. Splitting differently on re-run is safe; stale part URLs are removed.
+
+**Reply pattern for multi-part renders:**
+
+> Open:
+> - Part 1 — Introduction: `<url1>`
+> - Part 2 — Fundamentals: `<url2>`
+> - Part 3 — Module 3: Recursion: `<url3>`
+>
+> Source: `vault/…/file.md` (markdown is the source of truth — edit it there and re-run)
+
+Same provenance rules as single-page: no "Source:" footer in any rendered part, no cloudflared / tunnel suggestions, no closing line restating that the parts are live.
+
 ## When to call
 
 **Call `render-html` when** the markdown would meaningfully benefit from at least 2–3 of the patterns below (diagrams, tabs, callouts, timelines, sparklines, configurators). If the markdown is just headings + paragraphs + code blocks, *skip it*; the markdown itself reads fine in Obsidian.
@@ -82,6 +128,8 @@ render-html({
 A markdown body, written as an `.mdx` file under `.pi/server/content/v/<YYYY-MM-DD>-<slug>.mdx`. The tool injects frontmatter (`title`, `sidebar: false`) — **do not include frontmatter in the markdown you emit**.
 
 The page is served at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to) by the local Next.js server using a shadcn-based DocLayout.
+
+For multi-part renders (see *Splitting large markdown across pages* below), the artifact is a **set** of `.mdx` files under `<YYYY-MM-DD>-<base>-part-<N>-<part-slug>.mdx`, written by `write_html_render_multipart`. Each part's frontmatter carries the sibling list (`parts:` + `part_slug:`), which the DocLayout renders as a "Parts" nav block above the on-page TOC so readers can jump between pages.
 
 **Returning the URL to the user.** The URL is the entire response. Do NOT:
 
@@ -300,3 +348,4 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 - **Don't paste the rendered body inline** in the chat reply. The URL is the deliverable.
 - **Don't list multiple render URLs proactively.** The URL-secrecy model means each URL is shared deliberately. Never volunteer "here are your recent renders".
 - **Don't include the markdown source as a code block** in the rendered markdown — the source path goes in the response metadata, the file lives in the vault.
+- **Don't dump 2000+-line markdown onto a single page.** Offer a split first (see *Splitting large markdown across pages*) and use `write_html_render_multipart`. A single page with 30+ `##` sections, dozens of Mermaid blocks, or first-paint stalls is a failed render — the medium can't carry the load. Conversely, don't split a short doc just because it scrolls; the split is for docs the browser visibly chokes on, not for cosmetic chaptering.

@@ -15,6 +15,16 @@
  *                            overwrites the file; the URL stays stable.
  *                            Used by the `render-html` skill
  *                            (Layer 3).
+ *   - `write_html_render_multipart` — multi-part variant of
+ *                            `write_html_render`. Takes a `parts` array
+ *                            and writes one `.mdx` per part under
+ *                            `<base>-part-<N>-<part-slug>.mdx`. Each
+ *                            part's frontmatter carries the sibling list,
+ *                            which the DocLayout renders as a "Parts"
+ *                            nav block in the sidebar so readers can jump
+ *                            between pages. Used by the `render-html`
+ *                            skill when the source markdown is too large
+ *                            for a single HTML page (~2000+ lines).
  *   - `write_export_pdf` — PDF, written into the canonical export root
  *                          at `<repo>/exports/`. The Next.js server reads
  *                          from this directory at request time via a route
@@ -282,6 +292,144 @@ const writeHtmlRender = defineTool({
 	},
 });
 
+/*
+ * Multi-part variant of write_html_render. Used when a markdown source is
+ * too large to render on a single HTML page (rule of thumb: ~2000+ lines,
+ * or any curriculum / research doc whose single-page render visibly bloats
+ * the browser). The caller supplies an array of parts; each part becomes
+ * its own `.mdx` file at `content/v/<base>-part-<N>-<part-slug>.mdx` and
+ * its frontmatter carries the full `parts` list plus the current
+ * `part_slug`, which the DocLayout reads to render a "Parts" nav block
+ * above the on-page TOC. Re-running on the same overall title on the same
+ * day cleans up any prior single-page or multipart artifacts for the
+ * same base before writing, so the URL set always reflects the latest
+ * intent and stale parts can't linger when the split shape changes.
+ */
+const writeHtmlRenderMultipart = defineTool({
+	name: "write_html_render_multipart",
+	label: "Write HTML Render (multi-part)",
+	description:
+		"Write a long markdown source as a SET of `.mdx` part pages into the local Next.js server's `content/v/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. Use when the source markdown is too large for one HTML page (~2000+ lines, or any curriculum/research doc that visibly bloats the page). The caller passes an ordered `parts` array where each item is `{ title, markdown }`. Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+	parameters: Type.Object({
+		title: Type.String({
+			description:
+				"Overall title of the document (used to derive the base slug shared by every part). Each part's own page title is composed as `<part.title> — <title>`.",
+		}),
+		parts: Type.Array(
+			Type.Object({
+				title: Type.String({
+					description:
+						"Title of this part (used in the sidebar 'Parts' nav and to build its slug suffix). Keep it short — e.g. 'Introduction', 'Fundamentals', 'Module 3: Recursion'.",
+				}),
+				markdown: Type.String({
+					description:
+						"Markdown body for this part, written verbatim. NO frontmatter (the tool prepends it). Same idiom rules as `write_html_render` — Mermaid via ```mermaid` fences, GFM callouts via `> [!NOTE]`, no `<style>` / `<script>` / inline HTML chrome.",
+				}),
+			}),
+			{
+				minItems: 2,
+				description:
+					"Ordered list of parts. Index in this array maps 1:1 to the visible Part N number and to the slug ordering. Minimum two parts — if you only have one, use `write_html_render`.",
+			},
+		),
+		source_md_path: Type.Optional(
+			Type.String({
+				description:
+					"Vault-relative path of the markdown source the parts were split from. Recorded in the response so the caller can keep them paired.",
+			}),
+		),
+	}),
+
+	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		const baseSlug = `${todayIso()}-${slugify(params.title)}`;
+		const dir = join(SERVER_ROOT, "content", "v");
+		const pad = (n: number) =>
+			String(n).padStart(String(params.parts.length).length, "0");
+		const partSlugs = params.parts.map(
+			(p, i) => `${baseSlug}-part-${pad(i + 1)}-${slugify(p.title)}`,
+		);
+		const partsMeta = partSlugs.map((slug, i) => ({
+			slug,
+			title: params.parts[i].title,
+		}));
+
+		const escapeYaml = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+		const buildFrontmatter = (currentSlug: string, partTitle: string) => {
+			const fullTitle = `${partTitle} — ${params.title}`;
+			const lines = [
+				"---",
+				`title: "${escapeYaml(fullTitle)}"`,
+				"sidebar: false",
+				`part_slug: "${escapeYaml(currentSlug)}"`,
+				"parts:",
+				...partsMeta.map(
+					(p) =>
+						`  - { slug: "${escapeYaml(p.slug)}", title: "${escapeYaml(p.title)}" }`,
+				),
+				"---",
+				"",
+				"",
+			];
+			return lines.join("\n");
+		};
+
+		try {
+			if (!existsSync(dir)) {
+				await mkdir(dir, { recursive: true });
+			}
+
+			// Clean up any prior artifacts under the same base before writing
+			// the new set. Without this, shrinking from 5 parts to 3 would
+			// leave parts 4 and 5 stranded under their old URLs. We also
+			// remove `<base>.mdx` so a switch from single-page to multipart
+			// (or back) doesn't leave both flavors coexisting.
+			const existing = await readdir(dir).catch(() => [] as string[]);
+			const escapedBase = baseSlug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			const baseRegex = new RegExp(
+				`^${escapedBase}(\\.mdx|-part-\\d+-[a-z0-9-]+\\.mdx)$`,
+			);
+			await Promise.all(
+				existing
+					.filter((f) => baseRegex.test(f))
+					.map((f) => unlink(join(dir, f)).catch(() => undefined)),
+			);
+
+			const results: Array<{ slug: string; url: string; title: string; path: string }> = [];
+			for (let i = 0; i < params.parts.length; i++) {
+				const part = params.parts[i];
+				const slug = partSlugs[i];
+				const path = join(dir, `${slug}.mdx`);
+				const url = `${serverPublicUrl()}/v/${slug}`;
+				const frontmatter = buildFrontmatter(slug, part.title);
+				await writeFile(path, frontmatter + part.markdown, { encoding: "utf8" });
+				results.push({ slug, url, title: part.title, path });
+			}
+
+			const summary = results
+				.map((r, i) => `Part ${i + 1}: ${r.url}`)
+				.join("\n");
+			return {
+				content: [{ type: "text", text: `Rendered ${results.length} parts:\n${summary}` }],
+				details: {
+					base_slug: baseSlug,
+					title: params.title,
+					parts: results,
+					source_md_path: params.source_md_path,
+				},
+			};
+		} catch (e) {
+			const message = (e as Error).message;
+			return {
+				content: [
+					{ type: "text", text: `Failed to write multi-part HTML render: ${message}` },
+				],
+				details: { error: message },
+				isError: true,
+			};
+		}
+	},
+});
+
 const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
@@ -433,5 +581,6 @@ const writeExportPdf = defineTool({
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(writeNote);
 	pi.registerTool(writeHtmlRender);
+	pi.registerTool(writeHtmlRenderMultipart);
 	pi.registerTool(writeExportPdf);
 }
