@@ -26,8 +26,9 @@ exports/
 # Transient export-HTML staging — written, rendered to PDF, then deleted.
 # Retained on Chrome failure for manual recovery.
 .pi/server/.export-tmp/
-# Stray dev-only logs (e.g. Tailwind v4 native binary fallback noise).
-.pi/server/*.log
+# Log files anywhere in the tree (dev-server logs, Tailwind native-binary
+# fallback noise, ad-hoc debug logs, etc.).
+*.log
 
 # Local secrets — copy .env.example to .env and fill in. Never commit .env.
 .env
