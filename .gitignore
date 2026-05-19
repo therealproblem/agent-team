@@ -21,8 +21,10 @@ exports/
 .pi/server/.next/
 .pi/server/next-env.d.ts
 *.tsbuildinfo
-# Runtime-generated presentation artifacts (URL date-slug paths).
-.pi/server/content/v/*.mdx
+# Runtime-generated presentation artifacts (URL date-slug paths) and any
+# images/assets the server writes under public/p for them.
+.pi/server/content/v/
+.pi/server/public/p/
 # Transient export-HTML staging — written, rendered to PDF, then deleted.
 # Retained on Chrome failure for manual recovery.
 .pi/server/.export-tmp/
