@@ -38,6 +38,14 @@ import {
 const PERSONAS = ["pm", "engineer", "educator", "language", "trader"] as const;
 type Persona = (typeof PERSONAS)[number];
 
+const PERSONA_LABELS: Record<Persona, string> = {
+	pm: "PM",
+	engineer: "ENG",
+	educator: "ED",
+	language: "LAN",
+	trader: "TRD",
+};
+
 const SKILL_REGEX = /\.pi\/skills\/(pm|engineer|educator|language|trader)\/SKILL\.md$/;
 
 let activePersona: Persona | null = null;
@@ -117,14 +125,14 @@ class TwoLineFooter implements Component {
 	private renderLine2(width: number): string {
 		const sep = this.theme.fg("dim", " | ");
 		const personaCells = PERSONAS.map((p) => {
-			const label = p.toUpperCase();
+			const label = PERSONA_LABELS[p];
 			return p === activePersona
 				? this.theme.fg("accent", this.theme.bold(label))
 				: this.theme.fg("dim", label);
 		});
 		const personasLeft = personaCells.join(sep);
 		const personasW =
-			PERSONAS.reduce((acc, p) => acc + p.length, 0) +
+			PERSONAS.reduce((acc, p) => acc + PERSONA_LABELS[p].length, 0) +
 			(PERSONAS.length - 1) * 3; // " | " is 3 visible cols each
 
 		const statuses = this.footerData.getExtensionStatuses();
