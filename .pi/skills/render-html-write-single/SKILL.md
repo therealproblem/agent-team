@@ -1,5 +1,5 @@
 ---
-description: Layer 3 sub-skill of [[render-html]]. Wraps the `write_html_render` tool — writes one `.mdx` file at the slug the planner committed to, verifies the page actually compiles against the local Next.js dev server, and returns the verified URL. Pure single-page writer; refuses with isError if the markdown crosses the auto-split threshold without `force_single`. Caller is expected to have run `plan_html_render` first (see [[render-html-decide-split]]) and only invoke this tool when the plan returned `mode: "single"`.
+description: "Layer 3 sub-skill of [[render-html]]. Wraps the `write_html_render` tool — writes one `.mdx` file at the slug the planner committed to, verifies the page actually compiles against the local Next.js dev server, and returns the verified URL. Pure single-page writer; refuses with isError if the markdown crosses the auto-split threshold without `force_single`. Caller is expected to have run `plan_html_render` first (see [[render-html-decide-split]]) and only invoke this tool when the plan returned `mode: \"single\"`."
 ---
 
 # Render HTML — Write Single
