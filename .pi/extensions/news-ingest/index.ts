@@ -45,6 +45,7 @@ interface NewsItem {
 
 const SOURCES_PATH = join(process.cwd(), ".pi/state/news-sources.json");
 const STORE_PATH = join(process.cwd(), ".pi/state/news.json");
+const ERRORS_PATH = join(process.cwd(), ".pi/state/news-errors.json");
 
 const FRESH_WINDOW_MS = 60 * 60 * 1000; // re-use rows fetched within the last hour
 
@@ -88,6 +89,101 @@ function save(): void {
 
 function startOfToday(now: Date = new Date()): number {
 	return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+// ---------- Error log ----------
+//
+// Persisted snapshot of the most recent refresh's errors, so the `news` skill
+// can recall and explain failures the next time the user asks about them.
+// Overwritten on every refresh (cron, `/news-refresh`, `refresh_all_topics`).
+// `entries: []` is a valid clean state — the file's `last_refresh_at` still
+// records that a refresh ran, which is the difference between "last refresh
+// was clean" and "no refresh has run yet".
+
+type ErrorType =
+	| "http_4xx"
+	| "http_5xx"
+	| "http_other"
+	| "timeout"
+	| "network"
+	| "parse"
+	| "other";
+
+interface ErrorEntry {
+	topic: string;
+	feed_url: string;
+	message: string;
+	type: ErrorType;
+}
+
+interface ErrorLog {
+	last_refresh_at: string;
+	trigger: "cron" | "news-refresh" | "refresh_all_topics";
+	topics_attempted: number;
+	entries: ErrorEntry[];
+}
+
+function classifyError(message: string): ErrorType {
+	const m = message.toLowerCase();
+	const httpMatch = m.match(/http\s+(\d{3})/);
+	if (httpMatch) {
+		const code = Number(httpMatch[1]);
+		if (code >= 400 && code < 500) return "http_4xx";
+		if (code >= 500 && code < 600) return "http_5xx";
+		return "http_other";
+	}
+	if (m.includes("timeout") || m.includes("etimedout") || m.includes("aborted")) {
+		return "timeout";
+	}
+	if (
+		m.includes("fetch failed") ||
+		m.includes("enotfound") ||
+		m.includes("econnrefused") ||
+		m.includes("econnreset") ||
+		m.includes("network")
+	) {
+		return "network";
+	}
+	if (m.includes("parse") || m.includes("xml") || m.includes("unexpected token")) {
+		return "parse";
+	}
+	return "other";
+}
+
+// Refresh errors from the inner loops are formatted as `[topic] feedUrl: message`
+// (see `liveFetch` and the refresh handlers). Parse them back into structured
+// entries; fall back to topic-only if the shape doesn't match.
+function parseRefreshError(raw: string): ErrorEntry {
+	const m = raw.match(/^\[([^\]]+)\]\s+(.+?):\s+(.+)$/);
+	if (m) {
+		const [, topic, feed_url, message] = m;
+		return { topic, feed_url, message, type: classifyError(message) };
+	}
+	const t = raw.match(/^\[([^\]]+)\]\s+(.+)$/);
+	if (t) {
+		const [, topic, message] = t;
+		return { topic, feed_url: "", message, type: classifyError(message) };
+	}
+	return { topic: "", feed_url: "", message: raw, type: classifyError(raw) };
+}
+
+function writeErrorLog(
+	trigger: ErrorLog["trigger"],
+	topicsAttempted: number,
+	rawErrors: string[],
+): void {
+	try {
+		mkdirSync(dirname(ERRORS_PATH), { recursive: true });
+		const log: ErrorLog = {
+			last_refresh_at: new Date().toISOString(),
+			trigger,
+			topics_attempted: topicsAttempted,
+			entries: rawErrors.map(parseRefreshError),
+		};
+		writeFileSync(ERRORS_PATH, JSON.stringify(log, null, 2));
+	} catch {
+		// best-effort: never crash a refresh on log-write failure
+	}
 }
 
 function purgeOld(): void {
@@ -666,6 +762,7 @@ const refreshAllTopics = defineTool({
 		}
 
 		updateStatus(ctx);
+		writeErrorLog("refresh_all_topics", topics.length, errors);
 		const total = refreshed.reduce((a, r) => a + r.count, 0);
 		return {
 			content: [
@@ -759,6 +856,7 @@ export default function (pi: ExtensionAPI): void {
 					}
 				}
 				const total = refreshed.reduce((a, r) => a + r.count, 0);
+				writeErrorLog("news-refresh", topics.length, errors);
 				const errTail =
 					errors.length > 0
 						? ` (${errors.length} feed error${errors.length === 1 ? "" : "s"} — see details)`
@@ -769,6 +867,7 @@ export default function (pi: ExtensionAPI): void {
 					{ refreshed, ...(errors.length > 0 ? { errors } : {}) },
 				);
 			} catch (e) {
+				writeErrorLog("news-refresh", 0, [`[*] ${(e as Error).message}`]);
 				surface(pi, `news: refresh failed — ${(e as Error).message}`);
 			} finally {
 				refreshInFlight = false;
