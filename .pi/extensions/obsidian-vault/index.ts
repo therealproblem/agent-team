@@ -73,6 +73,22 @@ import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadDotenv, reloadDotenv } from "../../lib/dotenv";
+import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
+
+// Captured at extension boot (see the default export). The render tools
+// need `pi` to surface per-part completion messages into the TUI without
+// touching the tool's working indicator — `onUpdate` would, because pi
+// renders streamed tool content in place of the spinner. Module-scoped
+// `let` is fine: pi re-imports this module on session swaps and
+// re-invokes the default export, which refreshes the reference.
+let piRef: ExtensionAPI | null = null;
+
+const RENDER_HTML_CUSTOM_TYPE = "render-html";
+
+function surfaceRenderProgress(text: string): void {
+	if (!piRef) return;
+	surfaceShared(piRef, RENDER_HTML_CUSTOM_TYPE, text);
+}
 
 loadDotenv();
 
@@ -280,6 +296,357 @@ async function verifyRender(slug: string): Promise<
 	return first;
 }
 
+/*
+ * Auto-split policy for `write_html_render`.
+ *
+ *   AUTO_SPLIT_THRESHOLD — at or above this line count, the renderer tries
+ *                          to chop the markdown along top-level `##`
+ *                          headings into multi-part pages. 1200 is the
+ *                          floor — below it the browser handles a single
+ *                          page fine; above it diagrams pile up and first
+ *                          paint stalls. With MAX_LINES_PER_PART = 600,
+ *                          1200 is also the smallest source that can yield
+ *                          at least two balanced parts, so the threshold
+ *                          isn't an arbitrary line in the sand — it's the
+ *                          smallest source the policy can actually act on.
+ *   MAX_LINES_PER_PART   — hard cap per part. The bucketer flushes the
+ *                          current bucket before adding a section that
+ *                          would push past this. A single `##` section
+ *                          larger than the cap still becomes its own part
+ *                          (we never split mid-section — that breaks the
+ *                          "self-contained part" guarantee callers expect).
+ *   MIN_LAST_PART_LINES  — protects against a tiny dangling final part.
+ *                          If the tail bucket is shorter than this and the
+ *                          previous bucket has room, they get merged.
+ */
+const AUTO_SPLIT_THRESHOLD = 1200;
+const MAX_LINES_PER_PART = 600;
+const MIN_LAST_PART_LINES = 100;
+
+interface MarkdownSection {
+	headingText: string | null; // null = preamble (content before the first `##`)
+	body: string;
+	lineCount: number;
+}
+
+/*
+ * Walk a markdown body and split it into top-level `##` sections, returning
+ * an ordered list. Tracks fenced code blocks (``` and ~~~) so a `##` inside
+ * a code sample doesn't split prose. Preamble (anything before the first
+ * `##`) becomes a section with `headingText: null`. `###` and deeper
+ * headings stay inside their parent `##` section.
+ */
+function parseTopLevelSections(markdown: string): MarkdownSection[] {
+	const lines = markdown.split("\n");
+	const sections: MarkdownSection[] = [];
+	let curHeading: string | null = null;
+	let curStart = 0;
+	let fenceChar: string | null = null;
+	let fenceLen = 0;
+
+	const flush = (endExclusive: number) => {
+		const lineCount = endExclusive - curStart;
+		if (lineCount <= 0) return;
+		const body = lines.slice(curStart, endExclusive).join("\n");
+		sections.push({ headingText: curHeading, body, lineCount });
+	};
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+
+		if (fenceChar === null) {
+			const open = line.match(/^([`~])\1{2,}/);
+			if (open) {
+				fenceChar = open[1];
+				fenceLen = open[0].length;
+				continue;
+			}
+		} else {
+			const close = line.match(/^([`~])\1{2,}\s*$/);
+			if (close && close[1] === fenceChar && close[0].trimEnd().length >= fenceLen) {
+				fenceChar = null;
+				fenceLen = 0;
+			}
+			continue;
+		}
+
+		const h2 = line.match(/^##(?!#)\s+(.+?)\s*$/);
+		if (h2) {
+			flush(i);
+			curHeading = h2[1].trim();
+			curStart = i;
+		}
+	}
+	flush(lines.length);
+
+	if (
+		sections.length > 0 &&
+		sections[0].headingText === null &&
+		sections[0].body.trim() === ""
+	) {
+		sections.shift();
+	}
+	return sections;
+}
+
+/*
+ * Bucket an ordered list of `##` sections into balanced parts. Greedy: keep
+ * accumulating into the current bucket until adding the next section would
+ * cross MAX_LINES_PER_PART; then flush. A section larger than the cap on
+ * its own becomes a single-section bucket. Merges a tiny final bucket back
+ * into the previous one when there's headroom.
+ */
+function bucketSections(sections: MarkdownSection[]): MarkdownSection[][] {
+	const buckets: MarkdownSection[][] = [];
+	let cur: MarkdownSection[] = [];
+	let curLines = 0;
+
+	for (const s of sections) {
+		if (cur.length > 0 && curLines + s.lineCount > MAX_LINES_PER_PART) {
+			buckets.push(cur);
+			cur = [];
+			curLines = 0;
+		}
+		cur.push(s);
+		curLines += s.lineCount;
+	}
+	if (cur.length > 0) buckets.push(cur);
+
+	if (buckets.length >= 2) {
+		const last = buckets[buckets.length - 1];
+		const lastLines = last.reduce((a, s) => a + s.lineCount, 0);
+		const prev = buckets[buckets.length - 2];
+		const prevLines = prev.reduce((a, s) => a + s.lineCount, 0);
+		if (
+			lastLines < MIN_LAST_PART_LINES &&
+			prevLines + lastLines <= MAX_LINES_PER_PART
+		) {
+			buckets[buckets.length - 2] = prev.concat(last);
+			buckets.pop();
+		}
+	}
+	return buckets;
+}
+
+/*
+ * Returns >=2 parts when the markdown can be split sensibly along `##`
+ * headings, or [] when it can't (no headings, or everything fits in one
+ * bucket). Each part's title is the first `##` heading inside it.
+ */
+function splitMarkdownAlongHeadings(
+	markdown: string,
+): Array<{ title: string; markdown: string }> {
+	const sections = parseTopLevelSections(markdown);
+	if (sections.length < 2) return [];
+	const buckets = bucketSections(sections);
+	if (buckets.length < 2) return [];
+
+	return buckets.map((bucket, i) => {
+		const firstHeading = bucket.find((s) => s.headingText !== null);
+		const title = firstHeading?.headingText ?? `Part ${i + 1}`;
+		const body = bucket.map((s) => s.body).join("\n");
+		return { title, markdown: body };
+	});
+}
+
+function countLines(s: string): number {
+	if (!s) return 0;
+	let n = 1;
+	for (let i = 0; i < s.length; i++) if (s[i] === "\n") n++;
+	return n;
+}
+
+interface MultipartWriteParams {
+	title: string;
+	parts: Array<{ title: string; markdown: string }>;
+	source_md_path?: string;
+	extraDetails?: Record<string, unknown>;
+}
+
+/*
+ * Slug derivation for multipart parts. Both `plan_html_render` (planning
+ * pass) and `writeMultipartRender` (write pass) call this so the URLs
+ * surfaced at plan time match the files actually written. Slugs are
+ * deterministic in (title, parts ordering, parts titles) — re-running the
+ * planner and the writer on the same inputs produces the same set.
+ */
+function computeMultipartSlugs(
+	overallTitle: string,
+	partTitles: string[],
+): { baseSlug: string; partSlugs: string[] } {
+	const baseSlug = `${todayIso()}-${slugify(overallTitle)}`;
+	const padWidth = String(partTitles.length).length;
+	const partSlugs = partTitles.map(
+		(t, i) =>
+			`${baseSlug}-part-${String(i + 1).padStart(padWidth, "0")}-${slugify(t)}`,
+	);
+	return { baseSlug, partSlugs };
+}
+
+/*
+ * Shared write-and-verify path used by both `write_html_render`
+ * (when auto-split fires) and `write_html_render_multipart` (when the
+ * caller hands over an explicit parts array). Owns: base-slug derivation,
+ * cleanup of any prior set under the same base, frontmatter assembly with
+ * sibling list, write loop, parallel verification, error shape.
+ *
+ * Streaming model: as each part clears verification (or fails), its URL
+ * is surfaced into the TUI via `pi.sendMessage` (see surfaceRenderProgress).
+ * This is deliberately NOT piped through the tool's `onUpdate` channel —
+ * that channel renders in place of pi's braille working indicator, and
+ * displacing the spinner during an in-flight tool call leaves the user
+ * with no visual signal that the tool is still working. surfaceShared
+ * pushes a separate boxed message instead, so the spinner stays alive
+ * and URLs trickle in as they land.
+ */
+async function writeMultipartRender(params: MultipartWriteParams) {
+	const { baseSlug, partSlugs } = computeMultipartSlugs(
+		params.title,
+		params.parts.map((p) => p.title),
+	);
+	const dir = join(SERVER_ROOT, "content", "v");
+	const partsMeta = partSlugs.map((slug, i) => ({
+		slug,
+		title: params.parts[i].title,
+	}));
+
+	const escapeYaml = (s: string) =>
+		s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+	const buildFrontmatter = (currentSlug: string, partTitle: string) => {
+		const fullTitle = `${partTitle} — ${params.title}`;
+		const lines = [
+			"---",
+			`title: "${escapeYaml(fullTitle)}"`,
+			"sidebar: false",
+			`part_slug: "${escapeYaml(currentSlug)}"`,
+			"parts:",
+			...partsMeta.map(
+				(p) =>
+					`  - { slug: "${escapeYaml(p.slug)}", title: "${escapeYaml(p.title)}" }`,
+			),
+			"---",
+			"",
+			"",
+		];
+		return lines.join("\n");
+	};
+
+	if (!existsSync(dir)) {
+		await mkdir(dir, { recursive: true });
+	}
+
+	// Clean up any prior artifacts under the same base before writing the
+	// new set. Without this, shrinking from 5 parts to 3 would leave parts
+	// 4 and 5 stranded under their old URLs. We also remove `<base>.mdx`
+	// so a switch from single-page to multipart (or back) doesn't leave
+	// both flavors coexisting.
+	const existing = await readdir(dir).catch(() => [] as string[]);
+	const escapedBase = baseSlug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const baseRegex = new RegExp(
+		`^${escapedBase}(\\.mdx|-part-\\d+-[a-z0-9-]+\\.mdx)$`,
+	);
+	await Promise.all(
+		existing
+			.filter((f) => baseRegex.test(f))
+			.map((f) => unlink(join(dir, f)).catch(() => undefined)),
+	);
+
+	const results: Array<{
+		slug: string;
+		url: string;
+		title: string;
+		path: string;
+		html_stripped_count: number;
+	}> = [];
+	for (let i = 0; i < params.parts.length; i++) {
+		const part = params.parts[i];
+		const slug = partSlugs[i];
+		const path = join(dir, `${slug}.mdx`);
+		const url = `${serverPublicUrl()}/v/${slug}`;
+		const frontmatter = buildFrontmatter(slug, part.title);
+		const { cleaned, strippedCount } = stripMdxHtml(part.markdown);
+		await writeFile(path, frontmatter + cleaned, { encoding: "utf8" });
+		results.push({
+			slug,
+			url,
+			title: part.title,
+			path,
+			html_stripped_count: strippedCount,
+		});
+	}
+
+	// Verify every part's URL in parallel — one broken part is enough to
+	// fail the whole multipart write, since the sibling nav makes the
+	// broken part discoverable from every other page. As each verification
+	// resolves, push a TUI box with the URL so the user sees ready parts
+	// as they land. Each part is its own surfaced message (not a single
+	// accumulating block) — that way the spinner stays alive between
+	// parts and the message history reads chronologically.
+	const verifyOne = async (
+		r: (typeof results)[number],
+		index: number,
+	): Promise<{ r: typeof r; v: Awaited<ReturnType<typeof verifyRender>> }> => {
+		const v = await verifyRender(r.slug);
+		if (v.ok) {
+			surfaceRenderProgress(`Part ${index + 1} — ${r.title}: ${r.url}`);
+		} else {
+			const reason = (v as { ok: false; reason: string }).reason;
+			surfaceRenderProgress(
+				`Part ${index + 1} — ${r.title}: FAILED (${reason})`,
+			);
+		}
+		return { r, v };
+	};
+	const verifications = await Promise.all(results.map((r, i) => verifyOne(r, i)));
+	const failures = verifications.filter((x) => !x.v.ok);
+	if (failures.length > 0) {
+		const detail = failures
+			.map(
+				(x) =>
+					`${x.r.title}: ${(x.v as { ok: false; reason: string }).reason}`,
+			)
+			.join("; ");
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: `Wrote ${results.length} parts but ${failures.length} failed to render — ${detail}`,
+				},
+			],
+			details: {
+				base_slug: baseSlug,
+				title: params.title,
+				parts: results,
+				source_md_path: params.source_md_path,
+				...(params.extraDetails ?? {}),
+				failed_parts: failures.map((x) => ({
+					slug: x.r.slug,
+					title: x.r.title,
+					reason: (x.v as { ok: false; reason: string }).reason,
+				})),
+			},
+			isError: true as const,
+		};
+	}
+
+	const summary = results.map((r, i) => `Part ${i + 1}: ${r.url}`).join("\n");
+	return {
+		content: [
+			{
+				type: "text" as const,
+				text: `Rendered ${results.length} parts:\n${summary}`,
+			},
+		],
+		details: {
+			base_slug: baseSlug,
+			title: params.title,
+			parts: results,
+			source_md_path: params.source_md_path,
+			...(params.extraDetails ?? {}),
+		},
+	};
+}
+
 const writeNote = defineTool({
 	name: "write_note",
 	label: "Write Note",
@@ -384,19 +751,156 @@ const writeNote = defineTool({
 	},
 });
 
+/*
+ * Decider step for the `render-html` skill family. Takes the assembled
+ * markdown body and returns the deterministic plan that the matching
+ * write tool will execute:
+ *
+ *   - mode === "single"    → one .mdx file at the predetermined slug
+ *   - mode === "multipart" → an ordered parts array, each carrying its
+ *                            own slug, url, and pre-split markdown body
+ *
+ * The planner is the source of truth for filenames and URLs. Because
+ * slugs are deterministic in (date, title, parts ordering, parts
+ * titles), the URLs returned here are *exactly* the URLs the writer
+ * tool will later serve — so the orchestrator can surface them to the
+ * user the moment planning completes, before any file is written. Pi
+ * also surfaces the plan into the TUI from inside this tool (boxed
+ * message via surfaceRenderProgress) so the URLs appear in the user's
+ * terminal even when the orchestrator is mid-turn.
+ */
+const planHtmlRender = defineTool({
+	name: "plan_html_render",
+	label: "Plan HTML Render",
+	description:
+		"Decide whether a markdown body should be rendered as a single page or split into a multi-part set, and return the deterministic plan (predetermined slugs, URLs, paths). The orchestrator skill (`render-html`) calls this BEFORE either writer tool so URLs are known up-front. Split policy: if `force_single` is true OR the body is under ~1200 lines, mode is `single`. Otherwise the body is walked along top-level `##` headings and bucketed into parts of ≤ 600 lines each; mode is `multipart` when ≥ 2 buckets result, else `single` with `auto_split_skipped_reason` set. No files are written and nothing is verified — this tool is pure decision + slug derivation. After planning, call `write_html_render` for single mode or `write_html_render_multipart` for multipart mode with the returned `parts` array.",
+	parameters: Type.Object({
+		title: Type.String({
+			description:
+				"Title of the document. Used to derive the date-prefixed base slug shared by every part. Must match the title that will be passed to the writer.",
+		}),
+		markdown: Type.String({
+			description:
+				"The assembled markdown body to plan over. Pass the body exactly as it will be sent to the writer — slug derivation uses the title (not the markdown) but the splitter walks this body to decide how it carves into parts.",
+		}),
+		source_md_path: Type.Optional(
+			Type.String({
+				description:
+					"Vault-relative path of the markdown source (informational only — recorded in the response so the orchestrator can pair plan + source).",
+			}),
+		),
+		force_single: Type.Optional(
+			Type.Boolean({
+				description:
+					"Force `mode: single` even when the body crosses the auto-split threshold. Default false. Use only for sources you intentionally want shipped as one page (rare).",
+			}),
+		),
+	}),
+
+	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		try {
+			const sourceLines = countLines(params.markdown);
+			const dir = join(SERVER_ROOT, "content", "v");
+			const baseSlug = `${todayIso()}-${slugify(params.title)}`;
+
+			const planSingle = (skippedReason?: string) => {
+				const slug = baseSlug;
+				const url = `${serverPublicUrl()}/v/${slug}`;
+				const path = join(dir, `${slug}.mdx`);
+				surfaceRenderProgress(`Planned (single): ${url}`);
+				return {
+					content: [{ type: "text" as const, text: `Plan: single → ${url}` }],
+					details: {
+						mode: "single" as const,
+						base_slug: baseSlug,
+						source_lines: sourceLines,
+						slug,
+						url,
+						path,
+						title: params.title,
+						source_md_path: params.source_md_path,
+						...(params.force_single ? { override_reason: "force_single" } : {}),
+						...(skippedReason
+							? { auto_split_skipped_reason: skippedReason }
+							: {}),
+					},
+				};
+			};
+
+			if (params.force_single || sourceLines < AUTO_SPLIT_THRESHOLD) {
+				return planSingle();
+			}
+
+			const splitParts = splitMarkdownAlongHeadings(params.markdown);
+			if (splitParts.length < 2) {
+				const reason =
+					parseTopLevelSections(params.markdown).length < 2
+						? "no top-level `##` headings to split along"
+						: "all sections fit within MAX_LINES_PER_PART";
+				return planSingle(reason);
+			}
+
+			const { partSlugs } = computeMultipartSlugs(
+				params.title,
+				splitParts.map((p) => p.title),
+			);
+			const parts = splitParts.map((p, i) => {
+				const slug = partSlugs[i];
+				return {
+					index: i + 1,
+					slug,
+					url: `${serverPublicUrl()}/v/${slug}`,
+					path: join(dir, `${slug}.mdx`),
+					title: p.title,
+					markdown: p.markdown,
+					lines: countLines(p.markdown),
+				};
+			});
+
+			const lines = parts
+				.map((p) => `Part ${p.index} — ${p.title}: ${p.url}`)
+				.join("\n");
+			surfaceRenderProgress(`Planned (multipart, ${parts.length} parts):\n${lines}`);
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Plan: multipart (${parts.length} parts)\n${lines}`,
+					},
+				],
+				details: {
+					mode: "multipart" as const,
+					base_slug: baseSlug,
+					source_lines: sourceLines,
+					title: params.title,
+					source_md_path: params.source_md_path,
+					parts,
+				},
+			};
+		} catch (e) {
+			const message = (e as Error).message;
+			return {
+				content: [{ type: "text", text: `Failed to plan HTML render: ${message}` }],
+				details: { error: message },
+				isError: true,
+			};
+		}
+	},
+});
+
 const writeHtmlRender = defineTool({
 	name: "write_html_render",
 	label: "Write HTML Render",
 	description:
-		"Write a markdown body as an `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. Used by the `render-html` skill. The caller passes plain markdown body — Nextra owns layout, theme, syntax highlighting, copy buttons, TOC, and dark/light mode. Do NOT include `<!doctype>`, `<html>`, `<head>`, `<style>`, or `<script>` — that's all framework chrome. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a markdown body as a SINGLE `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. **This tool is the single-page leg of the `render-html` skill family — it does not split.** The orchestrator skill must call `plan_html_render` first; if that returns `mode: single` (or you have a specific reason to force a single page on a long body) call this tool. If the body exceeds ~1200 lines and `force_single` is not set, this tool refuses and tells you to plan first, since a single page would render unreadably. Markdown body only — no `<!doctype>`, `<html>`, `<head>`, `<style>`, `<script>`. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
-				"Title for the page (set as `title` in frontmatter, used to build the URL slug). Should match the source note's title.",
+				"Title for the page (set as `title` in frontmatter, used to build the URL slug). Must match the title passed to `plan_html_render` so the URL matches the planned URL.",
 		}),
 		markdown: Type.String({
 			description:
-				"Markdown body, written verbatim. NO frontmatter (this tool prepends it). NO `<!doctype>` / `<html>` / `<head>` / `<style>` / `<script>` — Nextra owns the chrome. Mermaid blocks via ```mermaid` fences are supported. GFM callouts via `> [!NOTE]` / `> [!WARNING]` / `> [!DANGER]` are rendered as styled boxes.",
+				"Markdown body, written verbatim. NO frontmatter (this tool prepends it). NO `<!doctype>` / `<html>` / `<head>` / `<style>` / `<script>` — Nextra owns the chrome. Mermaid blocks via ```mermaid` fences are supported. GFM callouts via `> [!NOTE]` / `> [!WARNING]` / `> [!DANGER]` are rendered as styled boxes. Refused with isError if longer than ~1200 lines unless `force_single` is true — use `plan_html_render` + `write_html_render_multipart` for large bodies.",
 		}),
 		source_md_path: Type.Optional(
 			Type.String({
@@ -404,18 +908,57 @@ const writeHtmlRender = defineTool({
 					"Vault-relative path of the markdown source this render was generated from (e.g. 'pm/prd/2026-05-15-foo.md'). Recorded in the response so the caller can keep them paired.",
 			}),
 		),
+		force_single: Type.Optional(
+			Type.Boolean({
+				description:
+					"Override the over-threshold guard and ship a single page even when the body is large. Default false. Set this only when `plan_html_render` was called with `force_single: true`, OR the source is genuinely one continuous narrative with no `##` boundaries.",
+			}),
+		),
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const slug = `${todayIso()}-${slugify(params.title)}`;
-		const dir = join(SERVER_ROOT, "content", "v");
-		const path = join(dir, `${slug}.mdx`);
-		const url = `${serverPublicUrl()}/v/${slug}`;
-
 		try {
+			const sourceLines = countLines(params.markdown);
+			if (!params.force_single && sourceLines >= AUTO_SPLIT_THRESHOLD) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Body is ${sourceLines} lines (≥ ${AUTO_SPLIT_THRESHOLD}). Call plan_html_render first; if the plan returns multipart, use write_html_render_multipart with its parts array. To override, pass force_single: true.`,
+						},
+					],
+					details: {
+						source_lines: sourceLines,
+						threshold: AUTO_SPLIT_THRESHOLD,
+						guard: "over_threshold_without_force_single",
+					},
+					isError: true,
+				};
+			}
+
+			const slug = `${todayIso()}-${slugify(params.title)}`;
+			const dir = join(SERVER_ROOT, "content", "v");
+			const path = join(dir, `${slug}.mdx`);
+			const url = `${serverPublicUrl()}/v/${slug}`;
+
 			if (!existsSync(dir)) {
 				await mkdir(dir, { recursive: true });
 			}
+
+			// Clean up any prior multipart set under the same base slug —
+			// otherwise switching from multipart to single-page would leave
+			// stale `-part-N-…` files coexisting with the new single page.
+			const existing = await readdir(dir).catch(() => [] as string[]);
+			const escapedBase = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			const partRegex = new RegExp(
+				`^${escapedBase}-part-\\d+-[a-z0-9-]+\\.mdx$`,
+			);
+			await Promise.all(
+				existing
+					.filter((f) => partRegex.test(f))
+					.map((f) => unlink(join(dir, f)).catch(() => undefined)),
+			);
+
 			const titleEscaped = params.title.replace(/"/g, '\\"');
 			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
 			const { cleaned, strippedCount } = stripMdxHtml(params.markdown);
@@ -443,6 +986,7 @@ const writeHtmlRender = defineTool({
 				};
 			}
 
+			surfaceRenderProgress(`Rendered (single): ${url}`);
 			return {
 				content: [{ type: "text", text: `Rendered ${url}` }],
 				details: {
@@ -484,7 +1028,7 @@ const writeHtmlRenderMultipart = defineTool({
 	name: "write_html_render_multipart",
 	label: "Write HTML Render (multi-part)",
 	description:
-		"Write a long markdown source as a SET of `.mdx` part pages into the local Next.js server's `content/v/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. Use when the source markdown is too large for one HTML page (~2000+ lines, or any curriculum/research doc that visibly bloats the page). The caller passes an ordered `parts` array where each item is `{ title, markdown }`. Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a long markdown source as a SET of `.mdx` part pages into the local Next.js server's `content/v/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. **This is the multi-part leg of the `render-html` skill family.** The orchestrator skill calls `plan_html_render` first; when it returns `mode: multipart`, pass `parts: plan.parts` directly into this tool (the planner produces the exact part shape this tool expects — same titles, same ordering, same markdown bodies). Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. URLs from the plan match the URLs this tool serves — same slug derivation. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -516,131 +1060,12 @@ const writeHtmlRenderMultipart = defineTool({
 	}),
 
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-		const baseSlug = `${todayIso()}-${slugify(params.title)}`;
-		const dir = join(SERVER_ROOT, "content", "v");
-		const pad = (n: number) =>
-			String(n).padStart(String(params.parts.length).length, "0");
-		const partSlugs = params.parts.map(
-			(p, i) => `${baseSlug}-part-${pad(i + 1)}-${slugify(p.title)}`,
-		);
-		const partsMeta = partSlugs.map((slug, i) => ({
-			slug,
-			title: params.parts[i].title,
-		}));
-
-		const escapeYaml = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-		const buildFrontmatter = (currentSlug: string, partTitle: string) => {
-			const fullTitle = `${partTitle} — ${params.title}`;
-			const lines = [
-				"---",
-				`title: "${escapeYaml(fullTitle)}"`,
-				"sidebar: false",
-				`part_slug: "${escapeYaml(currentSlug)}"`,
-				"parts:",
-				...partsMeta.map(
-					(p) =>
-						`  - { slug: "${escapeYaml(p.slug)}", title: "${escapeYaml(p.title)}" }`,
-				),
-				"---",
-				"",
-				"",
-			];
-			return lines.join("\n");
-		};
-
 		try {
-			if (!existsSync(dir)) {
-				await mkdir(dir, { recursive: true });
-			}
-
-			// Clean up any prior artifacts under the same base before writing
-			// the new set. Without this, shrinking from 5 parts to 3 would
-			// leave parts 4 and 5 stranded under their old URLs. We also
-			// remove `<base>.mdx` so a switch from single-page to multipart
-			// (or back) doesn't leave both flavors coexisting.
-			const existing = await readdir(dir).catch(() => [] as string[]);
-			const escapedBase = baseSlug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			const baseRegex = new RegExp(
-				`^${escapedBase}(\\.mdx|-part-\\d+-[a-z0-9-]+\\.mdx)$`,
-			);
-			await Promise.all(
-				existing
-					.filter((f) => baseRegex.test(f))
-					.map((f) => unlink(join(dir, f)).catch(() => undefined)),
-			);
-
-			const results: Array<{
-				slug: string;
-				url: string;
-				title: string;
-				path: string;
-				html_stripped_count: number;
-			}> = [];
-			for (let i = 0; i < params.parts.length; i++) {
-				const part = params.parts[i];
-				const slug = partSlugs[i];
-				const path = join(dir, `${slug}.mdx`);
-				const url = `${serverPublicUrl()}/v/${slug}`;
-				const frontmatter = buildFrontmatter(slug, part.title);
-				const { cleaned, strippedCount } = stripMdxHtml(part.markdown);
-				await writeFile(path, frontmatter + cleaned, { encoding: "utf8" });
-				results.push({
-					slug,
-					url,
-					title: part.title,
-					path,
-					html_stripped_count: strippedCount,
-				});
-			}
-
-			// Verify every part's URL in parallel — one broken part is enough
-			// to fail the whole multipart write, since the sibling nav makes
-			// the broken part discoverable from every other page.
-			const verifications = await Promise.all(
-				results.map(async (r) => ({ r, v: await verifyRender(r.slug) })),
-			);
-			const failures = verifications.filter((x) => !x.v.ok);
-			if (failures.length > 0) {
-				const detail = failures
-					.map(
-						(x, i) =>
-							`${x.r.title}: ${(x.v as { ok: false; reason: string }).reason}`,
-					)
-					.join("; ");
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Wrote ${results.length} parts but ${failures.length} failed to render — ${detail}`,
-						},
-					],
-					details: {
-						base_slug: baseSlug,
-						title: params.title,
-						parts: results,
-						source_md_path: params.source_md_path,
-						failed_parts: failures.map((x) => ({
-							slug: x.r.slug,
-							title: x.r.title,
-							reason: (x.v as { ok: false; reason: string }).reason,
-						})),
-					},
-					isError: true,
-				};
-			}
-
-			const summary = results
-				.map((r, i) => `Part ${i + 1}: ${r.url}`)
-				.join("\n");
-			return {
-				content: [{ type: "text", text: `Rendered ${results.length} parts:\n${summary}` }],
-				details: {
-					base_slug: baseSlug,
-					title: params.title,
-					parts: results,
-					source_md_path: params.source_md_path,
-				},
-			};
+			return await writeMultipartRender({
+				title: params.title,
+				parts: params.parts,
+				source_md_path: params.source_md_path,
+			});
 		} catch (e) {
 			const message = (e as Error).message;
 			return {
@@ -803,7 +1228,10 @@ const writeExportPdf = defineTool({
 });
 
 export default function (pi: ExtensionAPI): void {
+	piRef = pi;
+	pi.registerMessageRenderer(RENDER_HTML_CUSTOM_TYPE, createBoxRenderer());
 	pi.registerTool(writeNote);
+	pi.registerTool(planHtmlRender);
 	pi.registerTool(writeHtmlRender);
 	pi.registerTool(writeHtmlRenderMultipart);
 	pi.registerTool(writeExportPdf);
