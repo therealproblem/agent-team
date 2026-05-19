@@ -43,7 +43,6 @@ export type Decision =
 			persona: Persona;
 			line: string;
 			replyToMessageId: number;
-			triggeredBy?: "render" | "export" | "vault";
 	  }
 	| {
 			kind: "stop";

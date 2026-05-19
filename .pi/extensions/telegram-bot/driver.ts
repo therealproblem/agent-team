@@ -76,7 +76,6 @@ interface PendingInvoke {
 	persona: Persona;
 	replyToMessageId: number;
 	enqueuedAt: number;
-	triggeredBy?: "render" | "export" | "vault";
 }
 
 // Invokes we've called sendUserMessage for but haven't yet seen the matching
@@ -144,7 +143,6 @@ export async function handleInvoke(
 		persona: d.persona,
 		replyToMessageId: d.replyToMessageId,
 		enqueuedAt: now,
-		triggeredBy: d.triggeredBy,
 	};
 	pendingInvokes.push(pending);
 
@@ -283,7 +281,6 @@ export async function handleCallback(
 	const [prefix, value] = d.data.split(":", 2);
 	let line = "";
 	let persona: Persona = "engineer";
-	let triggeredBy: "render" | "export" | "vault" | undefined;
 
 	if (prefix === "persona") {
 		if (!(PERSONAS as readonly string[]).includes(value)) return;
@@ -292,9 +289,7 @@ export async function handleCallback(
 	} else if (prefix === "act") {
 		if (value === "render") line = "use render-html on the just-produced note";
 		else if (value === "export") line = "use export to produce a PDF of the just-produced note";
-		else if (value === "vault") line = "save the just-produced content to the vault via note-taker";
 		else return;
-		triggeredBy = value as "render" | "export" | "vault";
 		// Use whichever persona was last active in this chat.
 		const state = loadChatState(d.chatId, d.chatTitle);
 		if (state.lastAssistantPersona && (PERSONAS as readonly string[]).includes(state.lastAssistantPersona)) {
@@ -319,7 +314,6 @@ export async function handleCallback(
 			persona,
 			line,
 			replyToMessageId: d.messageId,
-			triggeredBy,
 		},
 		pi,
 	);
@@ -361,11 +355,13 @@ export async function onAgentEnd(messages: AgentMessageLike[]): Promise<void> {
 		return;
 	}
 
-	const keyboard = pickKeyboard(finalText, inv.triggeredBy);
+	const keyboard = pickKeyboard(finalText);
 	const ids = await safeSendOrReportError(inv.chatId, finalText, {
 		replyToMessageId: inv.replyToMessageId,
 		replyMarkup: keyboard,
 	});
+
+	await maybeSendExportedPdf(inv.chatId, finalText, inv.replyToMessageId);
 
 	// Persist what persona this reply was from and the message id of the last
 	// chunk (which carries any inline keyboard).
@@ -472,6 +468,34 @@ async function safeSendOrReportError(
 	}
 }
 
+// ---------- PDF upload ----------
+
+// Matches the `/p/<filename>.pdf` path that `write_export_pdf` emits. The
+// filename portion is the on-disk basename under AGENTS_TEAM_EXPORT_PATH —
+// the route handler at `app/p/[slug]/route.ts` is just a static disk read.
+const EXPORT_PDF_URL_RE = /\/p\/([A-Za-z0-9._-]+\.pdf)\b/;
+
+async function maybeSendExportedPdf(
+	chatId: number,
+	text: string,
+	replyToMessageId: number,
+): Promise<void> {
+	const m = text.match(EXPORT_PDF_URL_RE);
+	if (!m) return;
+	const filename = m[1];
+	const { resolve, join } = await import("node:path");
+	const exportRoot = resolve(
+		process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
+	);
+	const filePath = join(exportRoot, filename);
+	try {
+		await api.sendDocument(chatId, filePath, { filename, replyToMessageId });
+	} catch {
+		// best-effort; the URL is already in the text reply so the user can
+		// still download it manually.
+	}
+}
+
 // ---------- inline keyboards ----------
 
 const KEYBOARDS_DISABLED = (): boolean =>
@@ -493,10 +517,7 @@ function keyboardKindFor(text: string): "artifact" | "profile" | undefined {
  * proposal. No default persona switcher: persona is selected by typing /name
  * or @name in the next message, which keeps replies uncluttered.
  */
-function pickKeyboard(
-	text: string,
-	triggeredBy?: "render" | "export" | "vault",
-): InlineKeyboardMarkup | undefined {
+function pickKeyboard(text: string): InlineKeyboardMarkup | undefined {
 	if (KEYBOARDS_DISABLED()) return undefined;
 	const kind = keyboardKindFor(text);
 	if (kind === "profile") {
@@ -511,17 +532,10 @@ function pickKeyboard(
 		};
 	}
 	if (kind === "artifact") {
-		// When the response was triggered by a render or vault button, the
-		// content is by definition already in the vault — suppress the "Save
-		// to vault" button to avoid a redundant action.
-		const alreadyVaulted = triggeredBy === "render" || triggeredBy === "vault";
 		const buttons = [
 			{ text: "Render again", callback_data: "act:render" },
 			{ text: "Export PDF", callback_data: "act:export" },
 		];
-		if (!alreadyVaulted) {
-			buttons.push({ text: "Save to vault", callback_data: "act:vault" });
-		}
 		return { inline_keyboard: [buttons] };
 	}
 	return undefined;
