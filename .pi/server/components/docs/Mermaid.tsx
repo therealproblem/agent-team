@@ -24,7 +24,7 @@
  * blocks in chart source — the defaults below are the palette.
  */
 
-import { jsx } from "react/jsx-runtime";
+import { jsx, jsxs } from "react/jsx-runtime";
 import { useEffect, useId, useRef, useState } from "react";
 
 // Delphi tokens → Mermaid themeVariables. Cognac-Stained Parchment look:
@@ -179,10 +179,20 @@ function useIsVisible(ref: React.RefObject<HTMLDivElement | null>) {
   return isIntersecting;
 }
 
-export function Mermaid({ chart }: { chart: string }) {
+export function Mermaid({
+  chart,
+  chartNumber,
+}: {
+  chart: string;
+  chartNumber?: number;
+}) {
   const id = useId();
   const [svg, setSvg] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Separate target for mermaid.render's temporary measurement DOM.
+  // Keeping it off the React-managed outer container avoids reconciliation
+  // races when mermaid attaches and detaches its own nodes.
+  const renderTargetRef = useRef<HTMLDivElement | null>(null);
   const isVisible = useIsVisible(containerRef);
 
   useEffect(() => {
@@ -230,7 +240,7 @@ export function Mermaid({ chart }: { chart: string }) {
         const { svg: rendered } = await mermaid.render(
           id.replaceAll(":", ""),
           stripColorOverrides(decoded),
-          containerRef.current ?? undefined,
+          renderTargetRef.current ?? undefined,
         );
         if (!cancelled) setSvg(rendered);
       } catch (error) {
@@ -248,5 +258,32 @@ export function Mermaid({ chart }: { chart: string }) {
     };
   }, [chart, isVisible, id]);
 
-  return jsx("div", { ref: containerRef, dangerouslySetInnerHTML: { __html: svg } });
+  // The mermaid SVG is injected via dangerouslySetInnerHTML, so it needs
+  // its own dedicated wrapper. The outer div holds the optional chart-number
+  // label above it and still carries the IntersectionObserver ref.
+  return jsxs("div", {
+    ref: containerRef,
+    children: [
+      chartNumber
+        ? jsx("div", {
+            "aria-hidden": true,
+            style: {
+              fontSize: "0.75rem",
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              color: "#7f6e60",
+              marginTop: "1.5rem",
+              marginBottom: "-0.75rem",
+              textAlign: "center",
+              letterSpacing: "0.05em",
+            },
+            children: `Chart ${chartNumber}`,
+          })
+        : null,
+      jsx("div", {
+        ref: renderTargetRef,
+        dangerouslySetInnerHTML: { __html: svg },
+      }),
+    ],
+  });
 }

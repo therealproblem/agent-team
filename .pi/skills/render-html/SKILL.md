@@ -25,6 +25,17 @@ This isolation is the point: a long curriculum render that would burn 20k tokens
 
 **Always call `render-html` after** `note-taker` (not before). The vault markdown path is the input.
 
+## Targeted chart edits — skip the subagent
+
+Every rendered Mermaid block carries a 1-based `Chart N` caption (numbering resets per part on multipart). When the user references a chart by number — *"render chart 3 as a table"*, *"swap part 2 chart 1 for a bullet list"* — **do not redispatch to the subagent**. The fix is local:
+
+1. Locate the Nth fenced ```mermaid``` block in the vault source `.md`.
+2. Make the same swap in the corresponding `.mdx` under `.pi/server/content/v/`. For multipart, find the part's slug from the user's reference ("part 2") and edit only that file. Single-page renders have one `.mdx` to edit.
+3. Replace both with the requested alternative (GFM table, bullet list, prose, etc.). Apply the same content transform to both files so they stay in sync.
+4. No re-dispatch, no replan, no re-verify. `/v/[slug]` is `force-dynamic` — the next page load picks up the change. Tell the user the chart was swapped and the existing URL still works.
+
+This shortcut is *only* for targeted swaps of an individual chart (or other in-place fixups like a typo). If the request reshapes the document — new sections, new diagrams, restructured headings — go back through the subagent so the planner can decide single vs multipart again.
+
 ## How to dispatch
 
 Call the `subagent` tool with `agent: "render-html"`. The task is natural language; include:

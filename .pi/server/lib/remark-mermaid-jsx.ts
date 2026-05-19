@@ -10,8 +10,10 @@ import { visit } from "unist-util-visit";
  */
 export function remarkMermaidJsx() {
   return (tree: any) => {
+    let chartIndex = 0;
     visit(tree, "code", (node: any, index: number | null, parent: any) => {
       if (node.lang !== "mermaid" || index == null || !parent) return;
+      chartIndex += 1;
       parent.children[index] = {
         type: "mdxJsxFlowElement",
         name: "Mermaid",
@@ -26,6 +28,17 @@ export function remarkMermaidJsx() {
             value:
               "b64:" +
               Buffer.from(node.value as string, "utf8").toString("base64"),
+          },
+          {
+            // Per-document chart number, 1-based. Lets the user reference
+            // a specific chart ("render chart 3 as a table") and lets the
+            // agent locate the matching fenced block by ordinal.
+            type: "mdxJsxAttribute",
+            name: "chartNumber",
+            value: {
+              type: "mdxJsxAttributeValueExpression",
+              value: String(chartIndex),
+            },
           },
         ],
         children: [],
