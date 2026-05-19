@@ -130,6 +130,156 @@ function todayIso(): string {
 	return `${yyyy}-${mm}-${dd}`;
 }
 
+/*
+ * Strip raw HTML / JSX tags from a markdown body while preserving fenced
+ * code blocks (``` and ~~~) and inline code (backticks). MDX is permissive
+ * about HTML, but a stray `<div>` or unclosed `<br>` is enough to crash
+ * compilation, and the agent runtime can't always detect the failure —
+ * `write_html_render` returns the URL successfully, the agent says "done",
+ * and the user opens a broken page. Stripping is defense-in-depth on top
+ * of the SKILL.md "markdown only" rule.
+ *
+ * What we strip:
+ *   - HTML/JSX opening, closing, self-closing tags: <div>, </div>, <br/>
+ *   - HTML comments and processing instructions: <!--…-->, <!DOCTYPE …>
+ *
+ * What we preserve:
+ *   - Anything inside ``` or ~~~ fences (Mermaid, code samples — `<` is
+ *     legal in code).
+ *   - Inline code spans `like <this>`.
+ *   - GFM autolinks: <https://example.com>, <mailto:a@b.com> — the body
+ *     contains `://` or `@` so it doesn't match the tag regex.
+ *   - Bare `<` / `>` punctuation (e.g. inequalities in prose).
+ */
+function stripMdxHtml(markdown: string): { cleaned: string; strippedCount: number } {
+	let result = "";
+	let i = 0;
+	let strippedCount = 0;
+	const tagBodyRe = /^\/?[a-zA-Z][a-zA-Z0-9-]*(\s[^>]*?)?\/?$/;
+
+	while (i < markdown.length) {
+		const atLineStart = i === 0 || markdown[i - 1] === "\n";
+
+		// Fenced code block — copy through verbatim until the closing fence.
+		if (
+			atLineStart &&
+			(markdown.startsWith("```", i) || markdown.startsWith("~~~", i))
+		) {
+			const fence = markdown.startsWith("```", i) ? "```" : "~~~";
+			const close = markdown.indexOf(`\n${fence}`, i + fence.length);
+			if (close === -1) {
+				result += markdown.slice(i);
+				i = markdown.length;
+				continue;
+			}
+			const eol = markdown.indexOf("\n", close + 1 + fence.length);
+			const segmentEnd = eol === -1 ? markdown.length : eol;
+			result += markdown.slice(i, segmentEnd);
+			i = segmentEnd;
+			continue;
+		}
+
+		// Inline code span — copy through to the matching backtick run.
+		if (markdown[i] === "`") {
+			const runStart = i;
+			while (i < markdown.length && markdown[i] === "`") i++;
+			const runLen = i - runStart;
+			const tick = "`".repeat(runLen);
+			const close = markdown.indexOf(tick, i);
+			if (close === -1) {
+				result += markdown.slice(runStart, i);
+				continue;
+			}
+			result += markdown.slice(runStart, close + runLen);
+			i = close + runLen;
+			continue;
+		}
+
+		// Prose: a `<` that looks like a tag gets stripped. We only consider
+		// it a tag candidate if the `>` is on the same line — that excludes
+		// stray inequalities in prose ("if a < b, then ... > 0") from
+		// triggering a cross-paragraph strip, while still catching every
+		// real HTML/JSX tag (which by convention fits on one line).
+		if (markdown[i] === "<") {
+			const close = markdown.indexOf(">", i + 1);
+			if (close !== -1) {
+				const body = markdown.slice(i + 1, close);
+				if (!body.includes("\n")) {
+					const looksLikeTag = body.startsWith("!") || tagBodyRe.test(body);
+					if (looksLikeTag) {
+						strippedCount++;
+						i = close + 1;
+						continue;
+					}
+				}
+			}
+		}
+
+		result += markdown[i];
+		i++;
+	}
+
+	return { cleaned: result, strippedCount };
+}
+
+/*
+ * Confirm a rendered .mdx URL actually compiles and serves. After writing
+ * the file we hit the URL locally — if MDX compilation crashes, Next.js
+ * returns 500 with an error page. Returning isError from the tool means
+ * the agent can't accidentally tell the user "done" on a broken page.
+ *
+ * Always targets `http://localhost:8080` (not `serverPublicUrl()`) because
+ * the file write is local; verification doesn't need the tunnel hop, and
+ * checking locally avoids spurious failures when the tunnel itself is
+ * down but the page is fine.
+ */
+async function verifyRender(slug: string): Promise<
+	{ ok: true } | { ok: false; reason: string }
+> {
+	const url = `http://localhost:8080/v/${slug}`;
+	const fetchOnce = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+		try {
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 30_000);
+			const res = await fetch(url, { signal: controller.signal });
+			clearTimeout(timer);
+			const body = await res.text();
+			if (!res.ok) {
+				return { ok: false, reason: `HTTP ${res.status}` };
+			}
+			if (
+				/Failed to compile|Unhandled Runtime Error|Build Error|Server Error/i.test(
+					body,
+				)
+			) {
+				return { ok: false, reason: "page rendered with compile/runtime error markers" };
+			}
+			return { ok: true };
+		} catch (e) {
+			const msg = (e as Error).message;
+			if (/ECONNREFUSED|fetch failed/i.test(msg)) {
+				return {
+					ok: false,
+					reason:
+						"local Next.js dev server not reachable at http://localhost:8080 — start it with `npm run dev` in .pi/server before re-running the render",
+				};
+			}
+			return { ok: false, reason: msg };
+		}
+	};
+
+	const first = await fetchOnce();
+	if (first.ok) return first;
+	// Next.js's file watcher can briefly miss a just-written file; one
+	// retry after a short pause catches that case without masking real
+	// failures (compile errors will still fail on the retry).
+	if (first.reason.startsWith("HTTP 404")) {
+		await new Promise((r) => setTimeout(r, 1000));
+		return fetchOnce();
+	}
+	return first;
+}
+
 const writeNote = defineTool({
 	name: "write_note",
 	label: "Write Note",
@@ -268,7 +418,31 @@ const writeHtmlRender = defineTool({
 			}
 			const titleEscaped = params.title.replace(/"/g, '\\"');
 			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
-			await writeFile(path, frontmatter + params.markdown, { encoding: "utf8" });
+			const { cleaned, strippedCount } = stripMdxHtml(params.markdown);
+			await writeFile(path, frontmatter + cleaned, { encoding: "utf8" });
+
+			const verification = await verifyRender(slug);
+			if (!verification.ok) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Wrote ${path} but render verification failed: ${verification.reason}`,
+						},
+					],
+					details: {
+						slug,
+						path,
+						url,
+						title: params.title,
+						source_md_path: params.source_md_path,
+						html_stripped_count: strippedCount,
+						verify_error: verification.reason,
+					},
+					isError: true,
+				};
+			}
+
 			return {
 				content: [{ type: "text", text: `Rendered ${url}` }],
 				details: {
@@ -277,6 +451,7 @@ const writeHtmlRender = defineTool({
 					url,
 					title: params.title,
 					source_md_path: params.source_md_path,
+					html_stripped_count: strippedCount,
 				},
 			};
 		} catch (e) {
@@ -394,15 +569,64 @@ const writeHtmlRenderMultipart = defineTool({
 					.map((f) => unlink(join(dir, f)).catch(() => undefined)),
 			);
 
-			const results: Array<{ slug: string; url: string; title: string; path: string }> = [];
+			const results: Array<{
+				slug: string;
+				url: string;
+				title: string;
+				path: string;
+				html_stripped_count: number;
+			}> = [];
 			for (let i = 0; i < params.parts.length; i++) {
 				const part = params.parts[i];
 				const slug = partSlugs[i];
 				const path = join(dir, `${slug}.mdx`);
 				const url = `${serverPublicUrl()}/v/${slug}`;
 				const frontmatter = buildFrontmatter(slug, part.title);
-				await writeFile(path, frontmatter + part.markdown, { encoding: "utf8" });
-				results.push({ slug, url, title: part.title, path });
+				const { cleaned, strippedCount } = stripMdxHtml(part.markdown);
+				await writeFile(path, frontmatter + cleaned, { encoding: "utf8" });
+				results.push({
+					slug,
+					url,
+					title: part.title,
+					path,
+					html_stripped_count: strippedCount,
+				});
+			}
+
+			// Verify every part's URL in parallel — one broken part is enough
+			// to fail the whole multipart write, since the sibling nav makes
+			// the broken part discoverable from every other page.
+			const verifications = await Promise.all(
+				results.map(async (r) => ({ r, v: await verifyRender(r.slug) })),
+			);
+			const failures = verifications.filter((x) => !x.v.ok);
+			if (failures.length > 0) {
+				const detail = failures
+					.map(
+						(x, i) =>
+							`${x.r.title}: ${(x.v as { ok: false; reason: string }).reason}`,
+					)
+					.join("; ");
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Wrote ${results.length} parts but ${failures.length} failed to render — ${detail}`,
+						},
+					],
+					details: {
+						base_slug: baseSlug,
+						title: params.title,
+						parts: results,
+						source_md_path: params.source_md_path,
+						failed_parts: failures.map((x) => ({
+							slug: x.r.slug,
+							title: x.r.title,
+							reason: (x.v as { ok: false; reason: string }).reason,
+						})),
+					},
+					isError: true,
+				};
 			}
 
 			const summary = results

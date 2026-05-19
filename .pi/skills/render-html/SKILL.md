@@ -18,10 +18,13 @@ description: Layer 3 shared skill — renders an existing markdown note from the
 - `<style>` or `<script>` tags
 - Inline CSS, fonts, or theme switching
 - Hand-rolled HTML for tabs / callouts / TOC / dark-mode toggle
+- **Any raw HTML or JSX** — no `<div>`, `<span>`, `<br>`, `<details>`, `<Component />`, nothing. A single stray tag is enough to crash MDX compilation. The tool itself runs a code-fence-aware HTML stripper on every body before writing (so a `<div>` slips out as plain text), but treat the strip as defense-in-depth, not a license to author HTML. If the source markdown contains HTML, scrub it during the convert step — don't rely on the tool to fix it for you.
 
-The DocLayout provides all of those. You write the markdown; the renderer compiles it inside the parchment-styled layout.
+Exception, and only this exception: inside fenced ```` ``` ```` code blocks and inline backticks, `<` and `>` are preserved verbatim (so code samples and Mermaid edges work). Everywhere else, MDX-level HTML is stripped.
 
-If you find yourself authoring CSS, you are writing the wrong artifact.
+The DocLayout provides all chrome. You write the markdown; the renderer compiles it inside the parchment-styled layout.
+
+If you find yourself authoring CSS or JSX, you are writing the wrong artifact.
 
 ## Why this skill exists
 
@@ -331,6 +334,20 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 
    Do not paste the rendered body inline.
 
+## Verification — never say done on a broken page
+
+Both `write_html_render` and `write_html_render_multipart` fetch every URL they wrote (against `http://localhost:8080`) and confirm the page actually compiles — Next.js returns 500 / "Failed to compile" on MDX errors that the agent runtime can't otherwise see. If verification fails, the tool returns `isError: true` with a `verify_error` (single) or `failed_parts` (multipart) reason.
+
+**Agent rule:** never reply with `Open: <url>` (or any "done"-shaped message) until the tool call returned a non-error result. On verification failure:
+
+1. Read the `verify_error` / `failed_parts` reason.
+2. If the reason is *"local Next.js dev server not reachable"* — tell the user once that the server isn't running. Don't retry until they confirm it's up.
+3. If the reason is a compile / runtime error — re-read your generated markdown, find the offending construct (most often a smuggled `<Component>`, an unescaped `<` in prose, or a malformed Mermaid block), fix it in the markdown body, and re-call the tool. Do not return the URL to the user until a re-call succeeds.
+
+The same rule applies to multipart: a single failed part fails the whole render. Fix the broken part and re-call — re-runs clean up the prior set, so you won't end up with partially-broken sibling navigation.
+
+The tool also reports `html_stripped_count` (per part for multipart). A non-zero value means the input contained HTML the stripper removed; the page should still work, but treat it as a signal that the convert step should have caught that HTML earlier.
+
 ## Don't
 
 - **Don't write HTML / CSS / JS.** The renderer owns the chrome. Emit markdown body only.
@@ -349,3 +366,5 @@ If the type isn't above, scan the *idioms* table and pick 2–3 that fit the con
 - **Don't list multiple render URLs proactively.** The URL-secrecy model means each URL is shared deliberately. Never volunteer "here are your recent renders".
 - **Don't include the markdown source as a code block** in the rendered markdown — the source path goes in the response metadata, the file lives in the vault.
 - **Don't dump 2000+-line markdown onto a single page.** Offer a split first (see *Splitting large markdown across pages*) and use `write_html_render_multipart`. A single page with 30+ `##` sections, dozens of Mermaid blocks, or first-paint stalls is a failed render — the medium can't carry the load. Conversely, don't split a short doc just because it scrolls; the split is for docs the browser visibly chokes on, not for cosmetic chaptering.
+- **Don't author raw HTML or JSX in the markdown body** — no `<div>`, no `<details>`, no `<Component />`. MDX compilation fails on a single bad tag, and the agent runtime can't always see the failure. The tool strips HTML defensively before writing, but a render that depends on stripping to come out clean is a render that's likely to lose something the agent intended. Express the same idea in pure markdown (table, callout, sequential headings, Mermaid).
+- **Don't say "done" on a render the tool flagged as failed.** Both render tools verify the URL after writing and return `isError: true` with a reason if the page didn't compile. If you see an error result, fix the markdown and re-call — do not return the URL.
