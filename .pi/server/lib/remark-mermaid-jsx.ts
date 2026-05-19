@@ -33,12 +33,15 @@ export function remarkMermaidJsx() {
             // Per-document chart number, 1-based. Lets the user reference
             // a specific chart ("render chart 3 as a table") and lets the
             // agent locate the matching fenced block by ordinal.
+            //
+            // Emitted as a plain string attribute (not an expression node)
+            // because expression-value attributes in the mdast need an
+            // `estree` companion to be parsed back into a JS number — the
+            // string form is robust across MDX versions and is parsed back
+            // in the Mermaid component.
             type: "mdxJsxAttribute",
             name: "chartNumber",
-            value: {
-              type: "mdxJsxAttributeValueExpression",
-              value: String(chartIndex),
-            },
+            value: String(chartIndex),
           },
         ],
         children: [],

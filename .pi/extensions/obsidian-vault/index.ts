@@ -518,6 +518,11 @@ async function writeMultipartRender(params: MultipartWriteParams) {
 			"---",
 			`title: "${escapeYaml(fullTitle)}"`,
 			"sidebar: false",
+			// Persist the vault source path so the Mermaid syntax-fix
+			// endpoint can locate the originating .md and dual-write.
+			...(params.source_md_path
+				? [`source_md_path: "${escapeYaml(params.source_md_path)}"`]
+				: []),
 			`part_slug: "${escapeYaml(currentSlug)}"`,
 			"parts:",
 			...partsMeta.map(
@@ -960,7 +965,14 @@ const writeHtmlRender = defineTool({
 			);
 
 			const titleEscaped = params.title.replace(/"/g, '\\"');
-			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n---\n\n`;
+			// Persist the vault source path so client-side fix-ups (e.g. the
+			// Mermaid syntax-fix button) can locate the originating .md and
+			// keep both files in sync without round-tripping through the
+			// render-html subagent.
+			const sourceLine = params.source_md_path
+				? `source_md_path: "${params.source_md_path.replace(/"/g, '\\"')}"\n`
+				: "";
+			const frontmatter = `---\ntitle: "${titleEscaped}"\nsidebar: false\n${sourceLine}---\n\n`;
 			const { cleaned, strippedCount } = stripMdxHtml(params.markdown);
 			await writeFile(path, frontmatter + cleaned, { encoding: "utf8" });
 

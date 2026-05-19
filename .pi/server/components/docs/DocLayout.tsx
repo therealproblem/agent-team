@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Toc } from "@/components/docs/Toc";
 import { MobileTocSheet } from "@/components/docs/MobileTocSheet";
 import { PartsNav, parsePartsFromFrontmatter } from "@/components/docs/PartsNav";
+import { MermaidErrorToast } from "@/components/docs/MermaidErrorToast";
 import type { TocEntry } from "@/lib/toc";
 
 interface DocLayoutProps {
@@ -34,6 +35,7 @@ export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
   return (
     <>
       <MobileTocSheet entries={toc} parts={parts} currentSlug={currentSlug} />
+      <MermaidErrorToast />
       <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 md:px-6 md:py-12">
         <aside className="hidden md:block md:w-56 md:shrink-0 -my-8 md:-my-12">
           <div className="sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto pr-2 py-6">
