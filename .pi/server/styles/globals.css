@@ -233,34 +233,6 @@ svg[aria-roledescription="timeline"] .lineWrapper line {
   marker-end: none !important;
 }
 
-/* D2 diagrams — rendered server-side by remark-d2-jsx and inlined as SVG.
- * Match the spacing the mermaid container gets (margin: 1.5rem auto 0) and
- * cap the SVG so wide diagrams scale down to the prose column instead of
- * blowing past it. */
-.d2-diagram {
-  margin: 1.5rem auto 0;
-  display: flex;
-  justify-content: center;
-}
-.d2-diagram svg {
-  max-width: 100%;
-  height: auto;
-}
-.d2-error {
-  margin: 1.5rem 0;
-  padding: 12px 16px;
-  border: 1px solid rgba(246, 87, 38, 0.5);
-  border-radius: 8px;
-  background: rgba(246, 87, 38, 0.08);
-  color: var(--color-deep-cognac);
-  font-size: 14px;
-}
-.d2-error pre {
-  margin: 8px 0 0 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-}
-
 /* GFM alert callouts — restyled to Delphi: 16px radius, Cloud Fog tint
  * for NOTE, Muted Stone border by default. Soft, scholarly, never harsh. */
 .markdown-alert {

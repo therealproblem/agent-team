@@ -1,6 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
 import { Mermaid } from "@/components/docs/Mermaid";
-import { D2 } from "@/components/docs/D2";
 import { Separator } from "@/components/ui/separator";
 import {
   Table as KitTable,
@@ -300,7 +299,6 @@ export const mdxComponents = {
   td: Td,
   img: Img,
   Mermaid,
-  D2,
 } as const;
 
 export type MdxComponents = typeof mdxComponents;
