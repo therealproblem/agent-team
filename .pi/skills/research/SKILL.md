@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared service — online research via stealth browser. Fetches URLs and searches the web through Camoufox (a fingerprint-resistant Firefox fork), bypassing common bot-blockers (Cloudflare, DataDome, PerimeterX). Backed by the `@the-forge-flow/camoufox-pi` extension. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. NOT a writer — it returns raw HTML / markdown / search results that the calling persona reasons over.
+description: Layer 3 shared service — online research via stealth browser. Fetches URLs and searches the web through Camoufox (a fingerprint-resistant Firefox fork), bypassing common bot-blockers (Cloudflare, DataDome, PerimeterX). Backed by the `@the-forge-flow/camoufox-pi` extension. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. NOT a writer — it returns raw HTML / markdown / search results that the calling persona reasons over. Also keeps a rolling history of the last 10 finished research tasks at `.pi/state/research-history.json` — load this skill for "what did I research recently?" / "have I researched X before?" questions.
 ---
 
 # Research
@@ -164,11 +164,60 @@ That's a useful answer. The caller can decide whether to escalate.
 
 ## Steps
 
-1. **Start with search, not fetch.** Unless the user gave you the URL, call `tff-search_web` first to surface candidate sources.
-2. **Pick before fetching.** Look at the snippets. Don't fetch every result — pick the 1–3 most relevant URLs.
-3. **Prefer markdown.** Use `format: "markdown"` for reading; only use `"html"` when you need structure (tables, specific elements, anchors).
-4. **Cite as you reason.** Anything the caller surfaces to the user should be attributable to a fetched URL — keep the URL alongside any claim.
-5. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` — and, if the caller wants an interactive HTML render of the saved synthesis, a follow-up call to `render-html`.
+1. **Check recent-research history first.** Read `.pi/state/research-history.json` (see [Recent-research history](#recent-research-history)). If the current request overlaps a recent entry, surface the prior artifact (vault path / render URL) before fetching anything — re-running identical research is waste, and the user often wants the existing note opened, not regenerated. Only proceed to a fresh fetch if the prior entry is stale, the request explicitly asks for an update, or the overlap is partial.
+2. **Start with search, not fetch.** Unless the user gave you the URL, call `tff-search_web` first to surface candidate sources.
+3. **Pick before fetching.** Look at the snippets. Don't fetch every result — pick the 1–3 most relevant URLs.
+4. **Prefer markdown.** Use `format: "markdown"` for reading; only use `"html"` when you need structure (tables, specific elements, anchors).
+5. **Cite as you reason.** Anything the caller surfaces to the user should be attributable to a fetched URL — keep the URL alongside any claim.
+6. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` — and, if the caller wants an interactive HTML render of the saved synthesis, a follow-up call to `render-html`.
+7. **Record the task in the history file.** After the downstream action (render / summarise / export) completes, append an entry to `.pi/state/research-history.json` and trim to the 10 most recent — see [Recent-research history](#recent-research-history) for the exact shape.
+
+## Recent-research history
+
+A rolling log of the **last 10 finished research tasks** lives at `.pi/state/research-history.json`. It exists so Pi can answer "what did I research recently?" / "have I looked into X before?" without re-fetching, and so duplicate requests reuse the prior artifact instead of regenerating it.
+
+### Shape
+
+A single JSON array, newest entry **last** (append-only with a trim at the head). Each entry:
+
+```json
+{
+  "timestamp": "2026-05-19T14:22:10.123Z",
+  "request": "research the current state of WebGPU support across browsers",
+  "summary": "Chromium ships stable, Safari 18+ enables behind flag, Firefox Nightly only; spec at W3C CR.",
+  "artifact": "/v/2026-05-19-webgpu-browser-support"
+}
+```
+
+Field rules:
+
+- `timestamp` — ISO 8601 UTC, taken when the downstream action (render / summarise / export) finishes.
+- `request` — the user's original ask, verbatim where short; lightly normalised (strip leading "research" / "look up") if long-winded. One sentence max.
+- `summary` — one-line synthesis of what was found. Not the full note body — the headline finding. Aim for ≤140 chars.
+- `artifact` — the most useful pointer back to the result, in this priority: render URL (`/v/…`) > PDF URL (`/p/…`) > vault path (`vault/...md`) > `null` if the task was summarise-only with nothing persisted.
+
+### Read at start
+
+As Step 1 of every research invocation, read `.pi/state/research-history.json`. If the file doesn't exist yet, treat it as `[]` — you'll create it on first append. Scan for overlap with the current request:
+
+- **Exact / near-duplicate request, artifact still valid** → surface the prior `artifact` URL and ask the user whether they want it re-opened or a fresh pass. Don't silently re-run.
+- **Partial overlap** (related topic, different angle) → mention the prior entry inline ("you researched adjacent topic Y on $date — that note is at $artifact"), then proceed with the new fetch.
+- **No overlap** → proceed normally; the read is cheap and the freshness signal is still useful context.
+
+### Append at end
+
+Once the downstream action has completed and the user has a deliverable (render URL, PDF, summary, or vault note), update the history:
+
+1. Read the current array (or `[]` if absent).
+2. Append the new entry.
+3. If the array exceeds 10 entries, slice to keep only the **last 10** (i.e. drop entries from the front).
+4. Write back to `.pi/state/research-history.json` — pretty-printed JSON, 2-space indent, trailing newline, same convention as `news-bookmarks.json`.
+
+Skip the append only if the research was aborted, returned no useful content, or the user explicitly said "don't log this" — in those cases the entry would be noise.
+
+### On-demand queries
+
+When the user asks "what did I research recently?", "have I researched X before?", "show me my last few research notes", or similar, read `.pi/state/research-history.json` directly and answer from it. Reverse-iterate so newest comes first; offer to open the artifact for any entry the user picks. This does **not** count as a "research task" and must not append a new entry.
 
 ## Default downstream action: render
 
