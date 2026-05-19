@@ -29,8 +29,8 @@ export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
     <>
       <MobileTocSheet entries={toc} />
       <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 md:px-6 md:py-12">
-        <aside className="hidden md:block md:w-56 md:shrink-0">
-          <div className="sticky top-20">
+        <aside className="hidden md:block md:w-56 md:shrink-0 -my-8 md:-my-12">
+          <div className="sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto pr-2 py-6">
             <Toc entries={toc} />
           </div>
         </aside>

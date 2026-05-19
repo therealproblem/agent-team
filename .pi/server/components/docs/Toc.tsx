@@ -16,7 +16,7 @@ interface TocProps {
  * deliberately deferred until requested.
  */
 export function Toc({ entries, className }: TocProps) {
-  const items = entries.filter((e) => e.depth >= 2);
+  const items = entries.filter((e) => e.depth >= 2 && e.depth <= 3);
   if (items.length === 0) return null;
   return (
     <nav
