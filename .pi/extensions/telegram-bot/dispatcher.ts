@@ -5,20 +5,26 @@
  * Decision rules for `update.message` (in order, first match wins):
  *   1. chat_id not in allowlist               → ignore
  *   2. text starts with `/stop`               → stop
- *   3. text starts with `/<persona>` OR contains `@<persona>` OR replies to a
+ *   3. text matches `/new` or `/compact`      → control (driver does tmux
+ *                                                send-keys into pi's pane)
+ *   4. text starts with `/<persona>` OR contains `@<persona>` OR replies to a
  *      bot message                            → invoke (with that persona)
- *   4. otherwise                              → ingest (steering buffer)
+ *   5. otherwise                              → ingest (steering buffer)
  *
  * For `update.callback_query`:
- *   5. chat_id not in allowlist               → ignore
- *   6. data starts with known prefix          → callback
- *   7. otherwise                              → ignore
+ *   6. chat_id not in allowlist               → ignore
+ *   7. data starts with known prefix          → callback
+ *   8. otherwise                              → ignore
  *
- * Note: pi slash commands (/new, /resume, /fork, /export, …) are deliberately
- * NOT routed from Telegram. `pi.sendUserMessage()` hard-codes
- * `expandPromptTemplates: false`, so any "/foo" text we inject reaches the
- * agent as raw text instead of triggering pi's command handler. Surfacing them
- * as buttons just lies about what's possible.
+ * Pi slash commands like `/new` and `/compact` cannot be triggered via
+ * `pi.sendUserMessage()` — that API hard-codes `expandPromptTemplates: false`
+ * so an injected `/foo` reaches the LLM as raw text. Instead, when running
+ * inside tmux (the default — see the `tmux-host` extension), we type the
+ * command into pi's own pane via `tmux send-keys`, and pi's TUI handles it
+ * exactly as if the user had typed it. See `handleControl` in driver.ts.
+ *
+ * Other pi slash commands (/resume, /fork, /export, …) are not routed yet —
+ * /resume needs a session picker, /fork needs an entry id, etc.
  */
 
 import type { TelegramUpdate } from "./api";
@@ -52,6 +58,15 @@ export type Decision =
 			replyToMessageId: number;
 	  }
 	| {
+			kind: "control";
+			command: "new" | "compact";
+			args: string | undefined;
+			chatId: number;
+			chatTitle: string;
+			fromUsername: string;
+			replyToMessageId: number;
+	  }
+	| {
 			kind: "start";
 			chatId: number;
 			chatTitle: string;
@@ -79,6 +94,7 @@ const PERSONA_RE = new RegExp(`^/(${PERSONAS.join("|")})\\b`, "i");
 const PERSONA_MENTION_RE = new RegExp(`@(${PERSONAS.join("|")})\\b`, "i");
 const STOP_RE = /^\/stop\b/i;
 const START_RE = /^\/start\b/i;
+const CONTROL_RE = /^\/(new|compact)\b\s*(.*)$/i;
 const CALLBACK_PREFIXES = ["persona:", "act:", "pu:"];
 
 function chatTitle(update: TelegramUpdate["message"] | NonNullable<TelegramUpdate["callback_query"]>["message"]): string {
@@ -156,6 +172,23 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 	if (STOP_RE.test(text)) {
 		return {
 			kind: "stop",
+			chatId,
+			chatTitle: title,
+			fromUsername: sender,
+			replyToMessageId: msg.message_id,
+		};
+	}
+
+	// /new and /compact: typed into pi's own pane via tmux send-keys, since
+	// pi.sendUserMessage() can't trigger built-in slash commands. Must come
+	// before the persona check so `/new` isn't mistaken for `/news` etc.
+	const ctrl = text.match(CONTROL_RE);
+	if (ctrl) {
+		const args = ctrl[2].trim();
+		return {
+			kind: "control",
+			command: ctrl[1].toLowerCase() as "new" | "compact",
+			args: args.length > 0 ? args : undefined,
 			chatId,
 			chatTitle: title,
 			fromUsername: sender,

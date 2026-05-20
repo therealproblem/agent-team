@@ -10,7 +10,14 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { surface as surfaceShared } from "../../lib/tui";
 import type { TelegramUpdate } from "./api";
 import { type DispatcherContext, decide } from "./dispatcher";
-import { handleCallback, handleIngest, handleInvoke, handleStart, handleStop } from "./driver";
+import {
+	handleCallback,
+	handleControl,
+	handleIngest,
+	handleInvoke,
+	handleStart,
+	handleStop,
+} from "./driver";
 
 function surface(pi: ExtensionAPI, text: string): void {
 	surfaceShared(pi, "telegram-bot", text);
@@ -41,6 +48,12 @@ export async function dispatch(
 		case "stop":
 			surface(pi, `telegram-bot: /stop from @${decision.fromUsername}`);
 			return handleStop(decision);
+		case "control":
+			surface(
+				pi,
+				`telegram-bot: /${decision.command}${decision.args ? ` ${decision.args}` : ""} from @${decision.fromUsername}`,
+			);
+			return handleControl(decision);
 		case "start":
 			surface(
 				pi,

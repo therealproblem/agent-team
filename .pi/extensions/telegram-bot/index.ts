@@ -168,17 +168,22 @@ export default function (pi: ExtensionAPI): void {
 	 *
 	 *   /start    — bot-only: bootstrap reply with the chat id
 	 *   /stop     — bot-only: cancel the in-flight agent turn
+	 *   /new      — rotate pi's session (Esc → C-c → "/new" → Enter via tmux
+	 *               send-keys against $TMUX_PANE; see driver.handleControl)
+	 *   /compact  — trigger pi's compaction with optional custom instructions
 	 *
-	 * We don't surface pi's slash commands (/new, /resume, /fork, /export …)
-	 * here. Pi's extension API has no path for triggering them from outside
-	 * the TUI editor: `pi.sendUserMessage()` hard-codes
-	 * `expandPromptTemplates: false`, so any injected "/foo" reaches the
-	 * agent as raw text and never invokes pi's command handler.
+	 * /new and /compact only work when pi is running inside tmux (which the
+	 * `tmux-host` extension guarantees for every interactive invocation).
+	 * `pi.sendUserMessage()` can't invoke pi's built-in slash commands —
+	 * it hard-codes `expandPromptTemplates: false` — so we type them into
+	 * pi's own pane instead.
 	 */
 	function buildBotCommands(): { command: string; description: string }[] {
 		return [
 			{ command: "start", description: "show this chat's id / onboarding info" },
 			{ command: "stop", description: "cancel the in-flight agent turn" },
+			{ command: "new", description: "start a fresh pi session" },
+			{ command: "compact", description: "compact pi's context (optionally /compact <focus>)" },
 		];
 	}
 

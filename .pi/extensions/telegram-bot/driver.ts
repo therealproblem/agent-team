@@ -23,6 +23,7 @@
  * loop, agent_end lets us route the reply.
  */
 
+import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { api, type InlineKeyboardMarkup, type TelegramUpdate } from "./api";
 import type { Decision, Persona } from "./dispatcher";
@@ -214,6 +215,106 @@ export async function handleStop(d: Decision & { kind: "stop" }): Promise<void> 
 	} catch {
 		// best-effort
 	}
+}
+
+// ---------- control (/new, /compact) ----------
+
+/**
+ * Send a single `tmux send-keys` invocation. Caller is responsible for
+ * choosing whether to include `-l` (literal text) — without it, multi-char
+ * args like `Enter` are interpreted as key names.
+ */
+async function tmuxSendKeys(args: string[]): Promise<void> {
+	await new Promise<void>((res, rej) => {
+		const p = spawn("tmux", ["send-keys", ...args], { stdio: "ignore" });
+		p.on("error", rej);
+		p.on("exit", (code) =>
+			code === 0 ? res() : rej(new Error(`tmux send-keys exited ${code}`)),
+		);
+	});
+}
+
+/**
+ * Inject a pi slash command into pi's own pane.
+ *
+ * Sequence (all targeted at `$TMUX_PANE`, which the bot inherits from pi at
+ * launch — robust against `show-md` side panes being focused):
+ *
+ *   1. Escape — pi's `app.interrupt`: aborts a running agent turn, closes any
+ *      open modal (model picker, resume list, session tree, etc.).
+ *   2. C-c    — pi's `app.clear`: clears the editor buffer in case the user
+ *      had partial input. Without this, "/new" would be appended to their
+ *      text and Enter would submit "<their text>/new" as a chat message.
+ *   3. "/new" or "/compact …" — literal text, sent with `-l` so the leading
+ *      `/` isn't reinterpreted by tmux.
+ *   4. Enter  — submits, which routes to pi's TUI text-submit handler at
+ *      modes/interactive/interactive-mode.js:2030 (for /new) /
+ *      :2035 (for /compact).
+ *
+ * Small sleeps between bursts let pi's event loop process each event before
+ * the next arrives. Without them, queued keys can race the modal teardown.
+ */
+export async function handleControl(d: Decision & { kind: "control" }): Promise<void> {
+	const pane = process.env.TMUX_PANE;
+	if (!process.env.TMUX || !pane) {
+		await safeSend(
+			d.chatId,
+			`(can't /${d.command} — pi isn't running inside tmux)`,
+			{ replyToMessageId: d.replyToMessageId },
+		);
+		return;
+	}
+
+	// /new rotates pi's session — any in-flight Telegram invokes vanish with
+	// it, so the originating chats would never see `agent_end`. Notify them
+	// here (other than the initiator, who gets the success ack below).
+	if (d.command === "new") {
+		const affected = [
+			...(currentInvoke ? [currentInvoke] : []),
+			...pendingInvokes,
+		].filter((inv) => inv.chatId !== d.chatId);
+		for (const inv of affected) {
+			await safeSend(
+				inv.chatId,
+				`(cancelled — @${d.fromUsername} started a new pi session in "${d.chatTitle}")`,
+			);
+		}
+	}
+
+	const slashText =
+		d.command === "compact" && d.args ? `/compact ${d.args}` : `/${d.command}`;
+
+	try {
+		await tmuxSendKeys(["-t", pane, "Escape"]);
+		await new Promise((r) => setTimeout(r, 80));
+		await tmuxSendKeys(["-t", pane, "C-c"]);
+		await new Promise((r) => setTimeout(r, 60));
+		await tmuxSendKeys(["-t", pane, "-l", slashText]);
+		await tmuxSendKeys(["-t", pane, "Enter"]);
+	} catch (e) {
+		const msg = (e as Error).message;
+		await safeSend(
+			d.chatId,
+			`(couldn't send /${d.command}: ${msg})`,
+			{ replyToMessageId: d.replyToMessageId },
+		);
+		return;
+	}
+
+	// Stop the typing indicator immediately; the old session is on its way
+	// out and any in-flight tracking will be torn down when this module's
+	// runner is shut down by pi's session swap.
+	if (d.command === "new") {
+		stopTypingIndicator();
+	}
+
+	const reply =
+		d.command === "new"
+			? "(started a new pi session)"
+			: d.args
+				? `(compacting — ${d.args})`
+				: "(compacting…)";
+	await safeSend(d.chatId, reply, { replyToMessageId: d.replyToMessageId });
 }
 
 // ---------- start ----------
