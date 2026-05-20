@@ -16,7 +16,7 @@ Layer 1   ROOT SESSION        single Pi session — adopts personas inline
               blind by isolation — spawned via `subagent` when the active persona
               needs adversarial review
 Layer 3   SHARED SERVICES     skills any persona can call inline
-                              note-taker · show-md · render-html · export · news · scribe · research · summary · reminders
+                              note-taker · show-md · render-html · export · news · scribe · research · summary · reminders · scout
 ```
 
 The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
@@ -27,14 +27,14 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 |---|---|
 | Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. |
 | Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
-| Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. |
+| Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) + scout | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. Reviewers use isolation for blindness; `scout` uses it for cheap-model offload + context-noise isolation. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
-| Layer 3 services (note-taker, show-md, render-html, export, news, scribe, research, summary, reminders) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. |
+| Layer 3 services (note-taker, show-md, render-html, export, news, scribe, research, summary, reminders, scout) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. `scout` is a thin facade — the SKILL.md dispatches to `.pi/agents/scout.md` so the file-hunting work runs on a cheap model (`openai/gpt-5-mini` via Pi's `ELICE_GPT_5_MINI` provider) in an isolated sub-process. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 
 ## Specialization rule
 
-> **Sub-session when contamination would corrupt the output. Inline (persona or skill) when shared context aids the work.**
+> **Sub-session when contamination would corrupt the output, OR when cost / context isolation is the point. Inline (persona or skill) when shared context aids the work.**
 
 A UAT tester or red-team reviewer *must* be blind to the implementer's reasoning. Same loop = same context = bias. Inline cannot enforce this; sub-sessions can.
 
@@ -51,12 +51,13 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 ```
 .pi/
 ├── SYSTEM.md                  Root agent — persona-adoption rules
-├── agents/                    Reviewers only (spawned as sub-Pi processes)
+├── agents/                    Sub-Pi processes (reviewers + scout)
 │   ├── prd-critic.md          spawned by pm persona
 │   ├── uat-tester.md          spawned by engineer persona
 │   ├── red-team.md            spawned by engineer persona
 │   ├── assessment-grader.md   spawned by educator persona
-│   └── jlpt-examiner.md       spawned by language persona
+│   ├── jlpt-examiner.md       spawned by language persona
+│   └── scout.md               spawned by any persona via the `scout` Layer 3 skill — cheap-model file finder
 ├── skills/                    Personas + inner skills + Layer 3 services
 │   ├── pm/SKILL.md            PERSONA
 │   ├── engineer/SKILL.md      PERSONA
@@ -73,6 +74,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── research/SKILL.md      Layer 3 (online research via camoufox-pi)
 │   ├── summary/SKILL.md       Layer 3 (inline TL;DR of a URL or pasted text — paired with research; no vault write, no HTML, no PDF)
 │   ├── reminders/SKILL.md     Layer 3 (capture / resolve persistent todos)
+│   ├── scout/SKILL.md         Layer 3 (file finder — dispatches to `.pi/agents/scout.md` sub-agent on `openai/gpt-5-mini` so the hunt is cheap and doesn't bloat root context. Returns paths + short previews across repo + vault + `.pi/state/`.)
 │   │
 │   ├── prd/SKILL.md           inner (pm)
 │   ├── roadmap/SKILL.md       inner (pm)
@@ -272,7 +274,9 @@ These apply to every agent:
 | 1 | Root session (`.pi/SYSTEM.md`) | Persona-adoption model (Path B) |
 | Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
+| Sub-agents (non-reviewer) | scout | `.pi/agents/scout.md` — file finder, pinned to `openai/gpt-5-mini` (via Pi's `ELICE_GPT_5_MINI` provider), `thinking: minimal`, tools `read, bash`. Dispatched via the `scout` Layer 3 skill. |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
+| 3 | scout | Skill present at `.pi/skills/scout/SKILL.md`; agent at `.pi/agents/scout.md`. Persona-callable Layer 3 facade that dispatches to a sub-Pi process on `openai/gpt-5-mini` (Pi's `ELICE_GPT_5_MINI` provider — no external API key needed) to find files across repo + vault + `.pi/state/`. Returns JSON `{path, line?, preview}` array, max 20, repo-relative. Read-only by tool surface. |
 | 3 | note-taker, render-html, export, news, scribe | Skills present. `note-taker` enforces Obsidian conventions (frontmatter, tags, wiki-links). `render-html` reads vault markdown and emits a markdown body that Nextra serves at `/v/<YYYY-MM-DD>-<slug>`. `export` produces Kami-styled PDFs served at `/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` (via headless Chrome) for deliverables — resume, letter, portfolio, report, slides, etc. The `-<epoch>` suffix is appended per export to defeat CDN caching; prior PDFs for the same title — across all dates — are unlinked automatically once the new one is on disk. `fetch_topic` is live — RSS-backed via `.pi/state/news-sources.json`; topics without a registry entry fall back to `research` (search-back). |
 | 3 | research | Skill present. Backed by installed npm package `@the-forge-flow/camoufox-pi` (tools: `tff-fetch_url`, `tff-search_web`). |
 | ext | subagent | Pi's example, with profile pre-load + `--system-prompt` patch |
