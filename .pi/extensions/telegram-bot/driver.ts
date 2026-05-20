@@ -337,7 +337,10 @@ export async function handleStart(d: Decision & { kind: "start" }): Promise<void
 				"  @engineer can you help with X?",
 				"  /pm what should we prioritise?",
 				"",
-				"Use /stop to cancel the in-flight agent turn.",
+				"Commands:",
+				"  /stop — cancel the in-flight agent turn",
+				"  /new — start a fresh pi session",
+				"  /compact [focus] — compact pi's context",
 			].join("\n"),
 			{ replyToMessageId: d.replyToMessageId },
 		);
