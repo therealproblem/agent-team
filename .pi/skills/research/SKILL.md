@@ -1,30 +1,41 @@
 ---
-description: Layer 3 shared service — online research via stealth browser. Fetches URLs and searches the web through Camoufox (a fingerprint-resistant Firefox fork), bypassing common bot-blockers (Cloudflare, DataDome, PerimeterX). Backed by the `@the-forge-flow/camoufox-pi` extension. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. NOT a writer — it returns raw HTML / markdown / search results that the calling persona reasons over. Also keeps a rolling history of the last 10 finished research tasks at `.pi/state/research-history.json` — load this skill for "what did I research recently?" / "have I researched X before?" questions.
+description: Layer 3 orchestrator — coordinates the 9-skill research pipeline (frame → survey → rank → fetch → triangulate → steelman → synthesize → stop-check → capture) over the stealth-fetch tools `tff-fetch_url` and `tff-search_web` (via the `@the-forge-flow/camoufox-pi` extension). Also owns the fetch-reliability ladder (host mirrors, web archives, format pivots) used when a fetch returns garbage. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. Also handles "what did I research recently?" / "have I researched X before?" via `research-tree` state.
 ---
 
 # Research
 
-Online-research service for any persona. Wraps two tools provided by the `@the-forge-flow/camoufox-pi` extension:
+Layer 3 orchestrator. Online research for any persona, running a 9-skill pipeline. The orchestrator's job: run the phases in order, pass artifacts between them, handle escalations from `research-branch`, and loop back when `research-stop-check` fails. It does NOT do the per-phase work itself — that's the inner skills' job.
+
+```
+research-frame → research-tree.start_run → research-survey → source-rank →
+  tff-fetch_url × N  ↔  research-branch (mid-flight discoveries)
+                          ↳ triangulate (on factual claims)
+                          ↳ steelman (on tentative conclusions)
+→ synthesize → research-stop-check → note-taker → render-html / export → research-tree.complete_run
+```
+
+This skill also owns the **fetch-reliability ladder** (later in this doc) — the cross-cutting toolkit for when a single `tff-fetch_url` returns garbage. Inner skills (`research-survey`, `triangulate`, `steelman`) use the ladder via this skill's documentation.
+
+## The inner skills
+
+| # | Skill | Phase | Form |
+|---|---|---|---|
+| 1 | `research-frame` | 1. Frame | Layer 3 skill — sharpens question + deliverable shape + depth budget |
+| 2 | `research-tree` | state | Layer 3 skill — tree-shaped state file with per-claim provenance |
+| 3 | `research-survey` | 2. Survey | Layer 3 skill — shallow parallel searches → terrain map |
+| 4 | `source-rank` | 3. Plan | Layer 3 skill — score candidates, pick deep reads |
+| 5 | `triangulate` | 4. Cross-check | Layer 3 skill — fact verification + common-origin check |
+| 6 | `steelman` | 4.5 Disconfirm | Sub-agent (isolated context) — strongest-opposing-case pass |
+| 7 | `research-branch` | cross-cutting | Layer 3 skill — discovery-driven branching loop |
+| 8 | `synthesize` | 5. Synthesize | Layer 3 skill — structured deliverable from tree + sources |
+| 9 | `research-stop-check` | 6. Capture gate | Layer 3 skill — 6-point checklist before handoff |
+
+## Tool surface — Camoufox extension
+
+Two tools come from `@the-forge-flow/camoufox-pi`:
 
 - **`tff-fetch_url`** — load a URL through a stealth Firefox instance and return its content (HTML / Markdown / screenshot).
 - **`tff-search_web`** — DuckDuckGo web search, ranked results with snippets.
-
-Research is a **read-side service**. It fetches and returns. It does NOT summarize, editorialize, or save to the vault — that's the caller's job.
-
-## When to call
-
-- "Look up X online" / "find current sources on Y"
-- Persona is assembling a corpus and one of the source-types is web (RFCs, official docs, blog posts, GitHub READMEs, vendor pages)
-- An advisor / status doc references something whose state changed since training cutoff (library version, regulatory change, market event)
-- An on-site element is needed verbatim (changelog, release notes, pricing page) — fetch and quote
-- A reviewer needs to verify a fact the active persona is asserting
-
-**Do not invoke for:**
-- General Q&A the model can answer without sources — don't reach for the web reflexively
-- Anything inside the user's vault — that's `read`, not research
-- News-style "what happened this week" — that's the `news` skill (which itself may eventually delegate here)
-
-## Tool surface
 
 ```
 tff-fetch_url({
@@ -43,7 +54,7 @@ tff-search_web({
 })
 ```
 
-Exact parameter names follow whatever `@the-forge-flow/camoufox-pi` exposes; consult `pi list` for the current tool schemas if anything below drifts.
+Exact parameter names follow whatever `@the-forge-flow/camoufox-pi` exposes; consult `pi list` if anything drifts.
 
 ## Reading the tool result — `details`, NOT `content`
 
@@ -60,11 +71,72 @@ Both Camoufox tools return two fields. **You must read from `details`, not from 
 
 **A frequent failure mode:** the agent sees only the `content` summary (`200 (15942 markdown bytes)`), concludes the body wasn't returned, and reports a fake "tool limitation". The body IS returned — it's in `details.markdown`. Always read structured fields before claiming the tool didn't return what you needed.
 
-If `details.markdown` is present but mostly login-wall / paywall / nav chrome (common on x.com, LinkedIn, Medium, Substack post-paywall), state that plainly to the caller — don't claim the tool failed. Then either retry with a viable mirror (see below) or escalate to the user.
+If `details.markdown` is present but mostly login-wall / paywall / nav chrome (common on x.com, LinkedIn, Medium, Substack post-paywall), state that plainly to the caller — don't claim the tool failed. Then either retry with a viable mirror (see the fetch-reliability ladder below) or escalate to the user.
 
-## When a fetch returns garbage — the fallback ladder
+## The orchestrated pipeline
 
-A 200 status is not success. Pages that returned 16KB of "Sign in" CTAs, empty SPA shells, paywall teasers, or anti-bot puzzles all return 200. Apply these detection heuristics first; if any fire, the fetch *as far as your goal* failed and you must escalate.
+### 1. Frame the request
+
+Call `research-frame`. Returns `{ question, deliverable_shape, depth_budget, success_criteria }`. This becomes the contract for every downstream phase.
+
+### 2. Check prior research
+
+Call `research-tree.find_overlap({ user_request })`. If a prior run matches (similarity ≥ 0.6):
+
+- Surface the prior artifact (vault path / render URL).
+- Ask the user: open the existing, run fresh, or proceed both ways.
+- If user wants the existing, return that URL — don't proceed to phase 3.
+- If user wants fresh, proceed but tag the new run with `notes: "supersedes <prior_run_id>"`.
+
+If no overlap, call `research-tree.start_run({ user_request, frame })` and proceed.
+
+### 3. Survey the terrain
+
+Call `research-survey` with the frame. Returns `{ vocabulary, schools, canonical_voices, timeline_signal, recommended_deep_reads, open_questions_surfaced }`. Snippet-only; no fetches.
+
+### 4. Pick sources
+
+Call `source-rank` with the survey output. Returns ranked + picked URLs. Drop high-access-risk sources only after checking the fetch-reliability ladder for viable mirrors.
+
+### 5. Deep-read in parallel
+
+Fetch each picked URL via `tff-fetch_url` (markdown by default). For each fetch:
+
+- If garbage returned, walk the fetch-reliability ladder (below).
+- If a discovery fires (prereq / parent / sibling / pivot / citation / disqualifier), call `research-branch` — it may spawn child nodes, escalate to user, or stop the run.
+- On success, store the source via `research-tree.add_source(...)` and any extracted claims via `research-tree.add_claim(...)`.
+
+### 6. Verify factual claims
+
+For any load-bearing factual claim the synthesis will assert, call `triangulate`. Required when `deliverable_shape: "fact-check"`. Optional but recommended for `decision` and `comparison` shapes where a single bad fact would change the verdict.
+
+### 7. Disconfirming pass
+
+For `deliverable_shape ∈ {decision, fact-check, comparison}`, spawn the `steelman` subagent with the tentative conclusion. Required for `deep` depth_budget on any shape. The agent runs in an isolated child process — its result feeds into synthesize.
+
+### 8. Synthesize
+
+Call `synthesize` with `{ frame, tree, sources, triangulate_results, steelman_result }`. Returns a structured markdown body matching the deliverable_shape contract.
+
+### 9. Stop-check
+
+Call `research-stop-check` with the synthesis and tree. If `passed: true`, proceed. If `passed: false`:
+
+- Loop back to the phase named in `loop_back_to`.
+- Max 2 loops per check. If still failing, surface to user with the failure detail.
+- User can explicitly bypass ("ship it") — then the failures appear in a `## Known gaps` section of the synthesis.
+
+### 10. Capture
+
+Call `note-taker.save({ ... })` with the synthesized markdown. By default, follow with `render-html` (see "Default downstream action" below). Get the artifact URL back.
+
+### 11. Complete the run
+
+Call `research-tree.complete_run({ run_id, deliverable_artifact: <url> })`. The run is now immutable in the tree.
+
+## Fetch-reliability ladder
+
+A 200 status is not success. Pages that returned 16KB of "Sign in" CTAs, empty SPA shells, paywall teasers, or anti-bot puzzles all return 200. Apply these detection heuristics first; if any fire, the fetch *as far as your goal* failed and you must walk the ladder.
 
 ### Heuristics — "fetched but not useful"
 
@@ -75,7 +147,7 @@ A 200 status is not success. Pages that returned 16KB of "Sign in" CTAs, empty S
 - **Body is mostly nav/footer/recommendation/CTA boilerplate** with no prose density — skim before quoting.
 - **Status 403, 451, 429, or 5xx** — outright block, geo-block, rate-limit, server fault. Don't retry the same URL immediately.
 
-If any apply, **walk the ladder before giving up.** Don't fetch the same URL twice with the same parameters. Each rung is "different enough" from the last that a new attempt has real signal.
+If any apply, walk the ladder. Don't fetch the same URL twice with the same parameters. Each rung is "different enough" from the last that a new attempt has real signal.
 
 ### Step 1 — Pivot render mode and selector
 
@@ -144,8 +216,8 @@ Once you have the canonical site, fetch directly — bypasses every mirror's qui
 
 When the goal is a **fact** (a statistic, a definition, a date, a quote attributed to someone), not a specific source's wording:
 
-- Search for the claim itself, not the original source.
-- Pull 2–3 independent re-reports.
+- Call the dedicated `triangulate` skill — it handles common-origin checks and verdict-rendering.
+- For quick cases inside the ladder: search for the claim itself, pull 2–3 independent re-reports, cross-check.
 - The original may be paywalled, deleted, or behind auth — but if the claim is reported anywhere, you can verify and cite the re-report.
 
 ### When to actually stop
@@ -162,107 +234,60 @@ The output is **never** "the tool didn't return content." The output is, e.g.:
 
 That's a useful answer. The caller can decide whether to escalate.
 
-## Steps
+## Default downstream action
 
-1. **Check recent-research history first.** Read `.pi/state/research-history.json` (see [Recent-research history](#recent-research-history)). If the current request overlaps a recent entry, surface the prior artifact (vault path / render URL) before fetching anything — re-running identical research is waste, and the user often wants the existing note opened, not regenerated. Only proceed to a fresh fetch if the prior entry is stale, the request explicitly asks for an update, or the overlap is partial.
-2. **Start with search, not fetch.** Unless the user gave you the URL, call `tff-search_web` first to surface candidate sources.
-3. **Pick before fetching.** Look at the snippets. Don't fetch every result — pick the 1–3 most relevant URLs.
-4. **Prefer markdown.** Use `format: "markdown"` for reading; only use `"html"` when you need structure (tables, specific elements, anchors).
-5. **Cite as you reason.** Anything the caller surfaces to the user should be attributable to a fetched URL — keep the URL alongside any claim.
-6. **Hand back, don't store.** Return the relevant excerpts plus URLs to the calling persona/skill. Saving to the vault (if warranted) is the caller's job via `note-taker` — and, if the caller wants an interactive HTML render of the saved synthesis, a follow-up call to `render-html`.
-7. **Record the task in the history file.** After the downstream action (render / summarise / export) completes, append an entry to `.pi/state/research-history.json` and trim to the 10 most recent — see [Recent-research history](#recent-research-history) for the exact shape.
-
-## Recent-research history
-
-A rolling log of the **last 10 finished research tasks** lives at `.pi/state/research-history.json`. It exists so Pi can answer "what did I research recently?" / "have I looked into X before?" without re-fetching, and so duplicate requests reuse the prior artifact instead of regenerating it.
-
-### Shape
-
-A single JSON array, newest entry **last** (append-only with a trim at the head). Each entry:
-
-```json
-{
-  "timestamp": "2026-05-19T14:22:10.123Z",
-  "request": "research the current state of WebGPU support across browsers",
-  "summary": "Chromium ships stable, Safari 18+ enables behind flag, Firefox Nightly only; spec at W3C CR.",
-  "artifact": "/v/2026-05-19-webgpu-browser-support"
-}
-```
-
-Field rules:
-
-- `timestamp` — ISO 8601 UTC, taken when the downstream action (render / summarise / export) finishes.
-- `request` — the user's original ask, verbatim where short; lightly normalised (strip leading "research" / "look up") if long-winded. One sentence max.
-- `summary` — one-line synthesis of what was found. Not the full note body — the headline finding. Aim for ≤140 chars.
-- `artifact` — the most useful pointer back to the result, in this priority: render URL (`/v/…`) > PDF URL (`/p/…`) > vault path (`vault/...md`) > `null` if the task was summarise-only with nothing persisted.
-
-### Read at start
-
-As Step 1 of every research invocation, read `.pi/state/research-history.json`. If the file doesn't exist yet, treat it as `[]` — you'll create it on first append. Scan for overlap with the current request:
-
-- **Exact / near-duplicate request, artifact still valid** → surface the prior `artifact` URL and ask the user whether they want it re-opened or a fresh pass. Don't silently re-run.
-- **Partial overlap** (related topic, different angle) → mention the prior entry inline ("you researched adjacent topic Y on $date — that note is at $artifact"), then proceed with the new fetch.
-- **No overlap** → proceed normally; the read is cheap and the freshness signal is still useful context.
-
-### Append at end
-
-Once the downstream action has completed and the user has a deliverable (render URL, PDF, summary, or vault note), update the history:
-
-1. Read the current array (or `[]` if absent).
-2. Append the new entry.
-3. If the array exceeds 10 entries, slice to keep only the **last 10** (i.e. drop entries from the front).
-4. Write back to `.pi/state/research-history.json` — pretty-printed JSON, 2-space indent, trailing newline, same convention as `news-bookmarks.json`.
-
-Skip the append only if the research was aborted, returned no useful content, or the user explicitly said "don't log this" — in those cases the entry would be noise.
-
-### On-demand queries
-
-When the user asks "what did I research recently?", "have I researched X before?", "show me my last few research notes", or similar, read `.pi/state/research-history.json` directly and answer from it. Reverse-iterate so newest comes first; offer to open the artifact for any entry the user picks. This does **not** count as a "research task" and must not append a new entry.
-
-## Default downstream action: render
-
-When the user asks for research and does **not** specify a format, the default downstream action is **render** (via `render-html`). The full default flow is: research → `note-taker` (save markdown) → `render-html` (interactive HTML page) → return the URL.
+When the user asks for research and does **not** specify a format, the default downstream action is **render** (via `render-html`).
 
 | User said | Downstream action |
 |---|---|
-| "research X" / "look up X" / "find sources on Y" — no format mentioned | **Render** (default). Save via `note-taker`, then call `render-html`, return the `/v/…` URL. |
-| "summarise X" / "give me a summary of Y" / "TL;DR Z" | **Summarise** in the reply. Do not render. Do not export. |
-| "export to PDF" / "make a PDF" / "printable" / "deliverable" | **Export** via the `export` skill. Save via `note-taker` first, then `export`, return the `/p/…` URL. |
+| "research X" / "look up X" / "find sources on Y" — no format mentioned | **Render** (default). After `synthesize`, save via `note-taker`, then call `render-html`, return the `/v/…` URL. |
+| "summarise X" / "give me a summary of Y" / "TL;DR Z" | **Summarise** in the reply. Frame as `deliverable_shape: "summary"`; return synthesize's output inline; skip save. |
+| "export to PDF" / "make a PDF" / "printable" / "deliverable" | **Export** via the `export` skill. After `synthesize` and `note-taker`, call `export`, return the `/p/…` URL. |
 
 Do not ask which format to use when none is specified — render is the default. Only summarise or export when the user explicitly indicates so.
+
+## Recent-research queries
+
+When the user asks "what did I research recently?", "have I researched X before?", "show me my last few research notes", read the research-tree state via `research-tree.find_overlap(...)` or by walking `runs[]` reverse-chronologically.
+
+Return the matching runs — `user_request`, `started`, `deliverable_artifact`, and the root node's TL;DR claim. Offer to open any artifact. Do NOT start a new run for these queries.
 
 ## Caller patterns
 
 | Caller | Use case |
 |---|---|
 | Educator (`corpus-learning`) | Web flow of corpus assembly — fetch landmark papers' abstracts, lecture pages, official docs |
-| Educator (`feynman`, `content`) | Verify a definition or example against an authoritative source |
+| Educator (`feynman`, `content`) | Verify a definition or example against an authoritative source (often via `triangulate` directly) |
 | Engineer | Library docs, GitHub README/CHANGELOG, RFCs, language reference pages, Stack Overflow / GitHub Issues |
-| PM | Competitor pricing pages, public roadmaps, vendor changelogs, regulatory filings |
+| PM | Competitor pricing pages, public roadmaps, vendor changelogs, regulatory filings — usually `decision` shape, expects `steelman` to run |
 | Trader | Macro releases, exchange announcements, broker-spec pages — **never** for prescriptive market reads (still a student) |
 | Language | Tatoeba / NHK Easy / dictionary pages for vocabulary mining |
 | News (skill) | May delegate to `tff-fetch_url` for the actual ingest once `news-ingest` is fleshed out |
 
 ## Output style
 
-- After a fetch, hand back: `{ url, title, content_excerpt }` — not the entire page body. Trim to what matters.
-- After a search, hand back: ranked `{ title, url, snippet }` list. Let the caller pick.
-- Synthesis built on top of fetched sources goes through `note-taker` (markdown, into the vault). If the caller wants the synthesis presented as an interactive HTML page, they call `render-html` after saving. Research itself never writes — it only returns excerpts + URLs.
+- After a full pipeline run, return the artifact URL (`/v/…` or `/p/…`) plus a one-line summary.
+- After a `summary`-shape run with no save, return the synthesis inline.
+- After a single fetch (without going through the full pipeline), hand back `{ url, title, content_excerpt }` for fetches, ranked `{ title, url, snippet }` for searches.
+- For escalations from `research-branch`, surface the message verbatim with the discovery evidence quote.
 
 ## Don't
 
-- **Don't browse without a goal.** Every call should answer a specific question the persona has.
-- **Don't trust one source.** For anything contested (library best practice, framework comparison, market claim), pull 2–3 and cross-check.
+- **Don't browse without a goal.** Every pipeline run starts with `research-frame`. Skipping framing is what produces bad research.
+- **Don't trust one source for load-bearing claims.** `research-stop-check`'s "no single-source claim" gate exists because this failure is common. Don't bypass it without explicit user override.
 - **Don't fetch what's already in the user's vault.** Read locally first.
 - **Don't bypass robots.txt or paywalls.** The stealth profile defeats fingerprinting, not legal/ethical access rules.
-- **Don't editorialize.** Research returns excerpts and URLs. The persona reasons; research fetches.
-- **Don't claim the tool didn't return content** without first inspecting `details.markdown` (or `details.html`, or `details.results`). The `content` field is a TUI summary, not the payload. If you see only the summary line and conclude "the tool didn't return the body", you misread — read the structured `details` object first.
-- **Don't surrender after one fetch.** A 200 status with login-wall content, an SPA shell, a paywall teaser, or a truncated body is not success. Walk the fallback ladder (render-mode pivot · canonical mirror · web archive · format pivot · search-back · author-direct · triangulate) before reporting failure. Every hostile host has a cleaner door — spend 30 seconds looking for it.
-- **Don't refetch the same URL with the same parameters.** If a fetch returned garbage, the next attempt must be *different* (different render mode, different selector, different host, different format). Retrying identical parameters wastes a Camoufox session.
-- **Don't fabricate content** when the fetch is partial or blocked. Say what you got, name why it's incomplete, and propose the next ladder step or escalate to the user. Fabricating from training data instead of admitting the gap is the worst failure mode of this skill.
+- **Don't editorialize.** The synthesize phase has style rules that prevent advocacy creep. Don't bake opinions in earlier phases.
+- **Don't claim the tool didn't return content** without first inspecting `details.markdown` (or `details.html`, or `details.results`). The `content` field is a TUI summary, not the payload.
+- **Don't surrender after one fetch.** Walk the fallback ladder. Every hostile host has a cleaner door — spend 30 seconds looking for it.
+- **Don't refetch the same URL with the same parameters.** If a fetch returned garbage, the next attempt must be *different* (different render mode, different selector, different host, different format).
+- **Don't fabricate content** when the fetch is partial or blocked. Say what you got, name why it's incomplete, and propose the next ladder step.
+- **Don't skip stop-check.** If you find yourself wanting to ship without running it, that's the smell — run it.
+- **Don't auto-pursue mid-research discoveries.** `research-branch` has explicit per-type policies; follow them rather than your own intuition.
 
 ## Limits
 
 - First invocation downloads the Camoufox binary (~500 MB). Expect a one-time delay.
 - Dynamic pages may take 5–15s to render; use `wait_for_selector` to avoid grabbing pre-hydration content.
 - Some sites still detect (any stealth tool is an arms race). If `tff-fetch_url` returns blocked content, surface that — don't fake a result.
+- The pipeline's wall-time scales with `depth_budget` × number of branches. A `deep` budget with 2–3 branches can take 20+ minutes. Set expectations with the user early.
