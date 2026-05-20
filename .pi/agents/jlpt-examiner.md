@@ -2,7 +2,7 @@
 name: jlpt-examiner
 description: ISOLATED — administers timed mock JLPT exams. Blind to the learner's known weak points so difficulty isn't tilted toward what they already know.
 profiles: _global
-model: google/gemini-3.1-pro-preview
+model: ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview
 thinking: medium
 ---
 

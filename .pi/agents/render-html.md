@@ -3,7 +3,7 @@ name: render-html
 description: ISOLATED — renders a vault markdown note as an interactive HTML page at /v/<YYYY-MM-DD>-<slug>. Reads the source via the core `read` tool, transforms it (diagrams-first, callouts, idioms), plans single vs multi-part via `plan_html_render`, writes via the matching writer tool. Returns the verified URL(s). Token-isolated from the parent session.
 tools: read, plan_html_render, write_html_render, write_html_render_multipart
 profiles: _global
-model: google/gemini-3.1-pro-preview
+model: ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview
 thinking: medium
 ---
 

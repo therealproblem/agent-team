@@ -3,7 +3,7 @@ name: red-team
 description: ISOLATED — adversarial security reviewer. Receives only the artifact and threat-surface description. Finds abuse vectors; never softens findings, never proposes fixes.
 tools: read
 profiles: _global
-model: google/gemini-3.1-pro-preview
+model: ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview
 thinking: high
 ---
 
