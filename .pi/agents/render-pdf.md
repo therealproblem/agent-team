@@ -3,6 +3,7 @@ name: render-pdf
 description: ISOLATED — exports a vault markdown note (or inline markdown) as a print-ready Kami-styled PDF. Generates Kami-styled HTML, calls `write_export_pdf` (headless Chrome) to render the PDF, returns the verified URL. Token-isolated from the parent session.
 tools: read, write_export_pdf
 profiles: _global
+model: google/gemini-3.1-pro-preview
 thinking: medium
 ---
 

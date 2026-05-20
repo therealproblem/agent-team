@@ -3,6 +3,7 @@ name: uat-tester
 description: ISOLATED — blind UAT tester. Receives only the spec and the running-behavior description (or code as black-box artifact). Generates test scenarios from the user's seat.
 tools: read
 profiles: _global
+model: anthropic/claude-sonnet-4-5
 thinking: high
 ---
 

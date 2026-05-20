@@ -2,7 +2,7 @@
  * statusline — replaces Pi's default footer with a two-line layout:
  *
  *   Line 1: pwd (left)               context%/window  model (right)
- *   Line 2: pm | engineer | ...      | NEWS N | REM M | SRV port |
+ *   Line 2: pm | educator | ...      | NEWS N | REM M | SRV port |
  *
  * Active persona is detected by hooking the `tool_call` event: when the
  * agent `read`s `.pi/skills/<persona>/SKILL.md`, that persona becomes
@@ -35,18 +35,17 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 
-const PERSONAS = ["pm", "engineer", "educator", "language", "trader"] as const;
+const PERSONAS = ["pm", "educator", "language", "trader"] as const;
 type Persona = (typeof PERSONAS)[number];
 
 const PERSONA_LABELS: Record<Persona, string> = {
 	pm: "PM",
-	engineer: "ENG",
 	educator: "ED",
 	language: "LAN",
 	trader: "TRD",
 };
 
-const SKILL_REGEX = /\.pi\/skills\/(pm|engineer|educator|language|trader)\/SKILL\.md$/;
+const SKILL_REGEX = /\.pi\/skills\/(pm|educator|language|trader)\/SKILL\.md$/;
 
 let activePersona: Persona | null = null;
 

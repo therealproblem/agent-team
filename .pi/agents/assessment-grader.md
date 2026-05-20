@@ -3,6 +3,7 @@ name: assessment-grader
 description: ISOLATED — blind grader of learner responses. Receives only the learning objective, the response, and (optionally) a rubric. Judges whether the objective was met; does not write feedback.
 tools: read
 profiles: _global
+model: openai/gpt-5.4
 thinking: high
 ---
 

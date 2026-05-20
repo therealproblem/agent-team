@@ -2,5 +2,6 @@
   "packages": [
     "npm:@the-forge-flow/camoufox-pi"
   ],
-  "enableSkillCommands": false
+  "enableSkillCommands": false,
+  "defaultModel": "openai/gpt-5.5"
 }

@@ -13,12 +13,12 @@ You are scaffolding a new piece of the agents-team itself. The repo has four ext
 
 | Type | Location | Loaded as | When to pick this |
 |---|---|---|---|
-| **Persona** | `.pi/skills/<name>/SKILL.md` | Inline — root session reads it and adopts | A new top-level domain (peer of pm/engineer/educator/language/trader). Owns a chunk of the user's life. |
+| **Persona** | `.pi/skills/<name>/SKILL.md` | Inline — root session reads it and adopts | A new top-level domain (peer of pm/educator/language/trader). Owns a chunk of the user's life. |
 | **Inner skill** | `.pi/skills/<name>/SKILL.md` | Inline — called by a persona during a turn | A specialised capability used by exactly one persona (e.g. `prd` for pm, `kanji` for language) or a Layer 3 shared service (callable by every persona, e.g. `note-taker`, `research`). |
-| **Reviewer** | `.pi/agents/<name>.md` | Sub-session — spawned via `subagent` extension | Blind review where the implementer's reasoning would bias the verdict (e.g. `prd-critic`, `red-team`, `uat-tester`). Same file structure as Pi project agents. |
+| **Subagent** | `.pi/agents/<name>.md` | Sub-session — spawned via `subagent` extension | Two reasons to pick this: **(a) blind review** where the implementer's reasoning would bias the verdict (e.g. `prd-critic`, `red-team`, `uat-tester`), or **(b) model / context isolation** where the work needs a different model than the root or a clean window per spawn (e.g. `engineer` on Sonnet, `render-html` / `render-pdf` on Gemini). Same file structure as Pi project agents. Set `model:` in frontmatter to pin the model. |
 | **Tool extension** | `.pi/extensions/<name>/` | TypeScript module — `defineTool` + `pi.registerTool` or event subscribers | A new tool surface (vault writes, web fetches, persistence). **Build only when no existing extension / npm package provides it** — see AGENTS.md "Implementation workflow rule". |
 
-The specialization rule (from AGENTS.md): **sub-session when contamination would corrupt the output; inline when shared context aids the work.** This decides persona/inner-skill vs. reviewer.
+The specialization rule (from AGENTS.md): **sub-session when contamination would corrupt the output OR when a different model is required; inline when shared context aids the work and the root's model fits.** This decides persona/inner-skill vs. subagent.
 
 ## How to run this skill
 

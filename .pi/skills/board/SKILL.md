@@ -80,7 +80,7 @@ Flip `status:` as work progresses and update `updated:` to today's date. Don't d
 
 ## When to drop a card
 
-**Always** — under the pm and engineer personas, every unit of work the user gives you gets a card. The board is the canonical surface where the user tracks what you're doing for them; if work isn't on the board, from the user's perspective it isn't happening.
+**Always** — under the pm persona, and inside any spawn of the engineer subagent, every unit of work the user gives you gets a card. The board is the canonical surface where the user tracks what you're doing for them; if work isn't on the board, from the user's perspective it isn't happening. PM creates and routes cards; engineer updates the one card it was spawned for and never creates new ones (it returns `NEEDS_DECISION` for new branches and lets PM decide).
 
 This includes:
 - Multi-session work — drop the card at the start, keep it updated.
