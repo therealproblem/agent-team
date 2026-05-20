@@ -1,12 +1,12 @@
 ---
-description: Layer 3 shared skill — opens a vault markdown file in a tmux side pane using `leaf` (TUI markdown viewer). This is the DEFAULT display surface for any vault markdown the agent wants the user to read. Call AFTER `note-taker` has saved the file, on every reply that surfaces a vault markdown path the user is meant to open. The Pi session always runs inside tmux (enforced by the `tmux-host` extension), so the split-pane is reliably available; on the rare headless paths (`--no-session`, cron) the tool returns a silent no-op and the agent's reply still names the file path. The agent's reply is unchanged by this skill — `show-md` is additive, not a replacement. Use alongside (not instead of) `render-html` and `export` when those are also warranted; the three display surfaces are orthogonal (terminal vs web vs PDF).
+description: Layer 3 shared skill — opens a vault markdown file in a tmux side pane using `leaf` (TUI markdown viewer). This is the DEFAULT display surface for any vault markdown the agent wants the user to read. Call AFTER `note-taker` has saved the file, on every reply that surfaces a vault markdown path the user is meant to open. The Pi session always runs inside tmux (enforced by the `tmux-host` extension), so the split-pane is reliably available; on the rare headless paths (`--no-session`, cron) the tool returns a silent no-op and the agent's reply still names the file path. When `show-md` opens (`opened: true`), the chat reply collapses to a one-line pointer — no body summary, no recap of the file's contents — because the user is already reading them in the side pane. Use alongside (not instead of) `render-html` and `export` when those are also warranted; the three display surfaces are orthogonal (terminal vs web vs PDF).
 ---
 
 # Show-md
 
 `show-md` is the **markdown → tmux side pane** skill. It calls `leaf` on a saved vault markdown file in a tmux split, so the user can read the file next to the Pi pane without leaving the terminal.
 
-> If the agent's reply names a vault markdown path the user is meant to open, **`show-md` runs automatically**. The reply itself stays the same (path + one-line context). The side pane is the visible signal — don't narrate it.
+> If the agent's reply names a vault markdown path the user is meant to open, **`show-md` runs automatically** and the chat reply collapses to a one-line pointer: the path plus at most one sentence of context (e.g. "what to do next" or a question for the user). Do **not** also paste the file's tables, lists, headings, key-points, or "active recall" questions back into chat — leaf is already rendering them in the side pane, and duplicating the body turns one screen of content into two. The side pane is the visible signal.
 
 ## Why this skill exists
 
@@ -59,7 +59,7 @@ Vault-relative paths resolve against `$AGENTS_TEAM_VAULT_PATH` (or `<repo>/vault
 }
 ```
 
-The agent's reply still names the file path — `show-md` is additive. Don't change the chat reply based on whether the pane opened.
+When `opened: true`, the chat reply collapses to one line — the path plus at most one sentence of context. **Drop the body recap** (tables, bullet lists, headings, "key points", "active recall" Q&A) — leaf is already rendering all of that in the side pane. When `opened: false` (`not_in_tmux` / `not_found` / `tmux_error`), fall back to the agent's normal reply, which may include a short summary so the user has *something* to read.
 
 ## Pane behaviour
 
@@ -73,10 +73,11 @@ The tool result message includes a one-line reminder of these shortcuts — the 
 
 1. **Confirm the file exists in the vault.** If `note-taker` just ran, this is already true. If the agent is referencing an existing file, trust the path — `show_md` checks `existsSync` and returns `not_found` cleanly if wrong.
 2. **Call `show_md({ md_path })`.** One call. No retries on `not_in_tmux` — that's the headless path, the silent no-op is the correct behavior.
-3. **Do nothing else.** The visible side pane is the signal. Don't add "I opened it in a side pane" to the reply.
+3. **Shrink the chat reply to one line.** Path + at most one sentence of context (a follow-up question, a next step, "want me to also render this as HTML?"). Don't restate what's already on screen in leaf.
 
 ## Don't
 
+- **Don't recap the file's body in chat when `opened: true`.** No tables, no bullet lists of "key points", no "active recall" question rehash, no headings repeated as a chat outline. The user is reading the file in leaf in real time — pasting the same content into chat means they have to read it twice and scroll past a wall of duplicate text to get to anything new. Save chat for what *isn't* in the file: the next question, the next step, the choice you need from them.
 - **Don't narrate the pane-open.** The visible pane is the signal. Lines like "Opening in side pane…" or "I've opened the file for you" are noise — the user can see the pane.
 - **Don't retry on `not_in_tmux`.** That's the headless path; the tool is correctly silent. The agent's normal reply (which names the path) is sufficient.
 - **Don't call for files outside the vault** as a default. The skill accepts absolute paths for flexibility (e.g. user asks to view a one-off file), but the trigger rule is *vault* markdown.

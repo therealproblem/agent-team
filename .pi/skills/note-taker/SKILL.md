@@ -51,12 +51,14 @@ If `folder` is omitted, default to `inbox` and surface a follow-up: *"Saved to i
 
 ### Default — open in tmux side pane via `show-md`
 
-Every persona that calls `note-taker` follows up with `show-md({ md_path })` so the user sees the saved file in a side pane via `leaf`. This is the default display behaviour (see `AGENTS.md` global rule #6). The Pi session always runs inside tmux (enforced by the `tmux-host` extension), so the split-pane is reliably available; on headless invocations the tool silently no-ops and the reply is unchanged.
+Every persona that calls `note-taker` follows up with `show-md({ md_path })` so the user sees the saved file in a side pane via `leaf`. This is the default display behaviour (see `AGENTS.md` global rule #6). The Pi session always runs inside tmux (enforced by the `tmux-host` extension), so the split-pane is reliably available; on headless invocations the tool silently no-ops.
 
 ```
 1. note-taker.save({...})                →  vault/pm/prd/2026-05-15-foo.md         (canonical)
 2. show-md({md_path: "..."})             →  tmux side pane rendering the file       (default display)
 ```
+
+**When `show-md` returns `opened: true`, the chat reply collapses to one line** — the file path plus at most one sentence of context (a follow-up question, an offer to also render/export, the next step). Don't restate the file's tables, bullet lists, key points, or "active recall" questions in chat — leaf is already showing them in the side pane. Save chat for what *isn't* in the file. On `opened: false` (headless, file missing, tmux error), fall back to a normal reply with a short summary so the user has something to read.
 
 ### Opt-in — also render to HTML
 
