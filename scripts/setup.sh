@@ -54,7 +54,74 @@ case "$OS" in
 esac
 
 # ---------------------------------------------------------------------------
-# 2. tmux
+# 2. Stop running runtimes (Pi + Next.js)
+#
+# Re-running setup rebuilds .pi/server/.next/. If a `next start` is live
+# during that rebuild, its in-memory build manifest still points at the
+# previous CSS/JS hashes — Next will keep serving HTML that references
+# files we just overwrote, producing 500s on every static asset until the
+# server is restarted. Stop Next.js and Pi processes up front so the
+# rebuild lands cleanly. Skips this script's own ancestors so it doesn't
+# suicide when invoked from inside a Pi session. Idempotent: silent when
+# nothing's running.
+# ---------------------------------------------------------------------------
+
+if have pgrep; then
+	# Collect PIDs we must NOT kill: this shell + its full ancestor chain.
+	# Covers the case where pi forks bash forks setup.sh — killing pi would
+	# kill the script driving the rebuild.
+	SELF_PIDS=" $$ "
+	_anc="${PPID:-0}"
+	while [[ "$_anc" != "0" && "$_anc" != "1" && -n "$_anc" ]]; do
+		SELF_PIDS="${SELF_PIDS}${_anc} "
+		_anc="$(ps -o ppid= -p "$_anc" 2>/dev/null | tr -d ' ' || true)"
+	done
+
+	stop_matching() {
+		local label="$1" pattern="$2"
+		# pgrep -f matches the full command line — needed to catch
+		# `node .../next/dist/bin/next start` and similar wrappers.
+		local pids
+		pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
+		if [[ -z "$pids" ]]; then
+			ok "no ${label} running"
+			return
+		fi
+
+		local victims=() p
+		for p in $pids; do
+			[[ "$SELF_PIDS" == *" $p "* ]] && continue
+			victims+=("$p")
+		done
+
+		if (( ${#victims[@]} == 0 )); then
+			ok "no ${label} to stop (only this script's ancestors matched)"
+			return
+		fi
+
+		info "stopping ${label} (pids: ${victims[*]})"
+		kill "${victims[@]}" 2>/dev/null || true
+		# Give them a moment to exit gracefully before SIGKILL.
+		sleep 1
+		for p in "${victims[@]}"; do
+			kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
+		done
+		ok "stopped ${label}"
+	}
+
+	# next-server: forked worker process name. `next (dev|start|build)`:
+	# the npm-script entrypoint Next leaves in the command line.
+	stop_matching "Next.js servers" 'next-server|next (dev|start|build)'
+	# Pi CLI is installed as @earendil-works/pi-coding-agent — match the
+	# package path so we don't catch unrelated commands that happen to
+	# contain the letters "pi".
+	stop_matching "Pi runtimes" 'pi-coding-agent'
+else
+	warn "pgrep not found — skipping runtime shutdown. Stop any 'next start' / 'pi' processes manually before re-running, or .pi/server/.next/ may end up out of sync with the live process."
+fi
+
+# ---------------------------------------------------------------------------
+# 3. tmux
 # ---------------------------------------------------------------------------
 
 if have tmux; then
@@ -121,7 +188,7 @@ if tmux info >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Node + npm (prerequisite for Pi)
+# 4. Node + npm (prerequisite for Pi)
 # ---------------------------------------------------------------------------
 
 if ! have node; then
@@ -134,7 +201,7 @@ fi
 ok "Node $(node -v), npm $(npm -v)"
 
 # ---------------------------------------------------------------------------
-# 4. Pi (the agent runtime)
+# 5. Pi (the agent runtime)
 # ---------------------------------------------------------------------------
 
 if have pi; then
@@ -147,7 +214,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. leaf (TUI markdown viewer used by the show-md skill)
+# 6. leaf (TUI markdown viewer used by the show-md skill)
 #
 # `leaf` is invoked by .pi/extensions/show-md/ in a tmux side pane to display
 # vault markdown next to the Pi pane. Upstream ships an npm wrapper around
@@ -168,7 +235,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Pi project-local packages (restore from .pi/settings.json)
+# 7. Pi project-local packages (restore from .pi/settings.json)
 #
 # Pi records project-local extension installs in .pi/settings.json. The
 # .pi/npm/ tree is gitignored (regenerable), so on a fresh clone we replay
@@ -209,7 +276,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Local patches against .pi/npm/ packages
+# 8. Local patches against .pi/npm/ packages
 #
 # Some upstream playwright bugs bite us mid-research (Firefox uncaughtError
 # with no source location crashes the entire Node process — see
@@ -225,7 +292,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. .env scaffold (preserves existing .env)
+# 9. .env scaffold (preserves existing .env)
 # ---------------------------------------------------------------------------
 
 ENV_FILE="${REPO_ROOT}/.env"
@@ -243,7 +310,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Chrome binary for PDF export
+# 10. Chrome binary for PDF export
 #
 # `write_export_pdf` (in .pi/extensions/obsidian-vault/index.ts) shells out
 # to headless Chrome to render HTML → PDF. On a fresh machine with no
@@ -370,7 +437,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 10. exports/ root
+# 11. exports/ root
 #
 # `write_export_pdf` writes PDFs to <repo>/exports/. The Next.js server
 # serves them at /p/<slug>.pdf via a route handler at
@@ -387,7 +454,7 @@ mkdir -p "$EXPORT_ROOT"
 ok "exports/ root in place"
 
 # ---------------------------------------------------------------------------
-# 11. Nextra server npm install
+# 12. Nextra server npm install
 #
 # .pi/server/ is the local Next.js + Nextra app that serves rendered
 # presentations (/v/...) and exported PDFs (/p/...). Its node_modules/ is
@@ -438,7 +505,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 12. Nextra server production build
+# 13. Nextra server production build
 #
 # Pre-build the Next.js app so `pi` (or any caller) can start it via
 # `next start` in production mode instead of `next dev`. Production mode
@@ -473,7 +540,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 13. news-cron crontab entry
+# 14. news-cron crontab entry
 #
 # `scripts/news-cron.sh` calls `pi --no-session` against the news-ingest
 # extension's `refresh_all_topics` tool. Without an installed crontab line
@@ -517,7 +584,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 14. Legacy artifact cleanup
+# 15. Legacy artifact cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # experiments — old frontend attempts (pi-rpc-shim, Open WebUI, piclaw) and
@@ -561,7 +628,7 @@ if [[ "$removed_any" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 15. Unicode Braille support (loading indicator)
+# 16. Unicode Braille support (loading indicator)
 #
 # Pi and friends animate loading spinners with U+2800–U+28FF Braille Patterns
 # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏). These render correctly only when:
