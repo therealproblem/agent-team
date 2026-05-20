@@ -6,9 +6,9 @@ The aim is a long-running personal operating layer: you talk to it from the CLI 
 
 ## What this project is
 
-A single Pi session that **adopts a persona** for the work in front of it instead of routing every request to a separate sub-agent. The PM persona drafts a PRD; the engineer persona picks it up from the same conversation and builds against it; the educator persona writes a lesson plan; the language persona drills you on JLPT vocab. Same session, same memory of you — different rules and skills active depending on which persona is on.
+A single Pi session that **adopts a persona** for the work in front of it instead of routing every request to a separate sub-agent. The PM persona drafts a PRD and hands a kanban card to the `engineer` subagent (Sonnet, isolated child process) to build against it; the educator persona writes a lesson plan; the language persona drills you on JLPT vocab. Same session, same memory of you — different rules and skills active depending on which persona is on.
 
-Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner) are the exception: they run as **isolated sub-sessions** so they can audit work without being contaminated by the implementer's reasoning.
+Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman) and a handful of utility executors (engineer, scout, render-html, render-pdf) run as **isolated sub-sessions** — for blind audit, model isolation, context isolation, or cost.
 
 Everything that matters gets written to a **markdown-first Obsidian vault**. HTML renders and PDF exports are on-demand derivatives served by a local Next.js + Nextra site on port 8080 — the URL is the access control.
 
@@ -19,31 +19,50 @@ Three layers, organised by isolation rather than capability:
 ```
 Layer 0   META                observes & optimises the system across sessions
 Layer 1   ROOT SESSION        one Pi session — adopts personas inline
+          │                   openai/gpt-5.5 (1M ctx)
           │
-          ├── Personas              pm · engineer · educator · language · trader
+          ├── Personas              pm · educator · language · trader
           │   no extra model loop per turn; the root IS the persona while it's on
+          │   engineering requests route through pm, which spawns the engineer subagent
+          │
+          ├── Executor (sub-agent)  engineer (Sonnet 4.5)
+          │   isolated child process — code, tests, kanban card updates
           │
           └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
-                                      assessment-grader · jlpt-examiner
-              blind by isolation — spawned only when an adversarial second
-              opinion is needed
+                                      assessment-grader · jlpt-examiner · steelman
+              blind by isolation — adversarial second opinion
 Layer 3   SHARED SERVICES     skills any persona can call inline
-                              note-taker · render-html · export · research
+                              note-taker · show-md · render-html · export
+                              research (9-skill orchestrator) · scout
                               scribe · summary · news · reminders
 ```
 
-**The specialization rule:** sub-session when contamination would corrupt the output, inline (persona or skill) when shared context aids the work. A UAT tester *must* be blind to the implementer's reasoning, so it gets its own process. A PM and engineer working together *benefit* from continuity, so they share one session.
+**The specialization rule:** sub-session when keeping context separate is worth the round-trip — either because contamination would corrupt the output (blind reviewers), because the work needs a different model (engineer on Sonnet, renderers on Gemini), or because the exploration is high-token but low-reasoning and shouldn't bloat root context (scout, render planners). Inline (persona or skill) when shared context aids the work. A UAT tester *must* be blind to the implementer's reasoning, so it gets its own process. PM drafting a PRD benefits from continuity with the user's prior turns, so it stays inline.
+
+### Model fleet
+
+Per-agent models are pinned via the subagent extension's frontmatter `model:` field — three vendors active across the team:
+
+| Role | Model | Why |
+|---|---|---|
+| Root session | `openai/gpt-5.5` (1M ctx) | Long-running session needs the context window |
+| `engineer`, `uat-tester` | `anthropic/claude-sonnet-4-5` | Tool-heavy code work + multi-step interpretation |
+| `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor PRD audit + grading |
+| `red-team`, `jlpt-examiner`, `render-html`, `render-pdf` | `google/gemini-3.1-pro-preview` | Cross-vendor adversarial + Mermaid/SVG quality |
+| `scout`, `steelman` | `openai/gpt-5-mini` | Cheap models for high-token, low-reasoning sub-tasks |
+
+Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low. Gemini routes through the `ELICE_GEMINI_3_1_PRO` provider in `models.json` rather than a bare Google route, so no separate key is needed.
 
 ### Pi mapping
 
 | Concept | Pi artifact |
 |---|---|
 | Root agent (Layer 0 + 1) | The Pi session itself. `.pi/SYSTEM.md` is its system prompt. |
-| Personas | `.pi/skills/<name>/SKILL.md` — adopted inline by reading the file. |
-| Reviewers | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. |
+| Personas | `.pi/skills/<name>/SKILL.md` — adopted inline by reading the file. (No `engineer` persona — engineering routes through `pm`, which spawns the `engineer` subagent.) |
+| Executor + reviewer subagents | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Per-agent model pinned in frontmatter. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand. |
 | Shared services | Same shape as inner skills, available under every persona. |
-| Tool surfaces | TypeScript extensions under `.pi/extensions/`. |
+| Tool surfaces | TypeScript extensions under `.pi/extensions/` (server, telegram-bot, working-mood, obsidian-vault, news-ingest, reminders, …). |
 
 ### Per-domain memory of you
 
@@ -53,20 +72,45 @@ Layer 3   SHARED SERVICES     skills any persona can call inline
 |---|---|
 | `_global.md` | every persona + every reviewer |
 | `product.md` | pm persona |
-| `engineering.md` | engineer persona |
+| `engineering.md` | engineer subagent |
 | `learning.md` | educator persona |
 | `language.md` | language persona |
 | `trading.md` | trader persona |
 
-Personas read their profile at adoption time. Reviewers only get `_global.md` — domain context would compromise their blind audit. At session end the active persona can propose a `PROFILE_UPDATE` for you to approve or reject; nothing is written unsupervised.
+Personas read their profile at adoption time; the engineer subagent reads `engineering.md` at spawn time. Reviewers only get `_global.md` — domain context would compromise their blind audit. At session end the active persona can propose a `PROFILE_UPDATE` for you to approve or reject; nothing is written unsupervised.
 
 ### Vault, renders, exports
 
+Everything that persists is markdown in the vault. Three display surfaces sit on top of it — orthogonal, not alternatives:
+
+| Surface | Skill | Where |
+|---|---|---|
+| Terminal, next to Pi | `show-md` | tmux split-pane, rendered by `leaf` |
+| Web browser | `render-html` | Nextra HTML at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
+| PDF (printable / sendable) | `export` | Kami-styled PDF at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` |
+
 - **Vault is markdown.** PRDs, ADRs, reports, lesson plans, journal entries — everything that needs to persist goes through the `note-taker` skill and lands in the Obsidian vault as markdown with YAML frontmatter, inline `#tags`, and `[[wiki-links]]`. Graph view and backlinks depend on staying markdown-first.
-- **HTML renders** are opt-in. `render-html` produces a Nextra-styled page served at `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` — useful when diagrams, tabs, or callouts make on-screen reading meaningfully better.
-- **PDF exports** are for deliverables. `export` produces a print-ready, Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout) served at `http://localhost:8080/p/<YYYY-MM-DD>-<slug>.pdf` — for resumes, letters, portfolios, formal reports.
+- **`show-md` is the default.** Whenever a reply names a vault file the user is meant to open, `show-md` calls `leaf` in a tmux split so the markdown renders next to the Pi pane. The chat reply collapses to a one-line pointer — no body recap — because the side pane is the visible signal.
+- **HTML renders** are opt-in. `render-html` produces a Nextra-styled page — useful when diagrams, tabs, or callouts make on-screen reading meaningfully better. Now dispatched via an isolated `render-html` subagent (Gemini 3.1 Pro for Mermaid/SVG quality), with a planner-first split: large outputs become multi-part renders with a sidebar parts nav, streamed per-part URLs as each part verifies. Mermaid charts are numbered ("Chart N") and broken charts surface an in-page **Fix syntax** button that repairs the source via `pi --mode json -p` and dual-writes the page + vault note.
+- **PDF exports** are for deliverables. `export` produces a print-ready, Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout) — for resumes, letters, portfolios, formal reports. Dispatched via the `render-pdf` subagent on the same Gemini model. When the Telegram bot sees a `/p/<file>.pdf` URL in a reply, it uploads the on-disk file as a real Telegram document instead of just linking.
 
 The URL is the access control. No auth, no listing, no search index, no sitemap. To share externally, run cloudflared yourself (see below).
+
+### Research orchestrator
+
+`research` is a 9-skill pipeline over stealth web fetch + search (`camoufox-pi`), with tree-shaped state per run:
+
+```
+research-frame → research-tree.start_run → research-survey → source-rank
+  → fetch loop (research-branch · triangulate · steelman)
+  → synthesize → research-stop-check → note-taker → render-html / export
+```
+
+State moves through `.pi/state/research/<run>/research-tree.json` rather than a flat history — the last 10 finished runs stay queryable so "what did I research recently?" returns real answers. `steelman` runs as a blind reviewer for disconfirming evidence; `triangulate` enforces a common-origin check (5 tertiaries citing one primary = 1 data point, not 5). `synthesize` is reusable outside research — any structured deliverable with TL;DR + claim-level citations + a mandatory "What's contested" section.
+
+### scout — file finder on a cheap sub-agent
+
+`scout` is a Layer 3 skill that delegates file/path/symbol lookup to an isolated sub-Pi process pinned to `openai/gpt-5-mini`. Read-only (read + bash), returns `{path, line?, preview}` across repo + vault + `.pi/state/`. The "ls 50 dirs, grep 30 files, return 3 matches" exploration stays out of root context and off the root model's token bill.
 
 ### Telegram channel
 
@@ -78,7 +122,13 @@ Setup is a single slash command inside Pi: `/telegram-connect`. The first invoca
 
 The bot listens "always" in groups (every message enters the context as steering) but only triggers a turn when `@<persona>` is mentioned, `/<persona>` is used, or a user replies to one of the bot's own messages. In DMs every message triggers a turn — no `@` needed. `/stop` cancels the in-flight agent turn from any chat. Long replies are converted from markdown to Telegram-flavored HTML (`<b>`, `<i>`, `<code>`, `<pre>`, `<a>`) and chunked at the 4096-char limit. Inline keyboards attach only when the reply contains an artifact URL or a `PROFILE_UPDATE:` proposal — no default persona switcher.
 
+Telegram chats can also send `/new` (start a fresh Pi conversation) and `/compact` (compact the current context) — both are routed via `tmux send-keys` to the running Pi pane, and `/start` lists them in the onboarding reply so new chats discover them.
+
 The footer in Pi grows a `| TG ●` cell next to `| SRV …` when the bot is online. See `.pi/SYSTEM.md` § "Telegram channel" for the rules the agent follows on Telegram-originated turns.
+
+### Working-mood indicator
+
+Pi's default braille spinner is overridden by the in-repo `working-mood` extension — 28 kaomoji-verb frames rotate every 5s with an elapsed-time counter (`Ns / Mm Ss / Hh Mm`) ticking in muted color every 1s. Reliable in any terminal locale, no font dependency.
 
 ### A note on Trader
 
@@ -86,13 +136,15 @@ Trader runs in **student mode**. It never prescribes a trade. It surfaces patter
 
 ## Direction
 
-The current shape is the second iteration. The first ("Distributor") spawned every domain as its own Pi sub-session, paying a model loop per turn for the routing overhead. The current shape pulls domain agents **inline as personas** — the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay isolated only because contamination would corrupt their judgement.
+The current shape is the second iteration. The first ("Distributor") spawned every domain as its own Pi sub-session, paying a model loop per turn for the routing overhead. The current shape pulls domain agents **inline as personas** — the root session reads a persona's `SKILL.md` and operates under those rules.
+
+Sub-sessions have come back selectively, with a sharper rationale than "blind review." Three additional reasons now justify a child process: **model isolation** (engineer needs Sonnet, renderers need Gemini), **context isolation** (a 50-grep file hunt shouldn't bloat root), and **cost** (cheap models for high-token, low-reasoning sub-tasks). Engineer, scout, render-html, render-pdf, and steelman are recent expressions of this.
 
 Where it's heading:
 
 - **Web frontend** — not currently wired in; being rebuilt from scratch. Entry points today are the CLI (`pi` from the repo root) and the Telegram bot (see § Telegram channel above).
 - **Layer 0 meta-review** — surfacing cross-domain patterns and contradictions across profiles as the system accumulates a real model of you.
-- **Richer service surface** — `news-ingest` is stubbed; SRS decks need seeding; the trade-journal accessor is read-only for now.
+- **Richer service surface** — `news-ingest` is wired with a daily 07:00 cron refresh; SRS decks still need seeding; the trade-journal accessor is read-only for now.
 
 See `AGENTS.md` for the long-form internal design doc, including current build status per component.
 
@@ -115,7 +167,10 @@ The bootstrap script is idempotent and handles:
 5. `.env` scaffold from `.env.example` (preserves existing `.env`)
 6. `exports/` directory + `.pi/server/public/p` → `exports/` symlink for PDF serving
 7. Nextra server `npm install` in `.pi/server/`
-8. Nextra production build (`next build`) — `.env` is sourced first so build-time vars get baked in
+8. Stops any running Next.js + Pi processes so the rebuild doesn't fight a stale server
+9. Nextra production build (`next build`) — `.env` is sourced first so build-time vars get baked in
+10. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
+11. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
 
 Then start the agent:
 
@@ -135,7 +190,7 @@ pi --no-session -p "List your tools, skills, and agents."
 pi --no-session -p "Use subagent with agentScope:'project', agent:'prd-critic', task:'Reply with PI-OK only.'"
 
 # Persona adoption (inline)
-pi --no-session -p "Adopt the engineer persona and reply PI-OK."
+pi --no-session -p "Adopt the pm persona and reply PI-OK."
 ```
 
 ### Sharing renders externally
@@ -181,18 +236,21 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 ```
 .pi/
 ├── SYSTEM.md            Root agent — persona-adoption + Telegram rules
-├── agents/              Reviewers (spawned as sub-Pi processes)
+├── agents/              Executor + reviewer subagents (spawned as sub-Pi processes)
 ├── skills/              Personas + inner skills + shared services
 ├── extensions/          TypeScript tool surfaces (auto-loaded by Pi)
 │   ├── server/             Lifecycle for the Next.js server
 │   ├── telegram-bot/       Telegram bridge (long-poll)
+│   ├── working-mood/       Kaomoji + elapsed-counter working indicator
+│   ├── obsidian-vault/     Vault I/O + render-html / export tool surface
 │   └── …                   battery, news-ingest, reminders, srs, etc.
-├── server/              Next.js 16 + Nextra 4 app on :8080
-├── state/               profiles/, reminders.md, telegram/, meta-logs/
+├── server/              Next.js 16 + Nextra 4 app on :8080 — full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid
+├── state/               profiles/, reminders.md, telegram/, meta-logs/, research/<run>/research-tree.json
 ├── lib/                 dotenv loader + shared TUI primitives
 └── settings.json        Declares project-local npm packages
 scripts/
 ├── setup.sh             Idempotent bootstrap
+├── news-cron.sh         Daily 07:00 news refresh (installed by setup)
 ├── apply-patches.sh     Reapply local patches after npm installs
 └── patches/             Local fixes against vendored npm packages
 vault/                   Obsidian vault (gitignored; override via env)
