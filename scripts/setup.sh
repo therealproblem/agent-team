@@ -426,7 +426,49 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 11. exports/ root
+# 11. Python research deps (bs4 + requests)
+#
+# Pi sometimes shells out to a `python3 - <<PY` heredoc during research runs
+# to batch-fetch and clean several URLs at once (`requests` + `bs4` +
+# stdlib `html.parser`). Without these on the active python3's path the
+# call dies mid-run with `ModuleNotFoundError: No module named 'bs4'`.
+# Install both into the user site so they're importable from any shell the
+# bash tool spawns. The import probe at the top short-circuits when the
+# modules are already there, so re-runs cost nothing.
+#
+# Newer Pythons (3.11+, Homebrew, Ubuntu 23.04+) enforce PEP 668 and refuse
+# `pip install` outside a venv. We detect the "externally-managed-environment"
+# error and retry with --break-system-packages — these are leaf libraries,
+# not system packages, so the override is safe and avoids requiring a venv
+# just to make bs4 importable for ad-hoc shell calls.
+# ---------------------------------------------------------------------------
+
+if have python3; then
+	PY_RESEARCH_DEPS=(beautifulsoup4 requests)
+	if python3 -c 'import bs4, requests' >/dev/null 2>&1; then
+		ok "python3: bs4 + requests already importable"
+	else
+		info "installing Python research deps: ${PY_RESEARCH_DEPS[*]}…"
+		PIP_OUT=""
+		if ! PIP_OUT="$(python3 -m pip install --user --quiet "${PY_RESEARCH_DEPS[@]}" 2>&1)"; then
+			if [[ "$PIP_OUT" == *"externally-managed-environment"* ]]; then
+				info "  PEP 668 environment — retrying with --break-system-packages"
+				PIP_OUT="$(python3 -m pip install --user --break-system-packages --quiet "${PY_RESEARCH_DEPS[@]}" 2>&1)" || true
+			fi
+		fi
+		if python3 -c 'import bs4, requests' >/dev/null 2>&1; then
+			ok "python3: bs4 + requests installed"
+		else
+			warn "could not install Python research deps. Research runs that shell out to Python will fail with ModuleNotFoundError. Install manually: python3 -m pip install --user beautifulsoup4 requests"
+			[[ -n "$PIP_OUT" ]] && printf '%s\n' "$PIP_OUT" | sed 's/^/    /' >&2
+		fi
+	fi
+else
+	warn "python3 not found — skipping Python research deps install. Pi's research skill sometimes shells out to a Python heredoc using bs4/requests; those calls will fail until python3 + pip are installed."
+fi
+
+# ---------------------------------------------------------------------------
+# 12. exports/ root
 #
 # `write_export_pdf` writes PDFs to <repo>/exports/. The Next.js server
 # serves them at /p/<slug>.pdf via a route handler at
@@ -443,7 +485,7 @@ mkdir -p "$EXPORT_ROOT"
 ok "exports/ root in place"
 
 # ---------------------------------------------------------------------------
-# 12. Nextra server npm install
+# 13. Nextra server npm install
 #
 # .pi/server/ is the local Next.js + Nextra app that serves rendered
 # presentations (/v/...) and exported PDFs (/p/...). Its node_modules/ is
@@ -518,7 +560,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 13. Nextra server production build
+# 14. Nextra server production build
 #
 # Pre-build the Next.js app so `pi` (or any caller) can start it via
 # `next start` in production mode instead of `next dev`. Production mode
@@ -553,7 +595,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 14. news-cron crontab entry
+# 15. news-cron crontab entry
 #
 # `scripts/news-cron.sh` calls `pi --no-session` against the news-ingest
 # extension's `refresh_all_topics` tool. Without an installed crontab line
@@ -597,7 +639,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 15. Legacy artifact cleanup
+# 16. Legacy artifact cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # experiments — old frontend attempts (pi-rpc-shim, Open WebUI, piclaw) and
@@ -641,7 +683,7 @@ if [[ "$removed_any" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 16. Unicode Braille support (loading indicator)
+# 17. Unicode Braille support (loading indicator)
 #
 # Pi and friends animate loading spinners with U+2800–U+28FF Braille Patterns
 # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏). These render correctly only when:
