@@ -3,7 +3,7 @@ name: engineer
 description: ISOLATED — engineering executor. Spawned by the `pm` persona to implement a single kanban card. Receives a self-contained brief (project slug, card path, card body, pointers to PRDs/ADRs in the vault). Reads code, edits files, runs commands, spawns uat-tester / red-team / render-html / render-pdf as its rules require. Updates the card it was given; never creates new cards. Returns a one-line outcome + card path.
 tools: read, write, edit, bash, grep, glob, subagent, tff-fetch_url, tff-search_web
 profiles: _global, engineering
-model: anthropic/claude-sonnet-4-5
+model: ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5
 thinking: high
 ---
 

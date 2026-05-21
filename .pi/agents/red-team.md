@@ -3,7 +3,7 @@ name: red-team
 description: ISOLATED — adversarial security reviewer. Receives only the artifact and threat-surface description. Finds abuse vectors; never softens findings, never proposes fixes.
 tools: read
 profiles: _global
-model: openai/gpt-5.5
+model: ELICE_GPT_5_5/openai/gpt-5.5
 thinking: high
 ---
 

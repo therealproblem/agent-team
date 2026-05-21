@@ -3,7 +3,7 @@ name: prd-critic
 description: ISOLATED — blind reviewer of PRDs. Receives only the PRD body and the original problem statement. Surfaces gaps and problem-solution drift; does not propose fixes.
 tools: read
 profiles: _global
-model: openai/gpt-5.4
+model: ELICE_GPT_5_4/openai/gpt-5.4
 thinking: high
 ---
 
