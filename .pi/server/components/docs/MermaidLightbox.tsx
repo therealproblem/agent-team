@@ -25,7 +25,13 @@
  * zoom-at-point math stays simple (offsets are relative to viewport center).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "lucide-react";
@@ -141,7 +147,6 @@ export function MermaidLightbox({
   svg,
   caption,
 }: MermaidLightboxProps) {
-  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const [isPanning, setIsPanning] = useState(false);
 
@@ -149,13 +154,26 @@ export function MermaidLightbox({
   const svgWrapRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   // Each tracked pointer carries:
-  //   x, y       — last seen position (used by the pan delta on move)
-  //   startX/Y   — position at pointerdown (used by tap detection on up)
-  //   startTime  — pointerdown timestamp (used by tap detection on up)
+  //   x, y           — last seen position (used by the pan delta on move)
+  //   startX/Y       — position at pointerdown (used by tap detection on up)
+  //   startTime      — pointerdown timestamp (used by tap detection on up)
+  //   isTapCandidate — flips to false the first time the pointer drifts more
+  //                    than TAP_MAX_MOVE_PX from start, and never flips back.
+  //                    A pan that loops back near origin therefore still
+  //                    counts as a drag, not a tap. A second concurrent
+  //                    pointer also flips this on every existing pointer
+  //                    (pinch is never a tap).
   const pointersRef = useRef(
     new Map<
       number,
-      { x: number; y: number; startX: number; startY: number; startTime: number }
+      {
+        x: number;
+        y: number;
+        startX: number;
+        startY: number;
+        startTime: number;
+        isTapCandidate: boolean;
+      }
     >(),
   );
   // Gesture-start snapshot for pinch: ratio is dist/startDist applied to
@@ -174,21 +192,20 @@ export function MermaidLightbox({
     h: 0,
   });
 
+  // Mount-only setup. The component is conditionally rendered in Mermaid.tsx
+  // (only mounted while open=true), so there's no per-open reset to do —
+  // useState initialisers already produce a fresh `view` / `isPanning` and
+  // pointer/pinch/tap refs start empty. We just need to focus the close
+  // button so Escape works without a click first.
+  //
+  // No `mounted` SSR guard either: conditional rendering in the parent
+  // (state-driven, default false) guarantees we never reach SSR with this
+  // component active, so `document.body` is always defined when createPortal
+  // runs. The earlier guard was the reason wheel + size effects fired with
+  // null refs on first render and never re-ran.
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Fresh state every open. Also clear any leftover pointer/pinch tracking
-  // in case a previous session was torn down mid-gesture.
-  useEffect(() => {
-    if (!open) return;
-    setView(INITIAL_VIEW);
-    pointersRef.current.clear();
-    pinchRef.current = null;
-    lastTapRef.current = null;
-    // Move focus into the dialog so Escape works without a click first.
     requestAnimationFrame(() => closeBtnRef.current?.focus());
-  }, [open]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -223,7 +240,12 @@ export function MermaidLightbox({
   // authoritative natural size for Mermaid output, fit into 92vw × 85vh so
   // scale=1 means "fit to viewport." Any later scale change just multiplies
   // those base numbers.
-  useEffect(() => {
+  //
+  // useLayoutEffect (not useEffect) so the SVG resize and the wrapper's
+  // updated translate commit in the same paint. With a regular useEffect the
+  // browser would paint the new transform first and then resize on the next
+  // frame — visibly shifting the chart before it grows.
+  useLayoutEffect(() => {
     if (!open) return;
     const root = svgWrapRef.current?.querySelector("svg");
     if (!root) return;
@@ -302,12 +324,22 @@ export function MermaidLightbox({
       // Pointer capture keeps move/up events flowing to this element even
       // when the cursor leaves it mid-drag.
       e.currentTarget.setPointerCapture(e.pointerId);
+      // A second concurrent pointer means we're starting a pinch — neither
+      // pointer can be a tap from here on, so disqualify everything
+      // currently tracked. Without this, releasing one finger immediately
+      // after a pinch could fire a double-tap reset.
+      if (pointersRef.current.size > 0) {
+        for (const [id, p] of pointersRef.current) {
+          pointersRef.current.set(id, { ...p, isTapCandidate: false });
+        }
+      }
       pointersRef.current.set(e.pointerId, {
         x: e.clientX,
         y: e.clientY,
         startX: e.clientX,
         startY: e.clientY,
         startTime: performance.now(),
+        isTapCandidate: true,
       });
       setIsPanning(true);
       // Double-tap is decided on pointerup, not down — see endPointer.
@@ -324,13 +356,34 @@ export function MermaidLightbox({
       if (ptrs.size === 1) {
         const dx = e.clientX - prev.x;
         const dy = e.clientY - prev.y;
-        ptrs.set(e.pointerId, { ...prev, x: e.clientX, y: e.clientY });
+        // Sticky tap-candidate flag: any drift past TAP_MAX_MOVE_PX from
+        // the original pointerdown disqualifies this pointer from being a
+        // tap, and the flag never recovers — so a pan that loops back to
+        // near origin still counts as a drag.
+        const moveFromStart = Math.hypot(
+          e.clientX - prev.startX,
+          e.clientY - prev.startY,
+        );
+        const isTapCandidate =
+          prev.isTapCandidate && moveFromStart <= TAP_MAX_MOVE_PX;
+        ptrs.set(e.pointerId, {
+          ...prev,
+          x: e.clientX,
+          y: e.clientY,
+          isTapCandidate,
+        });
         setView((v) => ({ ...v, tx: v.tx + dx, ty: v.ty + dy }));
         return;
       }
 
       if (ptrs.size === 2) {
-        ptrs.set(e.pointerId, { ...prev, x: e.clientX, y: e.clientY });
+        // Pinch in progress — this pointer is definitively not a tap.
+        ptrs.set(e.pointerId, {
+          ...prev,
+          x: e.clientX,
+          y: e.clientY,
+          isTapCandidate: false,
+        });
         const [a, b] = [...ptrs.values()];
         const dist = Math.hypot(b.x - a.x, b.y - a.y);
         const midX = (a.x + b.x) / 2;
@@ -359,12 +412,13 @@ export function MermaidLightbox({
 
     if (!ptr) return;
 
-    // Classify this gesture: was it a tap (short, stationary press-and-release)
-    // or a drag? Pinch events run inside the size-2 branch above and are never
-    // considered taps. Only single-pointer gestures reach here as tap candidates.
+    // Classify this gesture: was it a tap (short press-and-release that never
+    // drifted past TAP_MAX_MOVE_PX from start) or a drag? `isTapCandidate`
+    // is sticky-false set in pointermove the first time the pointer strays,
+    // so a pan that wandered and came back is correctly classified as a
+    // drag rather than a tap. Pinch (size===2 branch) also flips it off.
     const dt = performance.now() - ptr.startTime;
-    const moveDist = Math.hypot(e.clientX - ptr.startX, e.clientY - ptr.startY);
-    const wasTap = dt <= TAP_MAX_MS && moveDist <= TAP_MAX_MOVE_PX;
+    const wasTap = ptr.isTapCandidate && dt <= TAP_MAX_MS;
     if (!wasTap) return;
 
     // Tap confirmed. Check for double-tap by comparing against the previous
@@ -395,7 +449,7 @@ export function MermaidLightbox({
     }
   }, []);
 
-  if (!mounted || !open) return null;
+  if (!open) return null;
 
   return createPortal(
     // Inline styles for the dialog shell so the dark backdrop, layering, and

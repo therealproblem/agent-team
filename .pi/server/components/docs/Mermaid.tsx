@@ -456,11 +456,16 @@ export function Mermaid({
         },
         "svg",
       ),
-      canExpand
+      // Only mount the lightbox while it's open so a fresh mount runs each
+      // time the user clicks — that's what guarantees view state (scale, tx,
+      // ty) starts at INITIAL_VIEW with no one-frame flash of the previous
+      // session's zoom. A persistent mount with internal `if (!open) return
+      // null` would carry stale state across opens.
+      canExpand && lightboxOpen
         ? jsx(
             MermaidLightbox,
             {
-              open: lightboxOpen,
+              open: true,
               onClose: () => setLightboxOpen(false),
               svg,
               caption: chartNumber ? `Chart ${chartNumber}` : undefined,
