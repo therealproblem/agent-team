@@ -175,7 +175,7 @@ async function readProjectMeta(slug: string, projectDir: string): Promise<Projec
     updated: toIsoDate(obj.updated),
     description: (typeof obj.description === "string" && obj.description.trim()) || "",
     body,
-    cardCounts: { backlog: 0, in_progress: 0, in_review: 0, blocked: 0, done: 0 },
+    cardCounts: emptyCardCounts(),
   };
 }
 
@@ -226,14 +226,12 @@ const PROJECT_STATUS_ORDER: Record<ProjectStatus, number> = {
   archived: 3,
 };
 
+function emptyCardCounts(): Record<Status, number> {
+  return Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<Status, number>;
+}
+
 function countCards(cards: Card[]): Record<Status, number> {
-  const counts: Record<Status, number> = {
-    backlog: 0,
-    in_progress: 0,
-    in_review: 0,
-    blocked: 0,
-    done: 0,
-  };
+  const counts = emptyCardCounts();
   for (const c of cards) counts[c.status]++;
   return counts;
 }
