@@ -1,12 +1,20 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { Fragment, type ReactNode } from "react";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — no types ship for the runtime-only react/jsx-runtime entry
+import { jsx, jsxs } from "react/jsx-runtime";
 import { compileMDX } from "next-mdx-remote/rsc";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
 import rehypeSlug from "rehype-slug";
 import rehypePrettyCode from "rehype-pretty-code";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { remarkAlert } from "remark-github-blockquote-alert";
+import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { remarkMermaidJsx } from "@/lib/remark-mermaid-jsx";
 import { mdxComponents } from "@/components/docs/mdx-components";
 import { extractToc, type TocEntry } from "@/lib/toc";
@@ -93,6 +101,26 @@ export async function compileMdxString(raw: string): Promise<React.ReactNode> {
     },
   });
   return content;
+}
+
+// Plain CommonMark+GFM → React. Use this instead of compileMdxString for
+// arbitrary user-written content (card bodies, etc.) where MDX's JSX parsing
+// rules would choke on raw text like `<1s`, `<--`, or bare `{`.
+export async function compileMarkdownString(raw: string): Promise<ReactNode> {
+  const processor = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkRehype)
+    .use(rehypeSlug)
+    .use(rehypePrettyCode, { theme: "github-light", keepBackground: false });
+  const tree = processor.parse(raw);
+  const hast = await processor.run(tree);
+  return toJsxRuntime(hast as never, {
+    Fragment,
+    jsx: jsx as never,
+    jsxs: jsxs as never,
+    components: mdxComponents as never,
+  });
 }
 
 export async function listMdxSlugs(): Promise<string[]> {

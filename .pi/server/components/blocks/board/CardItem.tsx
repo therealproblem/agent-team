@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import type { Card as BoardCard } from "@/lib/board-types";
@@ -35,7 +36,13 @@ function PersonaChip({ card }: { card: BoardCard }) {
   );
 }
 
-export function CardItem({ card }: { card: BoardCard }) {
+export function CardItem({
+  card,
+  bodyContent,
+}: {
+  card: BoardCard;
+  bodyContent: ReactNode | null;
+}) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -74,7 +81,7 @@ export function CardItem({ card }: { card: BoardCard }) {
           </Card>
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-serif text-xl leading-snug">
             {card.titlePending ? (
@@ -113,7 +120,11 @@ export function CardItem({ card }: { card: BoardCard }) {
           </div>
         ) : null}
 
-        {card.body ? (
+        {bodyContent ? (
+          <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground prose-headings:font-serif prose-headings:text-foreground prose-a:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+            {bodyContent}
+          </div>
+        ) : card.body ? (
           <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {card.body}
           </div>

@@ -24,10 +24,12 @@ export function BoardView({
   project,
   cards,
   details,
+  cardBodies,
 }: {
   project: Project;
   cards: BoardCard[];
   details: ReactNode | null;
+  cardBodies: Record<string, ReactNode>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -153,7 +155,13 @@ export function BoardView({
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
         {STATUSES.map((s) => (
-          <Column key={s} status={s} cards={byStatus[s]} dimmed={s === "done"} />
+          <Column
+            key={s}
+            status={s}
+            cards={byStatus[s]}
+            cardBodies={cardBodies}
+            dimmed={s === "done"}
+          />
         ))}
       </div>
       <Toaster />

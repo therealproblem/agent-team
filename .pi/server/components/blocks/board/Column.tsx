@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Card as BoardCard, Status } from "@/lib/board-types";
 import { STATUS_LABELS } from "@/lib/board-types";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,10 +9,12 @@ import { STATUS_TONE } from "./persona-theme";
 export function Column({
   status,
   cards,
+  cardBodies,
   dimmed,
 }: {
   status: Status;
   cards: BoardCard[];
+  cardBodies: Record<string, ReactNode>;
   dimmed?: boolean;
 }) {
   return (
@@ -35,7 +38,9 @@ export function Column({
           {cards.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">No cards</p>
           ) : (
-            cards.map((c) => <CardItem key={c.slug} card={c} />)
+            cards.map((c) => (
+              <CardItem key={c.slug} card={c} bodyContent={cardBodies[c.slug] ?? null} />
+            ))
           )}
         </div>
       </ScrollArea>

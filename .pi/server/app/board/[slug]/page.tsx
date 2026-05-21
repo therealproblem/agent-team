@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { loadProject } from "@/lib/board";
-import { compileMdxString } from "@/lib/mdx";
+import { compileMarkdownString, compileMdxString } from "@/lib/mdx";
 import { BoardView } from "@/components/blocks/board/BoardView";
 
 export const dynamic = "force-dynamic";
@@ -20,5 +21,21 @@ export default async function ProjectBoardPage({
   const loaded = await loadProject(slug);
   if (!loaded) notFound();
   const details = loaded.project.body ? await compileMdxString(loaded.project.body) : null;
-  return <BoardView project={loaded.project} cards={loaded.cards} details={details} />;
+  const compiled = await Promise.all(
+    loaded.cards.map(async (c) =>
+      c.body ? [c.slug, await compileMarkdownString(c.body)] as const : null,
+    ),
+  );
+  const cardBodies: Record<string, ReactNode> = {};
+  for (const entry of compiled) {
+    if (entry) cardBodies[entry[0]] = entry[1];
+  }
+  return (
+    <BoardView
+      project={loaded.project}
+      cards={loaded.cards}
+      details={details}
+      cardBodies={cardBodies}
+    />
+  );
 }
