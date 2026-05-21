@@ -474,6 +474,15 @@ ok "exports/ root in place"
 #                                       every flowchart on the site. The
 #                                       verification step below catches this.
 #   • remark-github-blockquote-alert — GFM callouts (> [!NOTE] etc.).
+#   • remark-math + rehype-katex     — pre-renders $…$ inline and $$…$$ block
+#                                       LaTeX to KaTeX HTML at compile time.
+#                                       The matching katex/dist/katex.min.css
+#                                       is @imported from styles/globals.css,
+#                                       so a missing `katex` module (pulled
+#                                       in transitively by rehype-katex)
+#                                       breaks every math formula on the
+#                                       site. The verification step below
+#                                       catches this.
 # ---------------------------------------------------------------------------
 
 SERVER_DIR="${REPO_ROOT}/.pi/server"
@@ -499,6 +508,21 @@ if [[ -f "${SERVER_DIR}/package.json" ]]; then
 		ok "@mermaid-js/layout-elk present (Mermaid flowchart layout engine)"
 	else
 		warn "@mermaid-js/layout-elk is missing from node_modules. Every Mermaid flowchart will fail to render. Run 'cd .pi/server && npm install @mermaid-js/layout-elk' to fix."
+	fi
+
+	# Verify the math toolchain — remark-math parses $…$ / $$…$$ during MDX
+	# compile, rehype-katex turns those nodes into KaTeX HTML, and the
+	# katex npm package provides both the HTML emitter and the matching
+	# stylesheet (imported by styles/globals.css). Any one missing means
+	# every formula on the site renders as raw text or unstyled markup.
+	missing_math=()
+	[[ -d "${SERVER_DIR}/node_modules/remark-math"  ]] || missing_math+=("remark-math")
+	[[ -d "${SERVER_DIR}/node_modules/rehype-katex" ]] || missing_math+=("rehype-katex")
+	[[ -d "${SERVER_DIR}/node_modules/katex"        ]] || missing_math+=("katex")
+	if [[ ${#missing_math[@]} -eq 0 ]]; then
+		ok "remark-math + rehype-katex + katex present (LaTeX math pipeline)"
+	else
+		warn "math pipeline modules missing from node_modules: ${missing_math[*]}. LaTeX formulas will not render. Run 'cd .pi/server && npm install ${missing_math[*]}' to fix."
 	fi
 else
 	info "no .pi/server/package.json — skipping Nextra install"

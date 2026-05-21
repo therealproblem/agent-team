@@ -62,6 +62,15 @@ Failure (`isError: true`):
 - Threshold-guard refusal: `guard: "over_threshold_without_force_single"`, plus `source_lines` and `threshold`. No file is written.
 - Verification failure: same shape as success but with `verify_error: <reason>`. The file IS on disk; the page didn't compile.
 
+## Math formulas in the body
+
+The MDX pipeline runs `remark-math` + `rehype-katex`, so any LaTeX you embed renders at compile time:
+
+- Inline: `$a^2 + b^2 = c^2$` mid-sentence.
+- Block: a `$$…$$` fence on its own paragraph with blank lines above and below.
+
+Escape literal dollars in prose as `\$` once the doc has math in it — otherwise the next `$` will be parsed as inline math. Full guidance and KaTeX caveats are in the [[render-html]] agent's *Math formulas* section. (Same pipeline as the multipart writer — math syntax behaves identically in either.)
+
 ## Don't
 
 - **Don't pass a markdown body different from what the planner saw.** Slugs and URLs only line up when inputs match.

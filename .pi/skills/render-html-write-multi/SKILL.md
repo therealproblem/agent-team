@@ -74,6 +74,10 @@ Same overall title, same day → the entire prior set under that base slug is cl
 
 That cleanup is also why you should never hand-edit the `parts` array between plan and write. If the agent's tweaked titles produce different slugs than the planner's, the cleanup pass removes the planner's URLs and writes to fresh ones — and the user has already seen the planner's URLs in their terminal.
 
+## Math formulas in part bodies
+
+Each part's `markdown` is compiled through the same MDX pipeline as the single-page writer, including `remark-math` + `rehype-katex`. Use `$…$` for inline math and `$$…$$` (own paragraph, blank lines above and below) for block math. Escape literal dollars in prose as `\$` once a part contains math. Full guidance is in the [[render-html]] agent's *Math formulas* section.
+
 ## Don't
 
 - **Don't transform the planner's `parts` array.** Pass it through verbatim.

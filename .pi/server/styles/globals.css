@@ -6,6 +6,11 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Roboto+Mono:wght@400&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
+/* KaTeX stylesheet — vendored from node_modules so we ship the same font
+ * files (KaTeX_Math, KaTeX_AMS, etc) the layout expects. rehype-katex emits
+ * the HTML structure these classes target, so without this CSS the math
+ * collapses into unstyled fallback text. */
+@import "katex/dist/katex.min.css";
 
 /*
  * Delphi — Cognac-Stained Parchment.
@@ -290,3 +295,64 @@ svg[aria-roledescription="timeline"] .lineWrapper line {
   border-left-color: var(--color-fire-opal);
 }
 .markdown-alert.markdown-alert-caution .markdown-alert-title { color: var(--color-fire-opal); }
+
+/*
+ * Mermaid edge override for dark surfaces (lightbox + dark mode article).
+ *
+ * Mermaid bakes `lineColor` (Deep Cognac #2b180a in our theme) inline on
+ * every flowchart link and arrowhead at render time, so changing the CSS
+ * variable later doesn't update existing SVGs. Against a dark surface those
+ * strokes drop to ~0 luminance contrast and disappear, even though the
+ * boxes themselves stay readable (parchment fills + dark borders).
+ *
+ * Two contexts share the override:
+ *   • `[data-mermaid-lightbox]` — the lightbox SVG wrapper, always on a
+ *     near-black backdrop regardless of site theme.
+ *   • `.dark [data-mermaid-svg]` — the article-context Mermaid render
+ *     target when the page is in dark mode. Light-mode articles keep the
+ *     dark cognac strokes that work on parchment.
+ *
+ * `!important` is required because Mermaid emits stroke as an inline
+ * `style="stroke: …"` attribute on each link, which beats class CSS
+ * without it.
+ */
+[data-mermaid-lightbox] .flowchart-link,
+[data-mermaid-lightbox] .edgePath > path,
+[data-mermaid-lightbox] g.edgePath path,
+[data-mermaid-lightbox] path.path,
+.dark [data-mermaid-svg] .flowchart-link,
+.dark [data-mermaid-svg] .edgePath > path,
+.dark [data-mermaid-svg] g.edgePath path,
+.dark [data-mermaid-svg] path.path {
+  stroke: #e8d9bf !important;
+}
+[data-mermaid-lightbox] .marker,
+[data-mermaid-lightbox] marker path,
+[data-mermaid-lightbox] #arrowhead,
+[data-mermaid-lightbox] defs marker > *,
+.dark [data-mermaid-svg] .marker,
+.dark [data-mermaid-svg] marker path,
+.dark [data-mermaid-svg] #arrowhead,
+.dark [data-mermaid-svg] defs marker > * {
+  fill: #e8d9bf !important;
+  stroke: #e8d9bf !important;
+}
+
+/* Mermaid node borders + text in dark mode.
+ *
+ * The boxes themselves render with a parchment fill and dark cognac border
+ * baked in. On a near-black page background the borders read fine *between*
+ * the box and the dark surrounding, but the cognac text inside the cream
+ * fill is fine too — leave those alone. We only re-tint edge labels (which
+ * sit on the dark page, not inside a node), so they stop blending into the
+ * backdrop. */
+.dark [data-mermaid-svg] .edgeLabel,
+.dark [data-mermaid-svg] .edgeLabel rect {
+  fill: transparent !important;
+}
+.dark [data-mermaid-svg] .edgeLabel text,
+.dark [data-mermaid-svg] .edgeLabel span,
+.dark [data-mermaid-svg] .edgeLabel foreignObject * {
+  color: #e8d9bf !important;
+  fill: #e8d9bf !important;
+}

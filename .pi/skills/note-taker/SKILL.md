@@ -129,6 +129,7 @@ Notes on the format:
 - **Code blocks:** triple-backtick with a language hint (` ```ts `, ` ```bash `, ` ```python `). Obsidian highlights.
 - **Tables:** standard markdown pipe tables. Render fine in Obsidian preview.
 - **Callouts:** Obsidian supports the `> [!note]`, `> [!warning]`, `> [!danger]` syntax — use them when content needs emphasis.
+- **Math formulas:** when the content involves a formula, equation, identity, or quantitative relationship, write it as LaTeX between `$…$` (inline) or `$$…$$` (block, blank lines above and below). Obsidian renders these via MathJax in preview; the [[render-html]] pipeline renders them via KaTeX. Both source forms are identical — author once, render anywhere. Don't paraphrase math as prose, don't fake it with Unicode (`σ²`, `∫`, `√`), and don't paste it inside a code block. Escape literal dollar signs in surrounding prose as `\$` once a note contains math, otherwise the next `$` will be parsed as the close of an inline expression.
 
 ## Steps
 

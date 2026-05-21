@@ -26,6 +26,7 @@
 
 import { jsx, jsxs } from "react/jsx-runtime";
 import { useEffect, useId, useRef, useState } from "react";
+import { MermaidLightbox } from "./MermaidLightbox";
 
 // Delphi tokens → Mermaid themeVariables. Cognac-Stained Parchment look:
 // parchment-cream node fills, deep-cognac borders/text/edges, warm-tan
@@ -207,6 +208,7 @@ export function Mermaid({
   // disk is rewritten by the route, so any subsequent reload still gets the
   // fixed version.
   const [overrideSource, setOverrideSource] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Separate target for mermaid.render's temporary measurement DOM.
   // Keeping it off the React-managed outer container avoids reconciliation
@@ -392,6 +394,12 @@ export function Mermaid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartNumber, failed, fixing, overrideSource]);
 
+  // Only let the chart open the lightbox once it has actually rendered —
+  // clicking a blank placeholder before mermaid finishes would show an empty
+  // viewer. `failed` charts also stay non-clickable; their affordance is the
+  // Fix-syntax button below.
+  const canExpand = Boolean(svg) && !failed;
+
   // The mermaid SVG is injected via dangerouslySetInnerHTML, so it needs
   // its own dedicated wrapper. The outer div is a centered flex column so
   // the SVG, caption, and Fix-syntax button line up under each other and
@@ -415,12 +423,51 @@ export function Mermaid({
           // width with proportional height. We can't put these rules in
           // mermaid's `themeCSS` because that block is injected inside the
           // SVG (it styles the SVG's *contents*, not the SVG element).
+          // `group` + cursor / role attrs make the rendered diagram act as a
+          // button that opens the zoom-and-pan lightbox; `tabindex`/keyboard
+          // handlers cover keyboard activation since this isn't a real
+          // <button> (a <button> would strip the SVG's intrinsic semantics).
+          //
+          // `data-mermaid-svg` marks this as a Mermaid render target so
+          // globals.css can re-paint edge strokes / arrowheads for dark
+          // mode (Mermaid bakes lineColor as inline `stroke="#2b180a"`
+          // which collapses to ~0 contrast on the dark page bg).
           className:
-            "w-full [&>svg]:block [&>svg]:mx-auto [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-full",
+            "group relative w-full [&>svg]:block [&>svg]:mx-auto [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-full" +
+            (canExpand ? " cursor-zoom-in" : ""),
+          "data-mermaid-svg": "",
           dangerouslySetInnerHTML: { __html: svg },
+          role: canExpand ? "button" : undefined,
+          tabIndex: canExpand ? 0 : undefined,
+          "aria-label": canExpand
+            ? chartNumber
+              ? `Open chart ${chartNumber} in viewer`
+              : "Open chart in viewer"
+            : undefined,
+          onClick: canExpand ? () => setLightboxOpen(true) : undefined,
+          onKeyDown: canExpand
+            ? (e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setLightboxOpen(true);
+                }
+              }
+            : undefined,
         },
         "svg",
       ),
+      canExpand
+        ? jsx(
+            MermaidLightbox,
+            {
+              open: lightboxOpen,
+              onClose: () => setLightboxOpen(false),
+              svg,
+              caption: chartNumber ? `Chart ${chartNumber}` : undefined,
+            },
+            "lightbox",
+          )
+        : null,
       chartNumber
         ? jsx(
             "div",

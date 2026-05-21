@@ -169,9 +169,33 @@ Picture the bounding box before writing the Mermaid:
 | GFM table | standard `| Col | … |` |
 | Task list | `- [ ] todo` / `- [x] done` |
 | Footnotes | `[^1]` + `[^1]: text` |
-| Math (inline / block) | `$x^2$` / `$$ \int_0^1 f $$` (KaTeX) |
+| Math (inline / block) | `$a^2 + b^2 = c^2$` inline · `$$ … $$` block (see *Math formulas* below) |
 
 Custom MDX components (`<Tabs>`, `<Steps>`, `<Cards>`, `<FileTree>`) are NOT provided. Express parallel content as side-by-side tables, procedural sequences as ordered lists.
+
+## Math formulas — use LaTeX whenever the content is mathematical
+
+The renderer runs `remark-math` + `rehype-katex` in the MDX pipeline, so `$…$` and `$$…$$` are pre-rendered to KaTeX HTML at compile time (no client-side math layout cost). **Use this whenever the source describes a formula, equation, identity, derivation, or quantitative relationship.** Don't paraphrase math as prose, don't fake it with Unicode (`σ²`, `∫`, `√`), don't paste it inside a code block — KaTeX is the right rendering.
+
+| Form | Syntax | Renders as |
+|---|---|---|
+| Inline | `$a^2 + b^2 = c^2$` in the middle of a sentence | typeset inline at text size |
+| Block | `$$\n\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}\n$$` on its own paragraph | centered display formula |
+
+Rules that matter:
+
+- **Block math needs blank lines above and below the `$$` fences.** Inside a list item or table cell, the surrounding blank line requirement won't hold — fall back to inline `$…$` there.
+- **Escape literal dollar signs.** Prose like "the laptop is $1,200" must be written as `the laptop is \$1,200` once math is on. An unescaped `$` followed later by another `$` will be parsed as inline math and mangle the paragraph between them.
+- **No `<math>` JSX, no raw KaTeX HTML.** Same rule as elsewhere — markdown body only. `$…$` / `$$…$$` is the input; the pipeline emits the HTML.
+- **Supported:** the full standard LaTeX-in-KaTeX set — Greek (`\alpha`, `\Sigma`), fractions (`\frac{a}{b}`), roots (`\sqrt{x}`), sums/integrals (`\sum_{i=1}^n`, `\int_0^\infty`), super/subscripts (`x^2`, `a_{ij}`), operators (`\cdot`, `\times`, `\leq`, `\approx`), aligned environments (`\begin{aligned} … \end{aligned}` inside a `$$` block), matrices (`\begin{pmatrix} … \end{pmatrix}`).
+- **Not supported:** `\usepackage`, `\newcommand`, TikZ, arbitrary LaTeX packages. KaTeX is a subset — if the source uses an exotic macro, pick a KaTeX-supported equivalent or rewrite the expression.
+
+When to reach for math vs alternatives:
+
+- **Formula in a single line of prose** → inline `$…$`.
+- **Standalone identity, derivation step, defining equation** → block `$$…$$`.
+- **A short numeric inequality with no Greek/operators** (`p < 0.05`) → prose is fine; math markup isn't required for plain digits + ASCII operators.
+- **A table of formulas** → put inline math inside the table cells, one formula per cell.
 
 ## Pattern picker by document type
 

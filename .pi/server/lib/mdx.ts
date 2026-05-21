@@ -3,7 +3,9 @@ import path from "node:path";
 import { compileMDX } from "next-mdx-remote/rsc";
 import rehypeSlug from "rehype-slug";
 import rehypePrettyCode from "rehype-pretty-code";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import { remarkMermaidJsx } from "@/lib/remark-mermaid-jsx";
 import { mdxComponents } from "@/components/docs/mdx-components";
@@ -37,9 +39,18 @@ export async function compileMdxFile(slug: string): Promise<CompiledMdx | null> 
     options: {
       parseFrontmatter: true,
       mdxOptions: {
-        remarkPlugins: [remarkGfm, remarkMermaidJsx, remarkAlert],
+        // remarkMath has to run before remarkMermaidJsx so its $…$ / $$…$$
+        // detection sees raw text — once a mermaid block is rewritten to a
+        // <Mermaid chart="b64:…"/> JSX node the rest of the pass is on AST
+        // nodes, but ordering here is just defensive.
+        remarkPlugins: [remarkGfm, remarkMath, remarkMermaidJsx, remarkAlert],
+        // rehypeKatex turns the math nodes remarkMath emitted into KaTeX
+        // HTML at compile time, so the page ships pre-rendered formulas
+        // (no client-side math layout cost). The matching katex.min.css
+        // is loaded once from globals.css.
         rehypePlugins: [
           rehypeSlug,
+          rehypeKatex,
           [
             rehypePrettyCode,
             {
