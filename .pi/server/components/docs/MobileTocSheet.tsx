@@ -45,7 +45,7 @@ export function MobileTocSheet({ entries, parts, currentSlug }: MobileTocSheetPr
           <Menu className="size-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 overflow-y-auto bg-background p-6">
+      <SheetContent side="left" className="scrollbar-hide w-72 overflow-y-auto bg-background p-6">
         <SheetTitle className="sr-only">Table of contents</SheetTitle>
         {hasParts ? <PartsNav parts={parts!} currentSlug={currentSlug} /> : null}
         <Toc entries={entries} />

@@ -26,6 +26,7 @@
 
 import { jsx, jsxs } from "react/jsx-runtime";
 import { useEffect, useId, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { MermaidLightbox } from "./MermaidLightbox";
 
 // Delphi tokens → Mermaid themeVariables. Cognac-Stained Parchment look:
@@ -400,12 +401,20 @@ export function Mermaid({
   // Fix-syntax button below.
   const canExpand = Boolean(svg) && !failed;
 
+  // True from mount until the first successful mermaid.render() (or until
+  // the chart enters the failed state). Covers both the "scrolled into view,
+  // mermaid is computing layout" gap and the longer "below the fold, waiting
+  // for IntersectionObserver" idle. Keeping the same placeholder for both
+  // states avoids a flash on fast renders and reserves vertical space so the
+  // article doesn't reflow under the reader when the SVG finally arrives.
+  const isLoading = !svg && !failed;
+
   // The mermaid SVG is injected via dangerouslySetInnerHTML, so it needs
   // its own dedicated wrapper. The outer div is a centered flex column so
   // the SVG, caption, and Fix-syntax button line up under each other and
   // each chart sits centered within the article column regardless of the
-  // SVG's natural width. Order: diagram, then caption, then (when broken)
-  // the per-chart Fix button.
+  // SVG's natural width. Order: loading placeholder (while pending), then
+  // diagram, then caption, then (when broken) the per-chart Fix button.
   return jsxs("div", {
     ref: containerRef,
     style: {
@@ -415,6 +424,49 @@ export function Mermaid({
       marginTop: "1.5rem",
     },
     children: [
+      isLoading
+        ? jsxs(
+            "div",
+            {
+              role: "status",
+              "aria-live": "polite",
+              style: {
+                width: "100%",
+                minHeight: "120px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+                color: "#7f6e60",
+                fontSize: "0.75rem",
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                letterSpacing: "0.05em",
+              },
+              children: [
+                jsx(
+                  Loader2,
+                  {
+                    size: 14,
+                    className: "animate-spin",
+                    "aria-hidden": true,
+                  },
+                  "spinner",
+                ),
+                jsx(
+                  "span",
+                  {
+                    children: chartNumber
+                      ? `Rendering chart ${chartNumber}…`
+                      : "Rendering chart…",
+                  },
+                  "label",
+                ),
+              ],
+            },
+            "loading",
+          )
+        : null,
       jsx(
         "div",
         {

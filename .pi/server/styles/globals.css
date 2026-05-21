@@ -217,6 +217,19 @@ body {
   background: var(--color-parchment-white);
 }
 
+/* Hide the scrollbar UI but keep wheel/trackpad scrolling. Used on the
+ * sticky TOC sidebar so the panel reads as editorial chrome rather than
+ * a control — the TOC's own rail-and-fill indicator carries the position
+ * cue instead. */
+.scrollbar-hide {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy Edge / IE */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;                /* WebKit / Blink */
+}
+
+
 /* Mermaid timeline title — rendered as a bare <text> element with inline
  * font-size="4ex" font-weight="bold" (no class, no CSS hook). Without an
  * override it reads as a heavy sans-serif slab that fights Delphi's Source
