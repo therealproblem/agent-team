@@ -48,7 +48,8 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 | Root session | `openai/gpt-5.5` (1M ctx) | Long-running session needs the context window |
 | `engineer`, `uat-tester` | `anthropic/claude-sonnet-4-5` | Tool-heavy code work + multi-step interpretation |
 | `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor PRD audit + grading |
-| `red-team`, `jlpt-examiner`, `render-html`, `render-pdf` | `google/gemini-3.1-pro-preview` | Cross-vendor adversarial + Mermaid/SVG quality |
+| `red-team` | `openai/gpt-5.5` | Adversarial review on the 1M-ctx model — same vendor as root |
+| `jlpt-examiner`, `render-html`, `render-pdf` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `scout`, `steelman` | `openai/gpt-5-mini` | Cheap models for high-token, low-reasoning sub-tasks |
 
 Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low. Gemini routes through the `ELICE_GEMINI_3_1_PRO` provider in `models.json` rather than a bare Google route, so no separate key is needed.
