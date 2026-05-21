@@ -70,6 +70,31 @@ export async function compileMdxFile(slug: string): Promise<CompiledMdx | null> 
   };
 }
 
+export async function compileMdxString(raw: string): Promise<React.ReactNode> {
+  const { content } = await compileMDX<Record<string, unknown>>({
+    source: raw,
+    components: mdxComponents,
+    options: {
+      parseFrontmatter: false,
+      mdxOptions: {
+        remarkPlugins: [remarkGfm, remarkMath, remarkMermaidJsx, remarkAlert],
+        rehypePlugins: [
+          rehypeSlug,
+          rehypeKatex,
+          [
+            rehypePrettyCode,
+            {
+              theme: "github-light",
+              keepBackground: false,
+            },
+          ],
+        ],
+      },
+    },
+  });
+  return content;
+}
+
 export async function listMdxSlugs(): Promise<string[]> {
   try {
     const entries = await fs.readdir(V_DIR);

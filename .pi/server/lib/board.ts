@@ -38,10 +38,12 @@ const cardFrontmatterSchema = z.object({
   tags: z.array(z.string()).optional(),
   created: z.union([z.string(), z.date()]).optional(),
   updated: z.union([z.string(), z.date()]).optional(),
+  title_pending: z.boolean().optional(),
 });
 
 const projectFrontmatterSchema = z.object({
   name: z.string().optional(),
+  description: z.string().optional(),
   status: z.string().optional(),
   owner: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -118,6 +120,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
       created: null,
       updated: null,
       body: raw.trim(),
+      titlePending: false,
       warning: parseError,
     };
   }
@@ -136,6 +139,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
     created: toIsoDate(obj.created),
     updated: toIsoDate(obj.updated),
     body: body.trim(),
+    titlePending: obj.title_pending === true,
     warning: warning ?? (fm.success ? null : "Invalid frontmatter shape"),
   };
 }
@@ -149,14 +153,14 @@ async function readProjectMeta(slug: string, projectDir: string): Promise<Projec
     raw = null;
   }
   let data: Record<string, unknown> = {};
-  let description = "";
+  let body = "";
   if (raw !== null) {
     try {
       const parsed = matter(raw);
       data = parsed.data as Record<string, unknown>;
-      description = parsed.content.trim();
+      body = parsed.content.trim();
     } catch {
-      description = raw.trim();
+      body = raw.trim();
     }
   }
   const fm = projectFrontmatterSchema.safeParse(data);
@@ -169,7 +173,8 @@ async function readProjectMeta(slug: string, projectDir: string): Promise<Projec
     tags: Array.isArray(obj.tags) ? obj.tags : [],
     created: toIsoDate(obj.created),
     updated: toIsoDate(obj.updated),
-    description,
+    description: (typeof obj.description === "string" && obj.description.trim()) || "",
+    body,
     cardCounts: { backlog: 0, in_progress: 0, in_review: 0, blocked: 0, done: 0 },
   };
 }
@@ -189,11 +194,13 @@ async function listCardsInProject(projectDir: string): Promise<Card[]> {
 }
 
 const STATUS_ORDER: Record<Status, number> = {
-  backlog: 0,
-  in_progress: 1,
-  in_review: 2,
+  request: 0,
+  triage: 1,
+  backlog: 2,
   blocked: 3,
-  done: 4,
+  in_progress: 4,
+  in_review: 5,
+  done: 6,
 };
 
 const PRIORITY_ORDER: Record<Priority, number> = { p0: 0, p1: 1, p2: 2, p3: 3 };

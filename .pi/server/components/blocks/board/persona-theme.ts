@@ -20,6 +20,8 @@ export const UNASSIGNED_THEME = {
 };
 
 export const STATUS_TONE: Record<Status, string> = {
+  request: "bg-[var(--color-sunset-orange)]",
+  triage: "bg-[var(--color-deep-cognac)]",
   backlog: "bg-[var(--color-warm-ash)]",
   in_progress: "bg-[var(--color-burnt-umber)]",
   in_review: "bg-[var(--color-pressed-cacao)]",

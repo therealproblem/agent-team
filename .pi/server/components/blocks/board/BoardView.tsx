@@ -1,22 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowLeft, FileText, Plus } from "lucide-react";
 import type { Card as BoardCard, Project, Status } from "@/lib/board-types";
 import { STATUSES, PERSONAS, type Persona } from "@/lib/board-types";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Toaster } from "@/components/ui/sonner";
 import { Column } from "./Column";
 import { Filters } from "./Filters";
+import { RequestForm } from "./RequestForm";
 
-export function BoardView({ project, cards }: { project: Project; cards: BoardCard[] }) {
+export function BoardView({
+  project,
+  cards,
+  details,
+}: {
+  project: Project;
+  cards: BoardCard[];
+  details: ReactNode | null;
+}) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const personaParam = searchParams.get("persona");
   const subParam = searchParams.get("sub");
 
+  const hasPendingTitle = useMemo(() => cards.some((c) => c.titlePending), [cards]);
+  useEffect(() => {
+    if (!hasPendingTitle) return;
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (Date.now() - start > 90_000) {
+        clearInterval(interval);
+        return;
+      }
+      router.refresh();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasPendingTitle, router]);
+
   const activePersona = (PERSONAS as readonly string[]).includes(personaParam ?? "")
     ? (personaParam as Persona)
     : null;
+
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return cards.filter((c) => {
@@ -27,13 +63,10 @@ export function BoardView({ project, cards }: { project: Project; cards: BoardCa
   }, [cards, activePersona, subParam]);
 
   const byStatus = useMemo(() => {
-    const map: Record<Status, BoardCard[]> = {
-      backlog: [],
-      in_progress: [],
-      in_review: [],
-      blocked: [],
-      done: [],
-    };
+    const map = Object.fromEntries(STATUSES.map((s) => [s, [] as BoardCard[]])) as Record<
+      Status,
+      BoardCard[]
+    >;
     for (const c of filtered) map[c.status].push(c);
     return map;
   }, [filtered]);
@@ -54,9 +87,61 @@ export function BoardView({ project, cards }: { project: Project; cards: BoardCa
           <span className="text-foreground">{project.name}</span>
         </div>
         <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">
-            {project.name}
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground">
+              {project.name}
+            </h1>
+            {details ? (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Details
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle className="font-serif text-xl leading-snug">
+                      {project.name}
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Full project details for {project.name}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground prose-headings:font-serif prose-headings:text-foreground prose-a:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+                    {details}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : null}
+            <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" size="sm" className="h-7 gap-1.5 text-xs">
+                  <Plus className="h-3 w-3" />
+                  Submit request
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="font-serif text-xl leading-snug">
+                    Submit a request
+                  </DialogTitle>
+                  <DialogDescription>
+                    Lands in the Request column for PM to triage.
+                  </DialogDescription>
+                </DialogHeader>
+                <RequestForm
+                  projectSlug={project.slug}
+                  onSuccess={() => setRequestOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
           {project.description ? (
             <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
               {project.description}
@@ -66,11 +151,12 @@ export function BoardView({ project, cards }: { project: Project; cards: BoardCa
         <Filters />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
         {STATUSES.map((s) => (
           <Column key={s} status={s} cards={byStatus[s]} dimmed={s === "done"} />
         ))}
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import type { Card as BoardCard } from "@/lib/board-types";
 import { PERSONA_LABELS, STATUS_LABELS } from "@/lib/board-types";
 import { Card } from "@/components/ui/card";
@@ -44,7 +44,24 @@ export function CardItem({ card }: { card: BoardCard }) {
           className="block w-full cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-lg"
         >
           <Card className="gap-2 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-none transition-colors hover:border-[var(--color-burnt-umber)]">
-            <h3 className="text-sm font-medium leading-snug text-foreground">{card.title}</h3>
+            <div className="flex items-start gap-1.5">
+              {card.titlePending ? (
+                <Loader2
+                  className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+                  aria-label="Generating title…"
+                />
+              ) : null}
+              <h3
+                className={cn(
+                  "text-sm font-medium leading-snug",
+                  card.titlePending
+                    ? "italic text-muted-foreground"
+                    : "text-foreground",
+                )}
+              >
+                {card.title}
+              </h3>
+            </div>
             <div className="flex items-center gap-1.5">
               <PersonaChip card={card} />
               {card.warning ? (
@@ -59,7 +76,14 @@ export function CardItem({ card }: { card: BoardCard }) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl leading-snug">{card.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 font-serif text-xl leading-snug">
+            {card.titlePending ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+            ) : null}
+            <span className={cn(card.titlePending && "italic text-muted-foreground")}>
+              {card.title}
+            </span>
+          </DialogTitle>
           <DialogDescription className="sr-only">
             Card details for {card.title}
           </DialogDescription>

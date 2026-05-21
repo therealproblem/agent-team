@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { loadProject } from "@/lib/board";
+import { compileMdxString } from "@/lib/mdx";
 import { BoardView } from "@/components/blocks/board/BoardView";
 
 export const dynamic = "force-dynamic";
@@ -18,5 +19,6 @@ export default async function ProjectBoardPage({
   const { slug } = await params;
   const loaded = await loadProject(slug);
   if (!loaded) notFound();
-  return <BoardView project={loaded.project} cards={loaded.cards} />;
+  const details = loaded.project.body ? await compileMdxString(loaded.project.body) : null;
+  return <BoardView project={loaded.project} cards={loaded.cards} details={details} />;
 }

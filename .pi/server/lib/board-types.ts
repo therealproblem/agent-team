@@ -1,7 +1,17 @@
-export const STATUSES = ["backlog", "in_progress", "in_review", "blocked", "done"] as const;
+export const STATUSES = [
+  "request",
+  "triage",
+  "backlog",
+  "blocked",
+  "in_progress",
+  "in_review",
+  "done",
+] as const;
 export type Status = typeof STATUSES[number];
 
 export const STATUS_LABELS: Record<Status, string> = {
+  request: "Request",
+  triage: "Triage",
   backlog: "Backlog",
   in_progress: "In Progress",
   in_review: "In Review",
@@ -40,6 +50,7 @@ export interface Card {
   created: string | null;
   updated: string | null;
   body: string;
+  titlePending: boolean;
   warning: string | null;
 }
 
@@ -52,5 +63,6 @@ export interface Project {
   created: string | null;
   updated: string | null;
   description: string;
+  body: string;
   cardCounts: Record<Status, number>;
 }
