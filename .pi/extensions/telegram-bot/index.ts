@@ -524,10 +524,36 @@ export default function (pi: ExtensionAPI): void {
 	// quit, reload, new, resume, fork). The dispatcher captures `pi` in its
 	// closure, so leaving the loop running after invalidation makes
 	// `pi.sendUserMessage` throw on the next incoming update. Stop cleanly here.
-	pi.on("session_shutdown", () => {
+	//
+	// On `quit` only (the actual process exit — session swaps keep pi alive),
+	// fire a heads-up to every allowlisted chat before tear-down so users on
+	// Telegram learn the agent went offline. Pi awaits async session_shutdown
+	// handlers via `runtimeHost.dispose()` before calling `process.exit(0)`,
+	// so the send completes before pi exits. Bounded by a tight timeout —
+	// a network outage at shutdown shouldn't hang pi.
+	pi.on("session_shutdown", async (event) => {
 		alive = false;
 		stopPending();
 		loop.stop();
+
+		if (event.reason === "quit" && process.env.TELEGRAM_BOT_TOKEN) {
+			const chats =
+				dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
+			if (chats.size > 0) {
+				const SHUTDOWN_NOTICE_TIMEOUT_MS = 4_000;
+				const sends = Array.from(chats).map((chatId) =>
+					api.sendMessage(chatId, "(pi shut down)").catch(() => undefined),
+				);
+				await Promise.race([
+					Promise.all(sends),
+					new Promise<void>((resolve) => {
+						const timer = setTimeout(resolve, SHUTDOWN_NOTICE_TIMEOUT_MS);
+						timer.unref?.();
+					}),
+				]);
+			}
+		}
+
 		shutdownDriver();
 	});
 
