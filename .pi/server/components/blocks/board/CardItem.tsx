@@ -81,7 +81,7 @@ export function CardItem({
           </Card>
         </button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-x-hidden overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-serif text-xl leading-snug">
             {card.titlePending ? (
@@ -121,7 +121,7 @@ export function CardItem({
         ) : null}
 
         {bodyContent ? (
-          <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground prose-headings:font-serif prose-headings:text-foreground prose-a:text-foreground prose-strong:text-foreground prose-code:text-foreground">
+          <div className="prose prose-sm min-w-0 max-w-none break-words text-sm leading-relaxed text-foreground prose-headings:font-serif prose-headings:text-foreground prose-a:text-foreground prose-strong:text-foreground prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-foreground">
             {bodyContent}
           </div>
         ) : card.body ? (
