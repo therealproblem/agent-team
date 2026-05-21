@@ -227,6 +227,22 @@ export function MermaidLightbox({
     };
   }, [open]);
 
+  // Inject the SVG imperatively. JSX-side `dangerouslySetInnerHTML` re-fired
+  // setInnerHTML on every render of this component (React 19 treats the
+  // `{__html: svg}` object literal as a new prop value because its identity
+  // changes per render, even when the underlying string doesn't), which
+  // replaced the SVG element during every pan tick and wiped the width/height
+  // the zoom effect had set — chart snapping back to its 300×150 intrinsic
+  // size mid-drag. Doing it via useLayoutEffect with a single `svg` dep
+  // means React never owns these children: we set innerHTML once per svg
+  // change, and the size effect's later mutations on the resulting SVG
+  // element persist across re-renders.
+  useLayoutEffect(() => {
+    const wrap = svgWrapRef.current;
+    if (!wrap) return;
+    wrap.innerHTML = svg;
+  }, [svg]);
+
   // Drive zoom by mutating the <svg>'s width/height attributes rather than
   // wrapping it in a CSS `transform: scale()`. With CSS scale on a composited
   // layer (which `will-change: transform` forces), the browser rasterizes the
@@ -513,7 +529,15 @@ export function MermaidLightbox({
         {/* Pan-only transform. The SVG itself is resized inline (see the
             zoom effect above) so vector quality is preserved at every scale
             — CSS `scale()` here would force GPU bitmap stretching, which is
-            what produced the pixelated chart at high zoom. */}
+            what produced the pixelated chart at high zoom.
+
+            No `dangerouslySetInnerHTML` here: React 19 re-runs setInnerHTML
+            on every render where the prop's *object identity* differs (the
+            literal `{__html: svg}` is a new object each render even when
+            the svg string is the same), which replaces the SVG element and
+            wipes the inline width/height the zoom effect just set. The
+            companion injection effect below sets innerHTML once per `svg`
+            change, then React leaves these children alone. */}
         <div
           ref={svgWrapRef}
           data-mermaid-lightbox=""
@@ -521,7 +545,6 @@ export function MermaidLightbox({
             transform: `translate(${view.tx}px, ${view.ty}px)`,
             lineHeight: 0,
           }}
-          dangerouslySetInnerHTML={{ __html: svg }}
         />
       </div>
 
