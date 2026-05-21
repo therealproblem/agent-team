@@ -54,19 +54,22 @@ case "$OS" in
 esac
 
 # ---------------------------------------------------------------------------
-# 2. Stop running runtimes (Pi + Next.js)
+# 2. Stop the server holding our port
 #
 # Re-running setup rebuilds .pi/server/.next/. If a `next start` is live
 # during that rebuild, its in-memory build manifest still points at the
 # previous CSS/JS hashes — Next will keep serving HTML that references
 # files we just overwrote, producing 500s on every static asset until the
-# server is restarted. Stop Next.js and Pi processes up front so the
-# rebuild lands cleanly. Skips this script's own ancestors so it doesn't
-# suicide when invoked from inside a Pi session. Idempotent: silent when
-# nothing's running.
+# server is restarted. Target the process bound to AGENTS_TEAM_SERVER_PORT
+# (default 8080) by port rather than pgrep'ing all `node`/`next` processes,
+# so unrelated node servers and Pi sessions on this machine are left alone.
+# Skips this script's own ancestors so it doesn't suicide when invoked from
+# inside a Pi session. Idempotent: silent when nothing's listening.
 # ---------------------------------------------------------------------------
 
-if have pgrep; then
+SERVER_PORT="${AGENTS_TEAM_SERVER_PORT:-8080}"
+
+if have lsof; then
 	# Collect PIDs we must NOT kill: this shell + its full ancestor chain.
 	# Covers the case where pi forks bash forks setup.sh — killing pi would
 	# kill the script driving the rebuild.
@@ -77,47 +80,33 @@ if have pgrep; then
 		_anc="$(ps -o ppid= -p "$_anc" 2>/dev/null | tr -d ' ' || true)"
 	done
 
-	stop_matching() {
-		local label="$1" pattern="$2"
-		# pgrep -f matches the full command line — needed to catch
-		# `node .../next/dist/bin/next start` and similar wrappers.
-		local pids
-		pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
-		if [[ -z "$pids" ]]; then
-			ok "no ${label} running"
-			return
-		fi
-
-		local victims=() p
-		for p in $pids; do
+	# `lsof -ti tcp:<port>` prints one PID per line for anything listening
+	# on (or connected to) that TCP port. -t = terse / PID-only output.
+	PORT_PIDS="$(lsof -ti tcp:"$SERVER_PORT" 2>/dev/null || true)"
+	if [[ -z "$PORT_PIDS" ]]; then
+		ok "nothing listening on port ${SERVER_PORT}"
+	else
+		victims=()
+		for p in $PORT_PIDS; do
 			[[ "$SELF_PIDS" == *" $p "* ]] && continue
 			victims+=("$p")
 		done
 
 		if (( ${#victims[@]} == 0 )); then
-			ok "no ${label} to stop (only this script's ancestors matched)"
-			return
+			ok "port ${SERVER_PORT} held only by this script's ancestors — leaving alone"
+		else
+			info "stopping server on port ${SERVER_PORT} (pids: ${victims[*]})"
+			kill "${victims[@]}" 2>/dev/null || true
+			# Give them a moment to exit gracefully before SIGKILL.
+			sleep 1
+			for p in "${victims[@]}"; do
+				kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
+			done
+			ok "stopped server on port ${SERVER_PORT}"
 		fi
-
-		info "stopping ${label} (pids: ${victims[*]})"
-		kill "${victims[@]}" 2>/dev/null || true
-		# Give them a moment to exit gracefully before SIGKILL.
-		sleep 1
-		for p in "${victims[@]}"; do
-			kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
-		done
-		ok "stopped ${label}"
-	}
-
-	# next-server: forked worker process name. `next (dev|start|build)`:
-	# the npm-script entrypoint Next leaves in the command line.
-	stop_matching "Next.js servers" 'next-server|next (dev|start|build)'
-	# Pi CLI is installed as @earendil-works/pi-coding-agent — match the
-	# package path so we don't catch unrelated commands that happen to
-	# contain the letters "pi".
-	stop_matching "Pi runtimes" 'pi-coding-agent'
+	fi
 else
-	warn "pgrep not found — skipping runtime shutdown. Stop any 'next start' / 'pi' processes manually before re-running, or .pi/server/.next/ may end up out of sync with the live process."
+	warn "lsof not found — skipping port-based shutdown. Stop whatever's bound to port ${SERVER_PORT} manually before re-running, or .pi/server/.next/ may end up out of sync with the live process."
 fi
 
 # ---------------------------------------------------------------------------
