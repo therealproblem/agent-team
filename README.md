@@ -167,7 +167,7 @@ The bootstrap script is idempotent and handles:
 5. `.env` scaffold from `.env.example` (preserves existing `.env`)
 6. `exports/` directory + `.pi/server/public/p` → `exports/` symlink for PDF serving
 7. Nextra server `npm install` in `.pi/server/`
-8. Stops any running Next.js + Pi processes so the rebuild doesn't fight a stale server
+8. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server — unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
 9. Nextra production build (`next build`) — `.env` is sourced first so build-time vars get baked in
 10. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
 11. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
