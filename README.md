@@ -52,7 +52,7 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 | `jlpt-examiner`, `render-html`, `render-pdf` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `scout`, `steelman` | `openai/gpt-5-mini` | Cheap models for high-token, low-reasoning sub-tasks |
 
-Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low. Every subagent's `model:` frontmatter is prefixed with its `ELICE_*` provider from `~/.pi/agent/models.json` (e.g. `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5`, `ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview`) so requests route through mlapi.run — no per-vendor API keys needed.
+Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low.
 
 ### Pi mapping
 
