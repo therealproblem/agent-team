@@ -5,6 +5,14 @@ data/
 # if you'd rather point at your real Obsidian vault.
 vault/
 
+# Safety net for stray vault content that lands outside `vault/`. The board
+# extension writes cards to `<vaultRoot>/projects/<slug>/board/...` and
+# `<vaultRoot>` resolves to `<repo>/vault` by default — there should never
+# be a `projects/` directory at the repo root. If something (a hand-edited
+# file, an agent with a misconfigured vault path) writes there anyway, this
+# rule keeps it out of git. See commit d11d82c for the case that prompted it.
+/projects/
+
 # Generated MDX renders — runtime content read by Nextra.
 renders/
 
