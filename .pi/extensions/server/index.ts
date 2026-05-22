@@ -112,6 +112,28 @@ const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 let pendingTimer: ReturnType<typeof setInterval> | null = null;
 let pendingFrame = 0;
 
+// Health-poll state. bringUp sets the footer to ready/down once, but if the
+// Next child crashes (or an external process serving the port goes away)
+// after that point, nothing else updates the footer — it would stay stuck at
+// "| SRV 8080" forever. So once we've reached a settled state we run a cheap
+// port probe every few seconds and flip the footer on a real transition.
+//
+// HEALTH_POLL_INTERVAL_MS=5000 trades off detection latency against work:
+// `isPortBound` is a fetch with a 500ms timeout, so each probe is a few ms
+// of local TCP. 5s is fast enough that a crashed server is visible before
+// the user notices on their own, slow enough that an idle TUI doesn't burn
+// CPU on it.
+const HEALTH_POLL_INTERVAL_MS = 5_000;
+let healthTimer: ReturnType<typeof setInterval> | null = null;
+let lastKnownSrvState: "ready" | "down" | null = null;
+
+function stopHealthPoll(): void {
+	if (healthTimer) {
+		clearInterval(healthTimer);
+		healthTimer = null;
+	}
+}
+
 // The spawned next child must survive session swaps (/new, /resume, /fork,
 // /reload) and only die when pi itself exits. Pi re-evaluates this JS module
 // on every swap, so a factory-scoped `let child` would be torn off the live
@@ -160,6 +182,10 @@ function setSrv(ctx: ExtensionContext | null, value: "ready" | "down" | "pending
 		// failure modes (no port to show then).
 		const label = value === "ready" ? String(SERVER_PORT) : "✗";
 		ctx.ui.setStatus("3srv", `| SRV ${label}`);
+		// Track the settled state so the health-poll has a baseline to
+		// detect transitions against. Pending isn't a settled state, so it
+		// doesn't update the tracker (handled by the early-return above).
+		lastKnownSrvState = value;
 	} catch {
 		// best-effort
 	}
@@ -219,94 +245,134 @@ export default function (pi: ExtensionAPI): void {
 		});
 	}
 
+	// Periodic port-bound probe that flips the footer to ✗ if the server
+	// goes away after bringUp has settled. Covers both "our spawned Next
+	// child crashed" and "another pi process was serving and exited" — the
+	// port probe is the single source of truth. Surfaces a one-shot line
+	// only on the ready→down edge so we don't spam during sustained outage.
+	function startHealthPoll(ctx: ExtensionContext): void {
+		stopHealthPoll();
+		const tick = async (): Promise<void> => {
+			if (!alive) return;
+			let bound: boolean;
+			try {
+				bound = await isPortBound(SERVER_PORT);
+			} catch {
+				return;
+			}
+			const next: "ready" | "down" = bound ? "ready" : "down";
+			if (next === lastKnownSrvState) return;
+			if (next === "down" && lastKnownSrvState === "ready") {
+				surface(
+					pi,
+					`server: port ${SERVER_PORT} stopped responding — tail ${LOG_PATH}`,
+				);
+			}
+			setSrv(ctx, next);
+		};
+		healthTimer = setInterval(() => {
+			void tick();
+		}, HEALTH_POLL_INTERVAL_MS);
+		healthTimer.unref?.();
+	}
+
 	async function bringUp(ctx: ExtensionContext): Promise<void> {
-		// Port-bound first: covers both "another pi is serving" and "we already
-		// spawned in this process during an earlier session". Makes /new
-		// /resume /fork /reload cheap no-ops once the server is alive.
-		if (await isPortBound(SERVER_PORT)) {
-			setSrv(ctx, "ready");
-			return;
-		}
-		if (!alive) return;
-
-		if (!existsSync(SERVER_ROOT)) {
-			surface(pi, `server: ${SERVER_ROOT} not found — run setup first`);
-			setSrv(ctx, "down");
-			return;
-		}
-		if (!existsSync(NEXT_BIN)) {
-			surface(
-				pi,
-				`server: next binary missing — run \`cd ${SERVER_ROOT} && npm install\` first`,
-			);
-			setSrv(ctx, "down");
-			return;
-		}
-		if (!IS_DEV && !existsSync(NEXT_BUILD_DIR)) {
-			surface(
-				pi,
-				`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && npm run build\`) first`,
-			);
-			setSrv(ctx, "down");
-			return;
-		}
-
-		// About to spawn — drive the pending spinner during the boot wait.
-		setSrv(ctx, "pending");
-
 		try {
-			await mkdir(dirname(LOG_PATH), { recursive: true });
-		} catch {
-			// Best-effort; if mkdir fails we let the createWriteStream below
-			// throw and surface the message in the catch handler.
-		}
-		if (!alive) return;
-		// Final port check right before spawn — another module instance racing
-		// us (e.g. an OLD bringUp resuming late after we already spawned) could
-		// have bound the port between our first check and now.
-		if (await isPortBound(SERVER_PORT)) {
-			setSrv(ctx, "ready");
-			return;
-		}
-		if (!alive) return;
-		const log = createWriteStream(LOG_PATH, { flags: "a" });
-
-		// Spawn Next directly. `npm run start`/`npm run dev` would interpose an
-		// npm process that swallows SIGTERM, leaving orphan Next.js children
-		// behind.
-		//   prod: `next start` serves pre-built .next/ artifacts — fast cold
-		//         start, no compile-on-request.
-		//   dev : `next dev --webpack` enables hot reload and compiles on
-		//         demand (first request is slow; pre-warm below absorbs it).
-		const nextArgs = IS_DEV
-			? [NEXT_BIN, "dev", "--webpack", "-p", String(SERVER_PORT)]
-			: [NEXT_BIN, "start", "-p", String(SERVER_PORT)];
-		const child = spawn("node", nextArgs, {
-			cwd: SERVER_ROOT,
-			stdio: ["ignore", "pipe", "pipe"],
-			env: process.env,
-		});
-		setChild(child);
-		child.stdout?.pipe(log);
-		child.stderr?.pipe(log);
-		child.on("error", (err) => {
-			surface(pi, `server: spawn error — ${err.message}`);
-			setSrv(ctx, "down");
-		});
-
-		// Poll up to 15s for the port to come up. With `next start` serving
-		// pre-built artifacts, port-bound usually means ready — pre-warm `/`
-		// anyway as a cheap belt-and-braces for the first user request.
-		for (let i = 0; i < 30; i++) {
+			// Port-bound first: covers both "another pi is serving" and "we already
+			// spawned in this process during an earlier session". Makes /new
+			// /resume /fork /reload cheap no-ops once the server is alive.
 			if (await isPortBound(SERVER_PORT)) {
-				await preWarm(SERVER_PORT);
 				setSrv(ctx, "ready");
 				return;
 			}
-			await new Promise((r) => setTimeout(r, 500));
+			if (!alive) return;
+
+			if (!existsSync(SERVER_ROOT)) {
+				surface(pi, `server: ${SERVER_ROOT} not found — run setup first`);
+				setSrv(ctx, "down");
+				return;
+			}
+			if (!existsSync(NEXT_BIN)) {
+				surface(
+					pi,
+					`server: next binary missing — run \`cd ${SERVER_ROOT} && npm install\` first`,
+				);
+				setSrv(ctx, "down");
+				return;
+			}
+			if (!IS_DEV && !existsSync(NEXT_BUILD_DIR)) {
+				surface(
+					pi,
+					`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && npm run build\`) first`,
+				);
+				setSrv(ctx, "down");
+				return;
+			}
+
+			// About to spawn — drive the pending spinner during the boot wait.
+			setSrv(ctx, "pending");
+
+			try {
+				await mkdir(dirname(LOG_PATH), { recursive: true });
+			} catch {
+				// Best-effort; if mkdir fails we let the createWriteStream below
+				// throw and surface the message in the catch handler.
+			}
+			if (!alive) return;
+			// Final port check right before spawn — another module instance racing
+			// us (e.g. an OLD bringUp resuming late after we already spawned) could
+			// have bound the port between our first check and now.
+			if (await isPortBound(SERVER_PORT)) {
+				setSrv(ctx, "ready");
+				return;
+			}
+			if (!alive) return;
+			const log = createWriteStream(LOG_PATH, { flags: "a" });
+
+			// Spawn Next directly. `npm run start`/`npm run dev` would interpose an
+			// npm process that swallows SIGTERM, leaving orphan Next.js children
+			// behind.
+			//   prod: `next start` serves pre-built .next/ artifacts — fast cold
+			//         start, no compile-on-request.
+			//   dev : `next dev --webpack` enables hot reload and compiles on
+			//         demand (first request is slow; pre-warm below absorbs it).
+			const nextArgs = IS_DEV
+				? [NEXT_BIN, "dev", "--webpack", "-p", String(SERVER_PORT)]
+				: [NEXT_BIN, "start", "-p", String(SERVER_PORT)];
+			const child = spawn("node", nextArgs, {
+				cwd: SERVER_ROOT,
+				stdio: ["ignore", "pipe", "pipe"],
+				env: process.env,
+			});
+			setChild(child);
+			child.stdout?.pipe(log);
+			child.stderr?.pipe(log);
+			child.on("error", (err) => {
+				surface(pi, `server: spawn error — ${err.message}`);
+				setSrv(ctx, "down");
+			});
+
+			// Poll up to 15s for the port to come up. With `next start` serving
+			// pre-built artifacts, port-bound usually means ready — pre-warm `/`
+			// anyway as a cheap belt-and-braces for the first user request.
+			for (let i = 0; i < 30; i++) {
+				if (await isPortBound(SERVER_PORT)) {
+					await preWarm(SERVER_PORT);
+					setSrv(ctx, "ready");
+					return;
+				}
+				await new Promise((r) => setTimeout(r, 500));
+			}
+			surface(pi, `server: failed to start within 15s — tail ${LOG_PATH}`);
+			setSrv(ctx, "down");
+		} finally {
+			// Whatever settled state we ended in (ready or down), arm the
+			// periodic port probe so the footer follows reality if the server
+			// later crashes or recovers. Skipped if we bailed via `!alive`
+			// (session_shutdown raced us) — the dying module shouldn't leak a
+			// fresh timer; the new module's bringUp will start its own.
+			if (alive) startHealthPoll(ctx);
 		}
-		surface(pi, `server: failed to start within 15s — tail ${LOG_PATH}`);
-		setSrv(ctx, "down");
 	}
 
 	// rebuild-server capability is available to the engineer subagent via the
@@ -338,11 +404,15 @@ export default function (pi: ExtensionAPI): void {
 
 	// Fires on *this* module's runner before pi tears it down. The server
 	// child should outlive /reload, /new, /resume, /fork — only /quit kills
-	// it. We stop the pending animation in every case so the dying module
-	// doesn't leak a setInterval ticking against a stale ctx.
+	// it. We stop both the pending animation AND the health-poll in every
+	// case so the dying module doesn't leak setIntervals ticking against a
+	// stale ctx (or worse, a setSrv against an ExtensionContext pi has
+	// already invalidated). The new module's bringUp arms a fresh
+	// health-poll bound to its own ctx.
 	pi.on("session_shutdown", async (event) => {
 		alive = false;
 		stopPendingAnimation();
+		stopHealthPoll();
 		if (event.reason !== "quit") return;
 		await killServer();
 	});
@@ -357,6 +427,7 @@ export default function (pi: ExtensionAPI): void {
 		(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL] = true;
 		const cleanup = (): void => {
 			stopPendingAnimation();
+			stopHealthPoll();
 			const child = getChild();
 			if (child && !child.killed) child.kill("SIGTERM");
 		};
