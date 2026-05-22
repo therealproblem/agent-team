@@ -16,6 +16,7 @@ import remarkMath from "remark-math";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { remarkMermaidJsx } from "@/lib/remark-mermaid-jsx";
+import { remarkWikilinks } from "@/lib/remark-wikilinks";
 import { mdxComponents } from "@/components/docs/mdx-components";
 import { extractToc, type TocEntry } from "@/lib/toc";
 
@@ -110,6 +111,7 @@ export async function compileMarkdownString(raw: string): Promise<ReactNode> {
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
+    .use(remarkWikilinks)
     .use(remarkRehype)
     .use(rehypeSlug)
     .use(rehypePrettyCode, { theme: "github-light", keepBackground: false });
