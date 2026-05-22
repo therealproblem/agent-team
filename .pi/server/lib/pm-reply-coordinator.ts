@@ -102,6 +102,45 @@ function pmTelegramChatId(): string | null {
 }
 
 /**
+ * Best-effort frontmatter read for the card's `id` and `title`. Used to
+ * build the deep link PM embeds in its Telegram notice. Returns empty
+ * strings on any failure — the caller falls back to slug-based values.
+ */
+async function readCardMeta(
+  projectSlug: string,
+  cardSlug: string,
+): Promise<{ id: string; title: string }> {
+  try {
+    const raw = await fs.readFile(cardPath(projectSlug, cardSlug), "utf8");
+    const parsed = matter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    const id = typeof data.id === "string" ? data.id : "";
+    // Squash to a single line and trim so the value drops cleanly into the
+    // prompt template (and into the Telegram message PM will compose).
+    const rawTitle = typeof data.title === "string" ? data.title : "";
+    const title = rawTitle.replace(/\s+/g, " ").trim();
+    return { id, title };
+  } catch {
+    return { id: "", title: "" };
+  }
+}
+
+/**
+ * Build the URL PM should include in its Telegram notice. Mirrors the
+ * convention used by board tools: `/c/<id>` when the card has been
+ * assigned a stable id, otherwise fall back to `/projects/<slug>?card=<slug>`.
+ */
+function buildCardUrl(projectSlug: string, cardSlug: string, cardId: string): string {
+  const base = (
+    process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ||
+    `http://localhost:${process.env.AGENTS_TEAM_SERVER_PORT || "8080"}`
+  ).replace(/\/+$/, "");
+  return cardId
+    ? `${base}/c/${cardId}`
+    : `${base}/projects/${projectSlug}?card=${cardSlug}`;
+}
+
+/**
  * Fire-and-forget `pi --no-session` that tells PM to read the card and
  * post a reply via `board_add_comment`. Pi's extensions (including
  * `board_add_comment` and `subagent`) load even in --no-session mode, so
@@ -111,15 +150,20 @@ function pmTelegramChatId(): string | null {
  * tool resolves to the user's primary chat without PM having to know the
  * id. PM is instructed to call the tool after posting its reply.
  */
-function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+async function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const vaultPath = `projects/${projectSlug}/board/${cardSlug}.md`;
   const replyChatId = pmTelegramChatId();
+  const meta = await readCardMeta(projectSlug, cardSlug);
+  const cardUrl = buildCardUrl(projectSlug, cardSlug, meta.id);
+  const displayTitle = meta.title || cardSlug;
   const prompt = [
     "You are the PM persona. A user comment thread on a kanban card needs your reply.",
     "",
     `Project: ${projectSlug}`,
     `Card slug: ${cardSlug}`,
     `Card path: vault/${vaultPath}`,
+    `Card title: ${displayTitle}`,
+    `Card URL: ${cardUrl}`,
     "",
     "Steps:",
     `1. Read \`vault/${vaultPath}\` end-to-end — frontmatter, body, every comment.`,
@@ -127,7 +171,12 @@ function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: bool
     "3. If the question is implementation-level, spawn the engineer subagent with a feasibility brief and weave its one-line outcome into your reply.",
     "4. Post ONE reply via the `board_add_comment` tool with `role: pm`. Address the whole burst of unread comments together, not one at a time. Be terse — match the tone of the user's comments. No reasoning history, no preamble.",
     "5. If the comment doesn't actually need a reply (a passing remark, a 'noted', etc.), still post a one-line acknowledgement so the user knows you saw it.",
-    `6. After board_add_comment succeeds, call the \`telegram_send\` tool with a one-line summary like "💬 PM on ${cardSlug}: <first sentence of your reply>". Omit \`chat_id\`; the env carries it. Skip this step only if telegram_send returns a "(skipped)" result.`,
+    "6. After board_add_comment succeeds, call the `telegram_send` tool. Format the `text` parameter EXACTLY as the three lines below (replace `<reply summary>` with one short sentence summarising your reply; leave the title and URL exactly as shown):",
+    "",
+    `   💬 PM on ${displayTitle}: <reply summary>`,
+    `   ${cardUrl}`,
+    "",
+    "   Omit `chat_id`; the env carries it. Skip this step only if telegram_send returns a \"(skipped)\" result.",
     "",
     "Adopt the pm persona first (read .pi/skills/pm/SKILL.md), then act. Surface nothing in chat — your output is the comment.",
   ].join("\n");
