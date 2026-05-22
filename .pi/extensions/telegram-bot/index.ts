@@ -33,10 +33,12 @@
  *   - agent_end: route the final assistant message back to Telegram.
  */
 
-import type {
-	ExtensionAPI,
-	ExtensionContext,
+import {
+	defineTool,
+	type ExtensionAPI,
+	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "@earendil-works/pi-ai";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadDotenv } from "../../lib/dotenv";
@@ -133,10 +135,87 @@ function writeEnvVar(key: string, value: string): boolean {
 	return true;
 }
 
+// ---------- telegram_send tool ----------
+
+/**
+ * Push a message to a Telegram chat via the bot. Works from any pi process
+ * that has TELEGRAM_BOT_TOKEN in env — including subagent children, which
+ * stay dormant for polling but share the same bot identity for outbound
+ * sends. Telegram's sendMessage has no single-consumer constraint, so
+ * parallel sends across processes are fine.
+ *
+ * Chat id resolution:
+ *   1. Explicit `chat_id` arg (when caller knows the chat).
+ *   2. `TELEGRAM_REPLY_CHAT_ID` env (spawner-injected for opt-in subagents).
+ *   3. Otherwise, no-op — the tool returns a "skipped" result instead of
+ *      blasting to the first allowlisted chat. Spawners that want a
+ *      notification MUST set the env var (or the agent MUST pass chat_id).
+ */
+const telegramSend = defineTool({
+	name: "telegram_send",
+	label: "Telegram send",
+	description: [
+		"Send a one-off message to a Telegram chat through the project's bot.",
+		"Use this when a subagent has a result the user should see in Telegram (e.g. PM posting a reply summary).",
+		"If `chat_id` is omitted, falls back to the TELEGRAM_REPLY_CHAT_ID env var; if neither is set, the tool no-ops (does NOT broadcast).",
+		"Text supports the same markdown-to-HTML conversion the bot uses for agent replies.",
+	].join(" "),
+	parameters: Type.Object({
+		text: Type.String({
+			description: "Message body. Markdown is converted to Telegram HTML. Max ~4000 chars per chunk (auto-split).",
+		}),
+		chat_id: Type.Optional(
+			Type.Number({
+				description: "Target chat id. Omit to use TELEGRAM_REPLY_CHAT_ID env var.",
+			}),
+		),
+	}),
+	async execute(_toolCallId, params) {
+		const args = params as { text: string; chat_id?: number };
+		const text = args.text?.trim();
+		if (!text) {
+			return { content: [{ type: "text", text: "(empty text — nothing sent)" }] };
+		}
+		if (!process.env.TELEGRAM_BOT_TOKEN) {
+			return { content: [{ type: "text", text: "(no TELEGRAM_BOT_TOKEN — skipped)" }] };
+		}
+
+		let chatId: number | undefined = args.chat_id;
+		if (chatId === undefined) {
+			const env = process.env.TELEGRAM_REPLY_CHAT_ID;
+			if (env) {
+				const parsed = Number(env);
+				if (Number.isFinite(parsed)) chatId = parsed;
+			}
+		}
+		if (chatId === undefined) {
+			return {
+				content: [
+					{ type: "text", text: "(no chat_id and no TELEGRAM_REPLY_CHAT_ID — skipped)" },
+				],
+			};
+		}
+
+		try {
+			const ids = await api.sendMessage(chatId, text);
+			return {
+				content: [{ type: "text", text: `sent to ${chatId} (${ids.length} chunk(s))` }],
+			};
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return {
+				content: [{ type: "text", text: `telegram send failed: ${msg}` }],
+				isError: true,
+			};
+		}
+	},
+});
+
 // ---------- extension entry ----------
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerMessageRenderer("telegram-bot", createBoxRenderer());
+	pi.registerTool(telegramSend);
 
 	let dctx: DispatcherContext | undefined;
 	// Flipped to false when this module's runner is torn down (session_shutdown).
@@ -144,6 +223,10 @@ export default function (pi: ExtensionAPI): void {
 	// in mid-flight, and the in-flight bringUp wakes up after tear-down and
 	// starts a transport against an invalid `pi`.
 	let alive = true;
+	// True only on the primary instance (the one that acquired the poll lock).
+	// Subagents and non-primary processes leave this false so they don't send
+	// connect/shutdown notices that the primary already covers.
+	let acquiredLock = false;
 
 	async function configureBot(): Promise<{
 		ok: boolean;
@@ -456,7 +539,7 @@ export default function (pi: ExtensionAPI): void {
 	//     BEFORE the runtime is invalidated, so the dying module's dispatcher
 	//     doesn't fire against a stale pi. The next module's session_start
 	//     starts a fresh loop with the new pi.
-	pi.on("session_start", (_event, ctx) => {
+	pi.on("session_start", (event, ctx) => {
 		setCtx(ctx);
 
 		// Silent fast-path: no token → stay completely dormant. Slash commands
@@ -488,6 +571,7 @@ export default function (pi: ExtensionAPI): void {
 		}
 
 		// At this point: token is set AND we acquired the polling lock.
+		acquiredLock = true;
 		setTg(ctx, "pending");
 
 		void (async () => {
@@ -524,6 +608,17 @@ export default function (pi: ExtensionAPI): void {
 						return;
 					}
 					await surfaceConnected(ctx, cfg.username ?? "?");
+
+					// On a fresh process boot (mirror of the "quit" shutdown notice),
+					// tell every allowlisted chat we're live. Skipped on reload/new/
+					// resume/fork so /reload doesn't spam every chat.
+					if (event.reason === "startup") {
+						const chats =
+							dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
+						for (const chatId of chats) {
+							api.sendMessage(chatId, "(pi connected)").catch(() => undefined);
+						}
+					}
 					return;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
@@ -557,10 +652,15 @@ export default function (pi: ExtensionAPI): void {
 	// a network outage at shutdown shouldn't hang pi.
 	pi.on("session_shutdown", async (event) => {
 		alive = false;
+		const wasPrimary = acquiredLock;
+		acquiredLock = false;
 		stopPending();
 		loop.stop();
 
-		if (event.reason === "quit" && process.env.TELEGRAM_BOT_TOKEN) {
+		// Only the primary process (the one that owned the poll lock) sends the
+		// shutdown notice. Subagents and other non-primary processes inherit the
+		// token but never brought up the bot — they have nothing to announce.
+		if (event.reason === "quit" && wasPrimary && process.env.TELEGRAM_BOT_TOKEN) {
 			const chats =
 				dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
 			if (chats.size > 0) {

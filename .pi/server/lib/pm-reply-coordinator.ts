@@ -30,7 +30,6 @@ import { getProjectsDir } from "@/lib/board";
 
 const DEFAULT_DEBOUNCE_MS = 30_000;
 const PI_SPAWN_TIMEOUT_MS = 5 * 60_000; // 5 min — PM reply may spawn engineer
-const TELEGRAM_PUSH_TIMEOUT_MS = 5_000;
 
 function debounceMs(): number {
   const v = process.env.AGENTS_TEAM_PM_REPLY_DEBOUNCE_MS;
@@ -89,13 +88,32 @@ function repoRoot(): string {
 }
 
 /**
+ * Pick the chat id PM should notify on Telegram. We use the first entry in
+ * TELEGRAM_ALLOWED_CHATS as the "primary" chat; if the user has multiple
+ * allowed chats they're treated as peers and PM only pings the first.
+ * Returns null when no allowlist is configured (PM's telegram_send tool
+ * then no-ops cleanly).
+ */
+function pmTelegramChatId(): string | null {
+  const allowed = process.env.TELEGRAM_ALLOWED_CHATS;
+  if (!allowed) return null;
+  const first = allowed.split(",").map((s) => s.trim()).find(Boolean);
+  return first ?? null;
+}
+
+/**
  * Fire-and-forget `pi --no-session` that tells PM to read the card and
  * post a reply via `board_add_comment`. Pi's extensions (including
  * `board_add_comment` and `subagent`) load even in --no-session mode, so
  * PM can spawn engineer for feasibility if needed.
+ *
+ * The spawn env carries TELEGRAM_REPLY_CHAT_ID so PM's `telegram_send`
+ * tool resolves to the user's primary chat without PM having to know the
+ * id. PM is instructed to call the tool after posting its reply.
  */
 function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const vaultPath = `projects/${projectSlug}/board/${cardSlug}.md`;
+  const replyChatId = pmTelegramChatId();
   const prompt = [
     "You are the PM persona. A user comment thread on a kanban card needs your reply.",
     "",
@@ -109,6 +127,7 @@ function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: bool
     "3. If the question is implementation-level, spawn the engineer subagent with a feasibility brief and weave its one-line outcome into your reply.",
     "4. Post ONE reply via the `board_add_comment` tool with `role: pm`. Address the whole burst of unread comments together, not one at a time. Be terse — match the tone of the user's comments. No reasoning history, no preamble.",
     "5. If the comment doesn't actually need a reply (a passing remark, a 'noted', etc.), still post a one-line acknowledgement so the user knows you saw it.",
+    `6. After board_add_comment succeeds, call the \`telegram_send\` tool with a one-line summary like "💬 PM on ${cardSlug}: <first sentence of your reply>". Omit \`chat_id\`; the env carries it. Skip this step only if telegram_send returns a "(skipped)" result.`,
     "",
     "Adopt the pm persona first (read .pi/skills/pm/SKILL.md), then act. Surface nothing in chat — your output is the comment.",
   ].join("\n");
@@ -121,11 +140,17 @@ function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: bool
       resolve(res);
     };
 
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      AGENTS_TEAM_NO_TMUX_REEXEC: "1",
+    };
+    if (replyChatId) env.TELEGRAM_REPLY_CHAT_ID = replyChatId;
+
     let child;
     try {
       child = spawn("pi", ["--no-session", "-p", prompt], {
         timeout: PI_SPAWN_TIMEOUT_MS,
-        env: { ...process.env, AGENTS_TEAM_NO_TMUX_REEXEC: "1" },
+        env,
         stdio: ["ignore", "pipe", "pipe"],
         cwd: repoRoot(),
       });
@@ -162,83 +187,16 @@ function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok: bool
   });
 }
 
-/**
- * Push a notification to every allowed Telegram chat that PM replied on a
- * card. Best-effort — failures (no token, no allowlist, network) are
- * swallowed so the main flow isn't blocked.
- */
-async function pushTelegramNotice(projectSlug: string, cardSlug: string): Promise<void> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const allowed = process.env.TELEGRAM_ALLOWED_CHATS;
-  if (!token || !allowed) return;
-
-  const chats = allowed
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (chats.length === 0) return;
-
-  // Reconstruct the short URL from the freshly-read card so we get the id
-  // even if it landed via backfill.
-  let cardId: string | null = null;
-  let title = cardSlug;
-  try {
-    const raw = await fs.readFile(cardPath(projectSlug, cardSlug), "utf8");
-    const parsed = matter(raw);
-    const data = parsed.data as Record<string, unknown>;
-    if (typeof data.id === "string") cardId = data.id;
-    if (typeof data.title === "string" && data.title.trim()) title = data.title.trim();
-  } catch {
-    // Best-effort — fall through with what we have.
-  }
-
-  const base = (
-    process.env.AGENTS_TEAM_SERVER_PUBLIC_URL ||
-    `http://localhost:${process.env.AGENTS_TEAM_SERVER_PORT || "8080"}`
-  ).replace(/\/+$/, "");
-  const url = cardId
-    ? `${base}/c/${cardId}`
-    : `${base}/projects/${projectSlug}?card=${cardSlug}`;
-
-  const safeTitle = title.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
-  const text = `💬 PM replied on <b>${safeTitle}</b>\n<a href="${url}">Open card</a>`;
-
-  await Promise.all(
-    chats.map(async (chatId) => {
-      try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), TELEGRAM_PUSH_TIMEOUT_MS);
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            chat_id: chatId,
-            text,
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-          }),
-        }).finally(() => clearTimeout(t));
-      } catch (e) {
-        console.error("[pm-reply] telegram push failed for chat", chatId, (e as Error).message);
-      }
-    }),
-  );
-}
-
 async function fireReply(projectSlug: string, cardSlug: string): Promise<void> {
   pending.delete(cardKey(projectSlug, cardSlug));
   try {
     const res = await spawnPmReply(projectSlug, cardSlug);
-    if (res.ok) {
-      // PM's board_add_comment call already wrote the comment + bumped
-      // `updated:`. Clear the pending flag here so the polling client stops.
-      await setPendingFlag(projectSlug, cardSlug, false);
-      await pushTelegramNotice(projectSlug, cardSlug);
-    } else {
-      // Pi failed — clear the pending flag so the UI doesn't hang forever.
-      // The user can re-comment to retry.
-      await setPendingFlag(projectSlug, cardSlug, false);
+    // PM's board_add_comment call already wrote the comment + bumped
+    // `updated:`. Clear the pending flag here so the polling client stops,
+    // whether pi succeeded or failed (failure: user can re-comment to retry).
+    await setPendingFlag(projectSlug, cardSlug, false);
+    if (!res.ok) {
+      // Failure already logged in spawnPmReply's `close` handler.
     }
   } catch (e) {
     console.error("[pm-reply] fireReply crashed:", (e as Error).message);
