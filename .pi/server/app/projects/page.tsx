@@ -4,7 +4,7 @@ import { ProjectIndex } from "@/components/blocks/board/ProjectIndex";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Board",
+  title: "Projects",
 };
 
 export default async function BoardIndexPage() {

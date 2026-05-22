@@ -83,7 +83,7 @@ export function BoardView({
       <div className="mb-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link
-            href="/board"
+            href="/projects"
             className="inline-flex items-center gap-1 hover:text-foreground"
             data-no-style
           >

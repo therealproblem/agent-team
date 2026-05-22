@@ -97,7 +97,7 @@ function ProjectTile({ project }: { project: Project }) {
   return (
     <div className="group relative">
       <Link
-        href={`/board/${encodeURIComponent(project.slug)}`}
+        href={`/projects/${encodeURIComponent(project.slug)}`}
         className="block"
         data-no-style
       >

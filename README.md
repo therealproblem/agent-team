@@ -111,7 +111,7 @@ State moves through `.pi/state/research/<run>/research-tree.json` rather than a 
 
 ### Project board
 
-Each project under `<vault>/projects/<slug>/` has a kanban board served at `http://localhost:8080/board/<slug>`. Seven columns — **Request → Triage → Backlog → Blocked → In Progress → In Review → Done** — read top-to-bottom as a card's life cycle. The project header shows the short `description:` from `project.md` frontmatter; a **Details** button opens a dialog with the full markdown body compiled through the existing MDX pipeline.
+Each project under `<vault>/projects/<slug>/` has a kanban board served at `http://localhost:8080/projects/<slug>`. Seven columns — **Request → Triage → Backlog → Blocked → In Progress → In Review → Done** — read top-to-bottom as a card's life cycle. The project header shows the short `description:` from `project.md` frontmatter; a **Details** button opens a dialog with the full markdown body compiled through the existing MDX pipeline.
 
 The page header also carries a **Submit request** form — the only sanctioned UI → vault write path in the whole system. Submissions write a card immediately into the Request column with a placeholder title (first eight words of the description) and `title_pending: true`, then fire Pi in the background to generate a real title; `CardItem` shows an italicised placeholder + spinner while pending and the board polls every 3s (capped at 90s) until everything settles. PM picks up requests via a triage workflow: pick-up → triage → blocked-on-user → engineer feasibility → decide → handoff to engineer to break the request down into Backlog cards.
 

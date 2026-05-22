@@ -196,8 +196,8 @@ async function generateTitleInBackground(
     console.error("[submitRequest] background title gen failed:", e);
     await clearTitlePending(projectSlug, cardSlug).catch(() => {});
   }
-  revalidatePath(`/board/${projectSlug}`);
-  revalidatePath("/board");
+  revalidatePath(`/projects/${projectSlug}`);
+  revalidatePath("/projects");
 }
 
 export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRequestResult> {
@@ -266,8 +266,8 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
   const body = `## Request\n\n${trimmedDescription}\n`;
 
   await fs.writeFile(filePath, frontmatter + body, "utf8");
-  revalidatePath(`/board/${projectSlug}`);
-  revalidatePath("/board");
+  revalidatePath(`/projects/${projectSlug}`);
+  revalidatePath("/projects");
 
   // Fire and forget — the response goes back to the client now; Pi keeps
   // running and rewrites the card title when it returns.
@@ -331,7 +331,7 @@ export async function addComment(input: {
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/board/${projectSlug}`);
+  revalidatePath(`/projects/${projectSlug}`);
   return { ok: true };
 }
 
@@ -364,8 +364,8 @@ export async function deleteCard(input: {
   }
   await ensureDir(archiveDir);
   await fs.rename(src, dst);
-  revalidatePath(`/board/${projectSlug}`);
-  revalidatePath("/board");
+  revalidatePath(`/projects/${projectSlug}`);
+  revalidatePath("/projects");
   return { ok: true };
 }
 
@@ -409,7 +409,7 @@ export async function deleteProject(input: { projectSlug: string }): Promise<Act
     target = path.join(archiveDir, `${projectSlug}-${suffix++}`);
   }
   await fs.rename(src, target);
-  revalidatePath("/board");
+  revalidatePath("/projects");
   return { ok: true };
 }
 
@@ -465,6 +465,6 @@ export async function unblockCard(input: {
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/board/${projectSlug}`);
+  revalidatePath(`/projects/${projectSlug}`);
   return { ok: true };
 }
