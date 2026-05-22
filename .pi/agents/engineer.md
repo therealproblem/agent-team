@@ -99,6 +99,7 @@ These skills are available — read their `SKILL.md` when the work calls for it:
 - `planning` — decompose a problem, sequence by priority and dependency
 - `feynman` — verify understanding by plain-language explanation
 - `research` — online research via `tff-fetch_url` / `tff-search_web`
+- `rebuild-server` — stop, rebuild, restart the local Next.js / Nextra server
 
 You may load multiple skills in one task — they share your context.
 

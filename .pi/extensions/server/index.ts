@@ -43,6 +43,12 @@
  * hot reload instead (skips the build-dir check; first request will compile
  * on demand).
  *
+ * Server rebuild capability is available to the engineer subagent via the
+ * `rebuild-server` inner skill (see `.pi/skills/rebuild-server/SKILL.md`).
+ * The skill documents the operational path (bash sequence) since skills cannot
+ * call extension-private helpers directly. Users can rebuild manually via
+ * `cd .pi/server && npm run build` + restart.
+ *
  * Configure via env vars:
  *   AGENTS_TEAM_SERVER_PATH — default: <cwd>/.pi/server
  *   AGENTS_TEAM_SERVER_PORT — default: 8080
@@ -168,6 +174,51 @@ export default function (pi: ExtensionAPI): void {
 	// have spawned a child).
 	let alive = true;
 
+	async function killServer(): Promise<void> {
+		const child = getChild();
+		if (!child || child.killed) return;
+		child.kill("SIGTERM");
+		await new Promise<void>((resolve) => {
+			const timer = setTimeout(() => {
+				if (child && !child.killed) child.kill("SIGKILL");
+				resolve();
+			}, 2000);
+			timer.unref?.();
+		});
+		setChild(null);
+	}
+
+	async function rebuildServer(): Promise<string> {
+		// Run `npm run build` in the server directory
+		return new Promise<string>((resolve, reject) => {
+			const buildProc = spawn("npm", ["run", "build"], {
+				cwd: SERVER_ROOT,
+				stdio: ["ignore", "pipe", "pipe"],
+				env: process.env,
+			});
+
+			const chunks: Buffer[] = [];
+			const errChunks: Buffer[] = [];
+
+			buildProc.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
+			buildProc.stderr?.on("data", (chunk: Buffer) => errChunks.push(chunk));
+
+			buildProc.on("error", (err) => {
+				reject(new Error(`Build spawn error: ${err.message}`));
+			});
+
+			buildProc.on("exit", (code) => {
+				if (code !== 0) {
+					const stderr = Buffer.concat(errChunks).toString("utf8");
+					reject(new Error(`Build failed with code ${code}:\n${stderr}`));
+				} else {
+					const stdout = Buffer.concat(chunks).toString("utf8");
+					resolve(stdout);
+				}
+			});
+		});
+	}
+
 	async function bringUp(ctx: ExtensionContext): Promise<void> {
 		// Port-bound first: covers both "another pi is serving" and "we already
 		// spawned in this process during an earlier session". Makes /new
@@ -258,6 +309,14 @@ export default function (pi: ExtensionAPI): void {
 		setSrv(ctx, "down");
 	}
 
+	// rebuild-server capability is available to the engineer subagent via the
+	// `rebuild-server` inner skill (see `.pi/skills/rebuild-server/SKILL.md`).
+	// Pi's slash-command API has no runtime persona gate, so we don't register
+	// a slash command (that would make it globally available). The skill documents
+	// the operational path (bash sequence) since skills cannot call extension-private
+	// helpers directly. The helpers below (killServer, rebuildServer, bringUp)
+	// remain available for future extension-internal paths if needed.
+
 	// Bring up on every session_start. Pi re-evaluates this module on /new,
 	// /resume, /fork, and /reload, so the previous instance's child reference
 	// is invisible from here — bringUp's port check is the source of truth
@@ -285,17 +344,7 @@ export default function (pi: ExtensionAPI): void {
 		alive = false;
 		stopPendingAnimation();
 		if (event.reason !== "quit") return;
-		const child = getChild();
-		if (!child || child.killed) return;
-		child.kill("SIGTERM");
-		await new Promise<void>((resolve) => {
-			const timer = setTimeout(() => {
-				if (child && !child.killed) child.kill("SIGKILL");
-				resolve();
-			}, 2000);
-			timer.unref?.();
-		});
-		setChild(null);
+		await killServer();
 	});
 
 	// Process-level cleanup as belt-and-braces for abrupt exits (Ctrl-C, kill
