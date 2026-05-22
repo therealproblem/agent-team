@@ -1,6 +1,7 @@
 "use server";
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
@@ -252,6 +253,7 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
   const today = new Date().toLocaleDateString("en-CA");
   const frontmatter = [
     "---",
+    `id: ${randomUUID()}`,
     `title: "${escapeYamlString(provisional)}"`,
     "status: request",
     "priority: p3",

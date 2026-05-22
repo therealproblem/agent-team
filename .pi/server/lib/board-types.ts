@@ -57,6 +57,7 @@ export interface Comment {
 
 export interface Card {
   slug: string;
+  id: string | null;
   title: string;
   status: Status;
   persona: Persona | null;

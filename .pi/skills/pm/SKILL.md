@@ -190,21 +190,21 @@ Run right after the design-language flow so design and copy land together.
 
 ## Board (mandatory)
 
-**Every** PM task gets a kanban card. The board at `http://localhost:8080/board` is how the user sees what you're working on, in progress, blocked, and shipped — if it isn't on the board, the user doesn't know it's happening. See the `board` skill for the full schema. No exceptions except an explicit "don't track this" from the user.
+**Every** PM task gets a kanban card. The board at `http://localhost:8080/projects/<slug>` is how the user sees what you're working on, in progress, blocked, and shipped — if it isn't on the board, the user doesn't know it's happening. See the `board` skill for the full schema. No exceptions except an explicit "don't track this" from the user.
 
 At the start of any PM turn:
 
 1. **Identify the project.** Cross-reference `<vault>/projects/INDEX.md`; ask the user only if it isn't obvious. If the project doesn't exist, **copy `<vault>/projects/_project_template.md` to `<vault>/projects/<slug>/project.md`** and fill in what you know — pull `folder:` and `github:` yourself (via `bash`: `pwd`, `git remote get-url origin`) if the user dropped you in a repo; ask once for goals + stakeholders if missing. Then add a one-line entry to `INDEX.md` under "Active". Do this before anything else.
-2. **Drop a card** under `<vault>/projects/<slug>/board/<card-slug>.md` with `persona: pm`, the appropriate `sub_persona:` (`prd`, `roadmap`, `stakeholder-summary`, `user-research`, `uiux`, `copywriter`), `status: in_progress`, today's date in `created:` and `updated:`, and a priority. The body of the markdown is the brief — what you're doing and why.
-3. **Update the card as state changes.** Flip to `status: in_review` when the artifact is drafted and you're spawning `prd-critic` or handing to the user. Flip to `status: done` when the user has the final version. Use `status: blocked` if you can't move forward — note why in the body.
+2. **Drop a card via `board_create_card`.** Call the tool — do NOT hand-write the markdown. Pass `persona: pm`, the appropriate `sub_persona:` (`prd`, `roadmap`, `stakeholder-summary`, `user-research`, `uiux`, `copywriter`), `status: in_progress`, a `priority`, the card `title`, and a `body` (the brief — what you're doing and why). The tool stamps a UUID `id:`, slugifies the title for the filename, writes the file, and returns `{id, projectSlug, cardSlug, url, vaultPath}`. **Surface the returned `url` in your reply** — e.g. "Tracking this on the board → `<url>`." That short URL deep-links the user straight into the card dialog.
+3. **Update the card as state changes.** Flip to `status: in_review` when the artifact is drafted and you're spawning `prd-critic` or handing to the user. Flip to `status: done` when the user has the final version. Use `status: blocked` if you can't move forward — note why in the body. State changes are edits via the `edit` tool on the card file at the returned `vaultPath`; only initial creation goes through `board_create_card`.
 4. **Always update `updated:`** to the current date when you change a card. Don't delete cards; the trail matters.
 5. **Maintain the project file and index.** When a project's status, deadline, owner, one-liner, blockers, key decisions, or handover state changes meaningfully, edit `<vault>/projects/<slug>/project.md` in place and bump its `updated:` field. If `status` or `deadline` changed, also update the matching row in `<vault>/projects/INDEX.md` — move the row between **Active / On hold / Shipped / Archived** sections as state shifts (don't delete; the trail matters). Decisions go in the *Key decisions* log with a date and one-line rationale. Pick-up state, open questions, gotchas, and recent context belong in the *Handover* section so a fresh session can resume cold.
 
-Even single-turn work gets a card — drop it, mark `done` in the same turn. The only carve-out is when the user explicitly tells you "don't bother tracking this."
+Even single-turn work gets a card — drop it, surface the URL, mark `done` in the same turn. The only carve-out is when the user explicitly tells you "don't bother tracking this."
 
 ## Request triage workflow
 
-User-submitted requests enter the board at `status: request` via the **Submit Request** button on `/board/[slug]`. They land with `persona: null` (the chip reads *Unassigned*) and `priority: p3` until you've looked at them. Your job is to turn each one into either a rejection-with-reason or a clean scope handed to the engineer for breakdown.
+User-submitted requests enter the board at `status: request` via the **Submit Request** button on `/projects/[slug]`. They land with `persona: null` (the chip reads *Unassigned*) and `priority: p3` until you've looked at them. Your job is to turn each one into either a rejection-with-reason or a clean scope handed to the engineer for breakdown.
 
 This is the **only** sanctioned UI → vault write path. It deliberately sits outside the `note-taker` rule because the writer is the user, not an agent. Don't mirror this for any other flow without explicit permission.
 
@@ -216,7 +216,7 @@ This is the **only** sanctioned UI → vault write path. It deliberately sits ou
 4. **If you need feasibility input.** Spawn the engineer subagent with the triage card path and a brief scoped to feasibility only — *not* implementation. Engineer appends its note under `## Feasibility (engineer)`. If the answer raises trade-offs the user should weigh in on, loop back to step 3 with refined questions.
 5. **Decide.**
    - **Rejected:** append `## Decision: rejected` with a one-paragraph reason. Set `status: done`. Done.
-   - **Accepted:** append `## Decision: accepted — scope handed to engineer` with the locked-in scope in one short paragraph. Spawn the engineer subagent with a brief saying "break the request at `<card path>` down into backlog cards under this project." The engineer authors the backlog cards itself (each with `persona: engineer`, `status: backlog`, appropriate `sub_persona`, and a brief + acceptance criteria). After it returns, append `## Spawned cards` to the triage card with the list of new card slugs, set the triage card to `status: done`.
+   - **Accepted:** append `## Decision: accepted — scope handed to engineer` with the locked-in scope in one short paragraph. Spawn the engineer subagent with a brief saying "break the request at `<card path>` down into backlog cards under this project — use the `board_create_card` tool, one call per card." The engineer authors the backlog cards via `board_create_card` (each with `persona: engineer`, `status: backlog`, appropriate `sub_persona`, and a brief + acceptance criteria), and returns the list of `{cardSlug, url}` pairs. Append a `## Spawned cards` section to the triage card with one line per spawned card — `- [<title>](<url>)` — then set the triage card to `status: done`. Surface the same list of URLs to the user.
 
 ### What lives on the triage card
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, Loader2, MessageSquarePlus, Trash2, Unlock } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, Link2, Loader2, MessageSquarePlus, Trash2, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import type { Card as BoardCard, Comment } from "@/lib/board-types";
 import { PERSONA_LABELS, STATUS_LABELS } from "@/lib/board-types";
@@ -330,18 +330,74 @@ function DeleteCardButton({
   );
 }
 
+function CopyLinkButton({ cardId }: { cardId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const onClick = async () => {
+    // Build the short link off `window.location.origin` so it picks up the
+    // current host (works for localhost, cloudflared tunnel, anything).
+    const url =
+      typeof window === "undefined"
+        ? `/c/${cardId}`
+        : `${window.location.origin}/c/${cardId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Link copied");
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy link");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Copy short link · /c/${cardId.slice(0, 8)}…`}
+      className="inline-flex items-center gap-1 rounded-full bg-[var(--color-cloud-fog)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--color-burnt-umber)_12%,var(--color-cloud-fog))] hover:text-foreground"
+    >
+      <Link2 className="h-3 w-3" />
+      {copied ? "copied" : "copy link"}
+    </button>
+  );
+}
+
 export function CardItem({
   card,
   projectSlug,
   bodyContent,
+  defaultOpen = false,
 }: {
   card: BoardCard;
   projectSlug: string;
   bodyContent: ReactNode | null;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(defaultOpen);
+
+  // Open when the URL ?card=<slug> matches (covers deep-link load + same-page
+  // navigation). Closing the dialog strips the param so a refresh doesn't
+  // re-open it.
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next && searchParams.get("card") === card.slug) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("card");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button
           type="button"
@@ -412,6 +468,7 @@ export function CardItem({
           {card.updated ? (
             <span className="text-[11px] text-muted-foreground">updated {card.updated}</span>
           ) : null}
+          {card.id ? <CopyLinkButton cardId={card.id} /> : null}
         </div>
 
         {(card.tags.length > 0 || card.link) && (

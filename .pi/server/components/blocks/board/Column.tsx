@@ -11,12 +11,14 @@ export function Column({
   cards,
   cardBodies,
   projectSlug,
+  openCardSlug,
   dimmed,
 }: {
   status: Status;
   cards: BoardCard[];
   cardBodies: Record<string, ReactNode>;
   projectSlug: string;
+  openCardSlug?: string | null;
   dimmed?: boolean;
 }) {
   return (
@@ -46,6 +48,7 @@ export function Column({
                 card={c}
                 projectSlug={projectSlug}
                 bodyContent={cardBodies[c.slug] ?? null}
+                defaultOpen={openCardSlug === c.slug}
               />
             ))
           )}

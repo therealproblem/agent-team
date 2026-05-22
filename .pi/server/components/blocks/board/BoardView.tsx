@@ -36,6 +36,7 @@ export function BoardView({
   const personaParam = searchParams.get("persona");
   const subParam = searchParams.get("sub");
   const priorityParam = searchParams.get("priority");
+  const cardParam = searchParams.get("card");
 
   const hasPendingTitle = useMemo(() => cards.some((c) => c.titlePending), [cards]);
   useEffect(() => {
@@ -166,6 +167,7 @@ export function BoardView({
             cards={byStatus[s]}
             cardBodies={cardBodies}
             projectSlug={project.slug}
+            openCardSlug={cardParam}
             dimmed={s === "done"}
           />
         ))}

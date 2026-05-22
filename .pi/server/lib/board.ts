@@ -39,6 +39,7 @@ const commentSchema = z.object({
 });
 
 const cardFrontmatterSchema = z.object({
+  id: z.string().optional(),
   title: z.string().optional(),
   status: z.string().optional(),
   persona: z.string().optional(),
@@ -51,6 +52,16 @@ const cardFrontmatterSchema = z.object({
   title_pending: z.boolean().optional(),
   comments: z.array(commentSchema).optional(),
 });
+
+// UUID v4, case-insensitive. Stored verbatim — `/c/<id>` route does a direct
+// string compare so anything outside this shape can never resolve.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function coerceCardId(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  return UUID_RE.test(s) ? s.toLowerCase() : null;
+}
 
 const projectFrontmatterSchema = z.object({
   name: z.string().optional(),
@@ -152,6 +163,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
   if (parseError) {
     return {
       slug,
+      id: null,
       title: slug,
       status: "backlog",
       persona: null,
@@ -172,6 +184,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
   const { status, warning } = coerceStatus(obj.status);
   return {
     slug,
+    id: coerceCardId(obj.id),
     title: (typeof obj.title === "string" && obj.title.trim()) || slug,
     status,
     persona: coercePersona(obj.persona),
@@ -186,6 +199,46 @@ async function parseCard(filePath: string): Promise<Card | null> {
     titlePending: obj.title_pending === true,
     warning: warning ?? (fm.success ? null : "Invalid frontmatter shape"),
   };
+}
+
+/**
+ * Resolve a card by its globally-unique frontmatter `id`. Walks every
+ * project's `board/` (skipping `_archive/` and dotfiles), parses each card,
+ * and returns the first match. The scan is O(cards) but bounded — a personal
+ * vault tops out at thousands. Returns `null` if no card carries that id.
+ */
+export async function findCardById(
+  id: string,
+): Promise<{ projectSlug: string; cardSlug: string } | null> {
+  if (!UUID_RE.test(id)) return null;
+  const want = id.toLowerCase();
+  const projectsDir = getProjectsDir();
+  let projectEntries: Array<{ name: string; isDirectory(): boolean }>;
+  try {
+    projectEntries = await fs.readdir(projectsDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const proj of projectEntries) {
+    if (!proj.isDirectory()) continue;
+    const projectSlug = proj.name;
+    if (projectSlug.startsWith(".") || projectSlug.startsWith("_")) continue;
+    const boardDir = path.join(projectsDir, projectSlug, "board");
+    let cardEntries: Array<{ name: string; isFile(): boolean }>;
+    try {
+      cardEntries = await fs.readdir(boardDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const c of cardEntries) {
+      if (!c.isFile() || !c.name.endsWith(".md") || c.name.startsWith(".")) continue;
+      const card = await parseCard(path.join(boardDir, c.name));
+      if (card?.id === want) {
+        return { projectSlug, cardSlug: card.slug };
+      }
+    }
+  }
+  return null;
 }
 
 async function readProjectMeta(slug: string, projectDir: string): Promise<Project> {

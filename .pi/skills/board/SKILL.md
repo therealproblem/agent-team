@@ -4,7 +4,36 @@ description: Shared reference for the per-project kanban board. Vault layout, pr
 
 # Board
 
-A read-only kanban view at `http://localhost:8080/board` shows every project under `<vault>/projects/<slug>/`. The UI never writes — **you** write by editing markdown files in the vault. Refresh the page to see changes.
+A kanban view at `http://localhost:8080/projects/<slug>` shows every project under `<vault>/projects/<slug>/`. The only UI → vault write paths are the **Submit request** form (user-authored requests) and a small set of card actions (comments, unblock, archive). Card creation, status changes, body edits, persona/sub-persona changes happen by **writing the markdown file**. Use `board_create_card` for the creation path so each card lands with a UUID `id:`; edit the file directly for everything else. Refresh the page to see changes.
+
+Every card has a globally-unique `id:` — share `http://localhost:8080/c/<id>` and the server resolves it to `/projects/<projectSlug>?card=<cardSlug>`, opening the card dialog deep-linked.
+
+## Card creation — `board_create_card`
+
+The `board_create_card` tool is the canonical card-creation path for any agent (PM, engineer). Do NOT hand-write the markdown file — the tool:
+
+- Generates a UUID v4 `id:` so the card is reachable at the short URL `http://localhost:8080/c/<id>`.
+- Slugifies the title for the filename (collisions get a random 6-char suffix).
+- Writes the frontmatter + body atomically.
+- Returns `{id, projectSlug, cardSlug, url, vaultPath}` — surface the `url` to the user.
+
+Call shape:
+
+```
+board_create_card({
+  project_slug: "agents-team",
+  title: "Wire Telegram polling fallback",
+  persona: "engineer",
+  sub_persona: "backend",
+  priority: "p1",
+  status: "backlog",        // optional, defaults to "backlog"
+  body: "## Brief\n\n…\n\n## Acceptance criteria\n\n…",
+  tags: ["telegram", "bot"], // optional
+  link: "engineering/adr/2026-05-12-telegram-transport.md",  // optional
+})
+```
+
+PM's rule: **always surface the returned `url`** in the reply. The dialog also carries a "copy link" chip next to the status pills so the user can grab the same `/c/<id>` URL by hand.
 
 ## Vault layout
 
@@ -44,6 +73,7 @@ Missing fields fall back: `name` → directory slug, `status` → `active`, `own
 
 ```yaml
 ---
+id: 8a1d103f-fb17-467c-9121-704144648199  # UUID v4, stamped by board_create_card; never edit
 title: "Wire up Telegram polling fallback"
 status: in_progress       # backlog | in_progress | in_review | blocked | done
 persona: engineer         # pm | engineer
@@ -59,7 +89,7 @@ Short description in markdown. Why it matters, acceptance criteria, links.
 The board shows the first ~160 chars truncated; full text is fine here.
 ```
 
-Missing/invalid `status` → `backlog` (with a small warning badge on the card). Missing `persona` → unassigned (still filterable). `link` is a vault-relative path — the board renders it as a small link to `/v/<slug>` (useful when the linked note has been published via `render-html`).
+Missing/invalid `status` → `backlog` (with a small warning badge on the card). Missing `persona` → unassigned (still filterable). `link` is a vault-relative path — the board renders it as a small link to `/v/<slug>` (useful when the linked note has been published via `render-html`). `id` is stamped by `board_create_card`; never hand-edit it.
 
 ## Sub-personas
 
