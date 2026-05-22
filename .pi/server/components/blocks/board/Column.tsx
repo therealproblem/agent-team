@@ -24,11 +24,11 @@ export function Column({
   return (
     <section
       className={cn(
-        "flex w-full flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
+        "flex h-full w-full flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
         dimmed && "opacity-70",
       )}
     >
-      <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-2">
           <span className={cn("h-2 w-2 rounded-full", STATUS_TONE[status])} />
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">
@@ -37,7 +37,7 @@ export function Column({
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">{cards.length}</span>
       </header>
-      <ScrollArea className="h-[calc(100vh-240px)] max-h-[520px] min-h-[200px]">
+      <ScrollArea className="flex-1">
         <div className="flex flex-col gap-2 p-2">
           {cards.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">No cards</p>

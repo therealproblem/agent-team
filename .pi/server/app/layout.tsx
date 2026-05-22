@@ -17,8 +17,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body className="bg-background text-foreground antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-          <SiteHeader />
-          {children}
+          <div className="flex h-screen flex-col">
+            <SiteHeader />
+            <main className="flex-1 overflow-hidden">{children}</main>
+          </div>
         </ThemeProvider>
       </body>
     </html>

@@ -88,8 +88,9 @@ export function BoardView({
   }, [filtered]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-4 flex flex-col gap-3">
+    <div className="flex h-full flex-col">
+      <div className="mx-auto w-full max-w-[1600px] shrink-0 px-4 py-6 md:px-6 md:py-8">
+        <div className="mb-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link
             href="/projects"
@@ -165,20 +166,23 @@ export function BoardView({
           ) : null}
         </div>
         <Filters />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
-        {STATUSES.map((s) => (
-          <Column
-            key={s}
-            status={s}
-            cards={byStatus[s]}
-            cardBodies={cardBodies}
-            projectSlug={project.slug}
-            openCardSlug={cardParam}
-            dimmed={s === "done"}
-          />
-        ))}
+      <div className="mx-auto w-full max-w-[1600px] flex-1 overflow-hidden px-4 pb-6 md:px-6 md:pb-8">
+        <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
+          {STATUSES.map((s) => (
+            <Column
+              key={s}
+              status={s}
+              cards={byStatus[s]}
+              cardBodies={cardBodies}
+              projectSlug={project.slug}
+              openCardSlug={cardParam}
+              dimmed={s === "done"}
+            />
+          ))}
+        </div>
       </div>
       <Toaster />
     </div>
