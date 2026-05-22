@@ -267,6 +267,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 │   ├── working-mood/       Kaomoji + elapsed-counter working indicator
 │   ├── obsidian-vault/     Vault I/O + render-html / export tool surface
 │   ├── board/              board_create_card + board_add_comment tools
+│   ├── env-guard/          Strips .env values from assistant messages + tool args
 │   └── ...                   battery, news-ingest, reminders, srs, etc.
 ├── server/              Next.js 16 + Nextra 4 app on :8080 - full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts
 ├── state/               profiles/, reminders.md, telegram/, meta-logs/, research/<run>/research-tree.json
