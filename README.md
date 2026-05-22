@@ -274,7 +274,9 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 └── settings.json        Declares project-local npm packages
 renders/                 MDX sources for HTML renders (root real dir; was a symlink under .pi/server/)
 scripts/
-├── setup.sh             Idempotent bootstrap
+├── setup.sh             Idempotent bootstrap (orchestrates phases/)
+├── phases/              Modular setup phases (stop-server, install-tmux, etc.)
+├── lib/                 Shared helpers (common.sh)
 ├── news-cron.sh         Daily 07:00 news refresh (installed by setup)
 ├── apply-patches.sh     Reapply local patches after npm installs
 └── patches/             Local fixes against vendored npm packages

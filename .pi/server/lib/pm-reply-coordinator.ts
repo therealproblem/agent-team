@@ -250,9 +250,10 @@ async function fireReply(projectSlug: string, cardSlug: string): Promise<void> {
   } catch (e) {
     console.error("[pm-reply] fireReply crashed:", (e as Error).message);
     await setPendingFlag(projectSlug, cardSlug, false).catch(() => {});
-  } finally {
-    revalidatePath(`/projects/${projectSlug}`);
   }
+  // Revalidation handled by the caller (scheduleReply path) to avoid
+  // calling revalidatePath during render when sweepStalePendings fires
+  // a stale pending from within a server component.
 }
 
 /**
@@ -274,12 +275,15 @@ export async function scheduleReply(
   if (ms === 0) {
     // Test hook — fire synchronously.
     pending.delete(key);
-    void fireReply(projectSlug, cardSlug);
+    await fireReply(projectSlug, cardSlug);
+    revalidatePath(`/projects/${projectSlug}`);
     return;
   }
 
   const timer = setTimeout(() => {
-    void fireReply(projectSlug, cardSlug);
+    void fireReply(projectSlug, cardSlug).then(() => {
+      revalidatePath(`/projects/${projectSlug}`);
+    });
   }, ms);
   // Don't keep the process alive just for this timer.
   if (typeof timer.unref === "function") timer.unref();
