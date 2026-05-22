@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import matter from "gray-matter";
 import { getProjectsDir } from "@/lib/board";
 import { STATUSES } from "@/lib/board-types";
+import { scheduleReply, sweepStalePendings } from "@/lib/pm-reply-coordinator";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 4000;
@@ -331,9 +332,21 @@ export async function addComment(input: {
   });
   data.comments = comments;
   data.updated = todayIso();
+  // The coordinator flips pm_reply_pending → true via setPendingFlag in the
+  // same module; we don't need to set it here. Doing both would race.
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
   revalidatePath(`/projects/${projectSlug}`);
+
+  // Lazy self-heal: on the first user comment after a server restart, walk
+  // the vault for stale `pm_reply_pending` flags and re-fire them.
+  void sweepStalePendings();
+
+  // Stamp `pm_reply_pending: true` on this card and schedule the debounced
+  // PM reply. New user comments on the same card before the window elapses
+  // reset the timer; the reply addresses the whole burst together.
+  void scheduleReply(projectSlug, cardSlug);
+
   return { ok: true };
 }
 

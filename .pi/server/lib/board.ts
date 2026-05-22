@@ -50,6 +50,7 @@ const cardFrontmatterSchema = z.object({
   created: z.union([z.string(), z.date()]).optional(),
   updated: z.union([z.string(), z.date()]).optional(),
   title_pending: z.boolean().optional(),
+  pm_reply_pending: z.boolean().optional(),
   comments: z.array(commentSchema).optional(),
 });
 
@@ -176,6 +177,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
       body: raw.trim(),
       comments: [],
       titlePending: false,
+      pmReplyPending: false,
       warning: parseError,
     };
   }
@@ -197,6 +199,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
     body: body.trim(),
     comments: coerceComments(obj.comments),
     titlePending: obj.title_pending === true,
+    pmReplyPending: obj.pm_reply_pending === true,
     warning: warning ?? (fm.success ? null : "Invalid frontmatter shape"),
   };
 }

@@ -70,6 +70,7 @@ export interface Card {
   body: string;
   comments: Comment[];
   titlePending: boolean;
+  pmReplyPending: boolean;
   warning: string | null;
 }
 

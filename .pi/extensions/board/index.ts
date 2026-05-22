@@ -19,7 +19,7 @@
 
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { access, mkdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import {
@@ -49,6 +49,8 @@ const SUB_PERSONAS: Record<(typeof VALID_PERSONAS)[number], readonly string[]> =
 const MAX_TITLE_LENGTH = 120;
 const MAX_SLUG_LENGTH = 60;
 const MAX_BODY_LENGTH = 16_000;
+const MAX_COMMENT_LENGTH = 4_000;
+const VALID_COMMENT_ROLES = ["pm", "engineer"] as const;
 
 function vaultRoot(): string {
 	return process.env.AGENTS_TEAM_VAULT_PATH || join(REPO_ROOT, "vault");
@@ -314,6 +316,126 @@ const boardCreateCard = defineTool({
 	},
 });
 
+interface AddCommentArgs {
+	project_slug: string;
+	card_slug: string;
+	body: string;
+	role: (typeof VALID_COMMENT_ROLES)[number];
+	author?: string;
+}
+
+function serverBaseUrl(): string {
+	const port = process.env.AGENTS_TEAM_SERVER_PORT || "8080";
+	// Always hit localhost for the in-process API — the public URL is for
+	// rendering links to users, not for in-process IPC.
+	return `http://127.0.0.1:${port}`;
+}
+
+const boardAddComment = defineTool({
+	name: "board_add_comment",
+	label: "Add Comment",
+	description:
+		"Post a `role: pm` or `role: engineer` comment on a kanban card. This is the canonical reply path when the PM or engineer needs to respond to a user comment thread on a card — fired by the server's PM-reply pipeline when the user adds a comment, or callable directly when you want to leave a thread note. The route writes through the same gray-matter pipeline the UI uses (atomic write, bumps `updated:`, clears `pm_reply_pending` for `role: pm`). Be terse — comments are conversational, not artifacts. Address the user's last unread comments together; don't write a comment per question. Returns `{cardSlug, projectSlug, commentIndex, role}`.",
+	parameters: Type.Object({
+		project_slug: Type.String({ description: "Project directory under `<vault>/projects/`." }),
+		card_slug: Type.String({
+			description: "Card filename without `.md`. The `cardSlug` returned by `board_create_card`, or the file basename under `<vault>/projects/<project_slug>/board/`.",
+		}),
+		body: Type.String({
+			description: "Comment body in markdown. Max 4000 chars. Terse and conversational; do not paste reasoning history.",
+		}),
+		role: Type.Union(VALID_COMMENT_ROLES.map((r) => Type.Literal(r)), {
+			description: "Who's commenting. `pm` for the user-facing reply (also clears the `pm_reply_pending` spinner). `engineer` for intermediate findings (does NOT clear the spinner — PM still owes the user a reply).",
+		}),
+		author: Type.Optional(
+			Type.String({
+				description: "Optional author label. Defaults to the role (e.g. `pm`, `engineer`). Useful when distinguishing multiple agents under the same role.",
+			}),
+		),
+	}),
+
+	async execute(_toolCallId, params, _signal) {
+		const args = params as AddCommentArgs;
+
+		const projectSlug = args.project_slug.trim();
+		const cardSlug = args.card_slug.trim();
+		const body = args.body.trim();
+
+		if (!projectSlug || !cardSlug || !body) {
+			return {
+				content: [{ type: "text", text: "project_slug, card_slug, and body are all required." }],
+				isError: true,
+			};
+		}
+		if (body.length > MAX_COMMENT_LENGTH) {
+			return {
+				content: [{ type: "text", text: `body too long (max ${MAX_COMMENT_LENGTH} chars).` }],
+				isError: true,
+			};
+		}
+
+		const url = `${serverBaseUrl()}/api/board/add-comment`;
+		let res: Response;
+		try {
+			res = await fetch(url, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					project_slug: projectSlug,
+					card_slug: cardSlug,
+					body,
+					role: args.role,
+					author: args.author,
+				}),
+			});
+		} catch (e) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Couldn't reach the server at ${url}: ${(e as Error).message}. Is the Nextra server running on port ${process.env.AGENTS_TEAM_SERVER_PORT || "8080"}?`,
+					},
+				],
+				isError: true,
+			};
+		}
+
+		let payload: { ok?: boolean; error?: string; commentIndex?: number } = {};
+		try {
+			payload = (await res.json()) as typeof payload;
+		} catch {
+			payload = {};
+		}
+
+		if (!res.ok || !payload.ok) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Server rejected comment: ${payload.error || res.statusText} (HTTP ${res.status})`,
+					},
+				],
+				isError: true,
+			};
+		}
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Posted ${args.role} comment on ${projectSlug}/${cardSlug} (index ${payload.commentIndex}).`,
+				},
+			],
+			details: {
+				projectSlug,
+				cardSlug,
+				role: args.role,
+				commentIndex: payload.commentIndex,
+			},
+		};
+	},
+});
+
 export default function (pi: ExtensionAPI): void {
 	if (!existsSync(projectsDir())) {
 		// Don't pre-create the projects dir — let the user / project-creation
@@ -321,4 +443,5 @@ export default function (pi: ExtensionAPI): void {
 		// missing.
 	}
 	pi.registerTool(boardCreateCard);
+	pi.registerTool(boardAddComment);
 }

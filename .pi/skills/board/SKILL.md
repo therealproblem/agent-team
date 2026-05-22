@@ -35,6 +35,24 @@ board_create_card({
 
 PM's rule: **always surface the returned `url`** in the reply. The dialog also carries a "copy link" chip next to the status pills so the user can grab the same `/c/<id>` URL by hand.
 
+## Replying to user comments — `board_add_comment`
+
+When the user adds a comment via the card dialog, the server stamps `pm_reply_pending: true` on the card and debounces (default 30s — set via `AGENTS_TEAM_PM_REPLY_DEBOUNCE_MS`). Once the window elapses, it fires a `pi --no-session` against the card. The spawn adopts the PM persona, reads the thread, optionally spawns engineer for feasibility, and posts one reply via `board_add_comment` with `role: pm`. That call clears `pm_reply_pending`, bumps `updated:`, and (if Telegram is wired) pushes a "💬 PM replied" notice to allowed chats with the short URL.
+
+Call shape:
+
+```
+board_add_comment({
+  project_slug: "agents-team",
+  card_slug: "wire-telegram-fallback",
+  body: "Yes — the backoff is fine. Engineer confirmed the retry budget covers the 409 grace window.",
+  role: "pm",      // "pm" clears the spinner; "engineer" leaves it on as audit
+  author: "pm",    // optional; defaults to the role
+})
+```
+
+The user calls `addComment` via the UI form — that path adds `role: user` and triggers the PM-reply pipeline. Agents always call `board_add_comment` (`pm` or `engineer` role) so they don't loop themselves.
+
 ## Vault layout
 
 ```

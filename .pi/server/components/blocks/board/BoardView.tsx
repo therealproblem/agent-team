@@ -38,19 +38,27 @@ export function BoardView({
   const priorityParam = searchParams.get("priority");
   const cardParam = searchParams.get("card");
 
+  // Poll while anything is in-flight: a title is being generated for a fresh
+  // request, OR a PM reply is being drafted in the background. The PM reply
+  // can take longer (engineer spawn, etc.) so the cap is wider.
   const hasPendingTitle = useMemo(() => cards.some((c) => c.titlePending), [cards]);
+  const hasPendingReply = useMemo(() => cards.some((c) => c.pmReplyPending), [cards]);
+  const polling = hasPendingTitle || hasPendingReply;
   useEffect(() => {
-    if (!hasPendingTitle) return;
+    if (!polling) return;
     const start = Date.now();
+    // Title gen is capped at ~45s; PM reply can run a few minutes if it
+    // spawns engineer for feasibility. Stop polling after 10 min either way.
+    const cap = hasPendingReply ? 600_000 : 90_000;
     const interval = setInterval(() => {
-      if (Date.now() - start > 90_000) {
+      if (Date.now() - start > cap) {
         clearInterval(interval);
         return;
       }
       router.refresh();
     }, 3000);
     return () => clearInterval(interval);
-  }, [hasPendingTitle, router]);
+  }, [polling, hasPendingReply, router]);
 
   const activePersona = (PERSONAS as readonly string[]).includes(personaParam ?? "")
     ? (personaParam as Persona)

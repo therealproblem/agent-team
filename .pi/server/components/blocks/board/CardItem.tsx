@@ -536,6 +536,12 @@ export function CardItem({
             </h4>
           </div>
           <CommentList comments={card.comments} />
+          {card.pmReplyPending ? (
+            <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 bg-card/40 px-3 py-2 text-xs italic text-muted-foreground">
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+              PM is drafting a reply…
+            </div>
+          ) : null}
           <CommentForm projectSlug={projectSlug} cardSlug={card.slug} />
         </div>
 
