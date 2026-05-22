@@ -52,7 +52,7 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 | `jlpt-examiner`, `render-html`, `render-pdf` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `scout`, `steelman` | `openai/gpt-5-mini` | Cheap models for high-token, low-reasoning sub-tasks |
 
-Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low. Gemini routes through the `ELICE_GEMINI_3_1_PRO` provider in `models.json` rather than a bare Google route, so no separate key is needed.
+Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low. Every subagent's `model:` frontmatter is prefixed with its `ELICE_*` provider from `~/.pi/agent/models.json` (e.g. `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5`, `ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview`) so requests route through mlapi.run — no per-vendor API keys needed.
 
 ### Pi mapping
 
@@ -114,6 +114,13 @@ State moves through `.pi/state/research/<run>/research-tree.json` rather than a 
 Each project under `<vault>/projects/<slug>/` has a kanban board served at `http://localhost:8080/projects/<slug>`. Seven columns — **Request → Triage → Backlog → Blocked → In Progress → In Review → Done** — read top-to-bottom as a card's life cycle. The project header shows the short `description:` from `project.md` frontmatter; a **Details** button opens a dialog with the full markdown body compiled through the existing MDX pipeline.
 
 The page header also carries a **Submit request** form — the only sanctioned UI → vault write path in the whole system. Submissions write a card immediately into the Request column with a placeholder title (first eight words of the description) and `title_pending: true`, then fire Pi in the background to generate a real title; `CardItem` shows an italicised placeholder + spinner while pending and the board polls every 3s (capped at 90s) until everything settles. PM picks up requests via a triage workflow: pick-up → triage → blocked-on-user → engineer feasibility → decide → handoff to engineer to break the request down into Backlog cards.
+
+Cards open into a detail dialog with the body rendered through a CommonMark/GFM pipeline (not MDX — chokes on user text like `**<1s**`), tags pinned right under the status pills so they're visible without scrolling, and `max-h` + `overflow-y-auto` so tall cards don't fall off the viewport. Cards also carry:
+
+- **Comments** — structured frontmatter array `{author, role, ts, body}`. Joseph posts via the dialog; agents append via their own tools. A comment-count chip shows on the column preview.
+- **Priority** — `p0`..`p3` chip on every column card; `?priority=p0..p3` URL filter in the Filters bar alongside persona.
+- **Unblock flow** — button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
+- **Soft delete** — cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
 
 ### scout — file finder on a cheap sub-agent
 
@@ -177,7 +184,8 @@ The bootstrap script is idempotent and handles:
 8. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server — unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
 9. Nextra production build (`next build`) — `.env` is sourced first so build-time vars get baked in
 10. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
-11. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
+11. Python research deps (`beautifulsoup4` + `requests`) installed to `--user` via `python3 -m pip` so the `research` skill's batch URL-fetch heredoc doesn't die with `ModuleNotFoundError`. Retries with `--break-system-packages` on PEP 668 systems.
+12. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
 
 Then start the agent:
 
