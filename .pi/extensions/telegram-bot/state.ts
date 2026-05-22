@@ -92,46 +92,61 @@ interface LockFile {
 const LOCK_PATH = join(STATE_DIR, "_poll.lock");
 
 /**
- * Attempt to acquire the polling lock. Returns true if acquired, false if
- * another live process holds it.
+ * Attempt to acquire the polling lock. Returns true if acquired (or already
+ * held by us), false if another live process holds it.
  *
- * Stale lock recovery:
- *   1. If PID is dead, reclaim immediately.
- *   2. If lock age > 10 minutes, reclaim even if PID is alive (handles
- *      kill -9, crash, sleep/suspend where PID lingers but polling stopped).
+ * The lock is the sole gatekeeper for "primary status" — exactly one Pi
+ * process per machine polls Telegram for updates at a time. Everyone else
+ * (subagents, cron-driven runs, secondary tmux sessions, --no-session
+ * one-shots) sees a live primary and stays dormant, so they don't fight
+ * over getUpdates and cause 409 conflicts.
  *
- * This makes recovery automatic — no manual `.pi/state/telegram/_poll.lock`
- * deletion required after unclean shutdown.
+ * Re-acquisition rules:
+ *   - Same PID (us): refresh the timestamp and return true. This is what
+ *     makes /reload, /new, /resume, /fork transparent — the same Node
+ *     process is re-evaluating the extension and we still own the lock.
+ *   - Different PID, alive: return false. The other live process is the
+ *     primary; we stay dormant.
+ *   - Different PID, dead (signal 0 throws ESRCH): reclaim. Covers kill -9,
+ *     crash, panic — anywhere the holder exited without releasing the lock.
+ *
+ * Note: there is intentionally NO age-based staleness reclaim. A previous
+ * version timed the lock out after 10 minutes "in case the holder slept",
+ * but a Pi session sitting idle in tmux for >10 min is normal and very
+ * much alive — letting a subagent steal the lock in that case caused the
+ * primary's getUpdates to start 409-conflicting against the subagent's
+ * concurrent poll, producing flapping (pi disconnected)/(pi connected)
+ * notifications. Sleep/suspend resolves itself: the OS pauses the holder,
+ * its loop pauses, and on wake it resumes polling — no reclaim needed.
+ * If the holder is genuinely deadlocked, the user can delete
+ * `.pi/state/telegram/_poll.lock` manually.
  */
 export function tryAcquirePollLock(): boolean {
 	ensureDir();
 	const currentPid = process.pid;
-	const STALE_LOCK_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
-	// Check if lock exists
 	const existing = readJson<LockFile>(LOCK_PATH);
 	if (existing) {
-		const lockAge = Date.now() - new Date(existing.acquiredAt).getTime();
-		const isStaleByAge = lockAge > STALE_LOCK_AGE_MS;
-
-		// If lock is older than 10 minutes, reclaim regardless of PID status
-		if (isStaleByAge) {
-			// Fall through to acquire
-		} else {
-			// Check if the PID is still alive
-			try {
-				// Sending signal 0 checks if process exists without actually sending a signal
-				process.kill(existing.pid, 0);
-				// Process exists and lock is fresh — held by another live process
-				return false;
-			} catch (err: unknown) {
-				// Process doesn't exist or we don't have permission to signal it
-				// Treat as stale lock and fall through to acquire
-			}
+		if (existing.pid === currentPid) {
+			// We already own it (this is a re-evaluation of the extension
+			// module within the same Node process, e.g. /reload / /new /
+			// /resume / /fork). Refresh the timestamp and continue.
+			writeJson(LOCK_PATH, {
+				pid: currentPid,
+				acquiredAt: new Date().toISOString(),
+			});
+			return true;
+		}
+		try {
+			// Signal 0 is a process-existence probe — doesn't actually signal.
+			process.kill(existing.pid, 0);
+			// Holder is alive and not us — stay dormant.
+			return false;
+		} catch {
+			// ESRCH / EPERM — holder is gone or unreachable. Reclaim below.
 		}
 	}
 
-	// Acquire lock
 	writeJson(LOCK_PATH, {
 		pid: currentPid,
 		acquiredAt: new Date().toISOString(),
