@@ -414,6 +414,40 @@ export function CardItem({
           ) : null}
         </div>
 
+        {(card.tags.length > 0 || card.link) && (
+          <div className="flex flex-col gap-1.5 text-xs">
+            {card.tags.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Tags
+                </span>
+                {card.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full bg-[var(--color-cloud-fog)] px-2 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    #{t}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {card.link ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Link
+                </span>
+                <Link
+                  href={`/v/${encodeURIComponent(card.link.replace(/\.mdx?$/i, ""))}`}
+                  className="truncate font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                  title={card.link}
+                >
+                  ↗ {card.link}
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {card.warning ? (
           <div className="flex items-start gap-1.5 rounded-md border border-[color-mix(in_oklab,var(--color-sunset-orange)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-sunset-orange)_8%,transparent)] px-3 py-2 text-xs text-[var(--color-sunset-orange)]">
             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
@@ -447,40 +481,6 @@ export function CardItem({
           <CommentList comments={card.comments} />
           <CommentForm projectSlug={projectSlug} cardSlug={card.slug} />
         </div>
-
-        {(card.tags.length > 0 || card.link) && (
-          <div className="flex flex-col gap-2 border-t border-border/60 pt-3 text-xs">
-            {card.tags.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Tags
-                </span>
-                {card.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full bg-[var(--color-cloud-fog)] px-2 py-0.5 text-[10px] text-muted-foreground"
-                  >
-                    #{t}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {card.link ? (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Link
-                </span>
-                <Link
-                  href={`/v/${encodeURIComponent(card.link.replace(/\.mdx?$/i, ""))}`}
-                  className="truncate font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline"
-                  title={card.link}
-                >
-                  ↗ {card.link}
-                </Link>
-              </div>
-            ) : null}
-          </div>
-        )}
 
         <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
           <DeleteCardButton
