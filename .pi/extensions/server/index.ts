@@ -38,16 +38,10 @@
  * `[server]` label is dropped (same pattern as the reminders extension).
  *
  * If you're iterating on the .pi/server/ Next app itself, `next start` won't
- * pick up changes — rebuild with `cd .pi/server && npm run build` and
- * restart Pi, or set `AGENTS_TEAM_SERVER_MODE=dev` to spawn `next dev` with
- * hot reload instead (skips the build-dir check; first request will compile
- * on demand).
- *
- * Server rebuild capability is available to the engineer subagent via the
- * `rebuild-server` inner skill (see `.pi/skills/rebuild-server/SKILL.md`).
- * The skill documents the operational path (bash sequence) since skills cannot
- * call extension-private helpers directly. Users can rebuild manually via
- * `cd .pi/server && npm run build` + restart.
+ * pick up changes — rebuild manually with `cd .pi/server && npm run build`
+ * and restart Pi, or set `AGENTS_TEAM_SERVER_MODE=dev` to spawn `next dev`
+ * with hot reload instead (skips the build-dir check; first request will
+ * compile on demand).
  *
  * Configure via env vars:
  *   AGENTS_TEAM_SERVER_PATH — default: <cwd>/.pi/server
@@ -374,14 +368,6 @@ export default function (pi: ExtensionAPI): void {
 			if (alive) startHealthPoll(ctx);
 		}
 	}
-
-	// rebuild-server capability is available to the engineer subagent via the
-	// `rebuild-server` inner skill (see `.pi/skills/rebuild-server/SKILL.md`).
-	// Pi's slash-command API has no runtime persona gate, so we don't register
-	// a slash command (that would make it globally available). The skill documents
-	// the operational path (bash sequence) since skills cannot call extension-private
-	// helpers directly. The helpers below (killServer, rebuildServer, bringUp)
-	// remain available for future extension-internal paths if needed.
 
 	// Bring up on every session_start. Pi re-evaluates this module on /new,
 	// /resume, /fork, and /reload, so the previous instance's child reference
