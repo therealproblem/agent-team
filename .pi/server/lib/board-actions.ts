@@ -488,3 +488,61 @@ export async function unblockCard(input: {
   revalidatePath(`/projects/${projectSlug}`);
   return { ok: true };
 }
+
+export async function markCardDone(input: {
+  projectSlug: string;
+  cardSlug: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+
+  let card;
+  try {
+    card = await readCardFile(projectSlug, cardSlug);
+  } catch {
+    return { ok: false, error: "Card not found." };
+  }
+  const { filePath, parsed, data } = card;
+
+  if (data.status === "done") {
+    return { ok: false, error: "Card is already done." };
+  }
+
+  data.status = "done";
+  data.updated = todayIso();
+
+  await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  revalidatePath(`/projects/${projectSlug}`);
+  return { ok: true };
+}
+
+export async function reopenCard(input: {
+  projectSlug: string;
+  cardSlug: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+
+  let card;
+  try {
+    card = await readCardFile(projectSlug, cardSlug);
+  } catch {
+    return { ok: false, error: "Card not found." };
+  }
+  const { filePath, parsed, data } = card;
+
+  if (data.status !== "done") {
+    return { ok: false, error: "Card is not done." };
+  }
+
+  // Revert to in_progress unless the card tracks a better prior state.
+  // For now, we'll use in_progress as the safe default.
+  data.status = "in_progress";
+  data.updated = todayIso();
+
+  await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  revalidatePath(`/projects/${projectSlug}`);
+  return { ok: true };
+}

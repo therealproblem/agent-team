@@ -3,11 +3,11 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Link2, Loader2, MessageSquarePlus, Trash2, Unlock } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Link2, Loader2, MessageSquarePlus, RotateCcw, Trash2, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import type { Card as BoardCard, Comment } from "@/lib/board-types";
 import { PERSONA_LABELS, STATUS_LABELS } from "@/lib/board-types";
-import { addComment, deleteCard, unblockCard } from "@/lib/board-actions";
+import { addComment, deleteCard, markCardDone, reopenCard, unblockCard } from "@/lib/board-actions";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -267,6 +267,80 @@ function UnblockButton({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function MarkDoneButton({
+  projectSlug,
+  cardSlug,
+}: {
+  projectSlug: string;
+  cardSlug: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const onClick = () => {
+    startTransition(async () => {
+      const res = await markCardDone({ projectSlug, cardSlug });
+      if (!res.ok) {
+        toast.error(res.error ?? "Couldn't mark card as done.");
+        return;
+      }
+      router.refresh();
+      toast.success("Card marked as done.");
+    });
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={pending}
+      className="h-7 gap-1.5 text-xs"
+    >
+      <CheckCircle2 className="h-3 w-3" />
+      {pending ? "Marking…" : "Mark as Done"}
+    </Button>
+  );
+}
+
+function ReopenCardButton({
+  projectSlug,
+  cardSlug,
+}: {
+  projectSlug: string;
+  cardSlug: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const onClick = () => {
+    startTransition(async () => {
+      const res = await reopenCard({ projectSlug, cardSlug });
+      if (!res.ok) {
+        toast.error(res.error ?? "Couldn't reopen card.");
+        return;
+      }
+      router.refresh();
+      toast.success("Card reopened.");
+    });
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={pending}
+      className="h-7 gap-1.5 text-xs"
+    >
+      <RotateCcw className="h-3 w-3" />
+      {pending ? "Reopening…" : "Reopen"}
+    </Button>
   );
 }
 
@@ -552,9 +626,16 @@ export function CardItem({
             title={card.title}
             onDone={() => setOpen(false)}
           />
-          {card.status === "blocked" ? (
-            <UnblockButton projectSlug={projectSlug} cardSlug={card.slug} />
-          ) : null}
+          <div className="flex items-center gap-2">
+            {card.status === "blocked" ? (
+              <UnblockButton projectSlug={projectSlug} cardSlug={card.slug} />
+            ) : null}
+            {card.status === "done" ? (
+              <ReopenCardButton projectSlug={projectSlug} cardSlug={card.slug} />
+            ) : card.status !== "request" ? (
+              <MarkDoneButton projectSlug={projectSlug} cardSlug={card.slug} />
+            ) : null}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
