@@ -15,7 +15,15 @@ The `board_create_card` tool is the canonical card-creation path for any agent (
 - Generates a UUID v4 `id:` so the card is reachable at the short URL `http://localhost:8080/c/<id>`.
 - Slugifies the title for the filename (collisions get a random 6-char suffix).
 - Writes the frontmatter + body atomically.
-- Returns `{id, projectSlug, cardSlug, url, vaultPath}` — surface the `url` to the user.
+- Returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}` — surface the `url` to the user.
+
+### Editing a card after creation — use `filePath`, never `vaultPath`
+
+`vaultPath` is **vault-relative** (`projects/<slug>/board/<card>.md`). `filePath` is the **absolute on-disk path** (`/Users/.../agents-team/vault/projects/<slug>/board/<card>.md`).
+
+When you later edit a card via the `edit` tool, pass `filePath`. **Do not pass `vaultPath`** — the `edit` tool resolves relative paths against your cwd (the repo root), which would drop the write at `<repo>/projects/...` instead of `<repo>/vault/projects/...`. **There must never be a `projects/` directory at the repo root**; if you see one, it's broken.
+
+The same rule applies when constructing an edit path by hand: prefix `vault/` (or use the absolute path) — never write to a bare `projects/...` path.
 
 Call shape:
 

@@ -125,7 +125,7 @@ const boardCreateCard = defineTool({
 	name: "board_create_card",
 	label: "Create Card",
 	description:
-		"Create a new kanban card under a project. Returns the card's globally-unique short URL — surface that URL in your reply so the user can click into the card. Use this whenever you (PM or engineer) drop a card on the board; do NOT hand-write the markdown file. The tool stamps a UUID `id:`, slugifies the title for the filename, writes the frontmatter + body, and returns `{id, projectSlug, cardSlug, url, vaultPath}`.",
+		"Create a new kanban card under a project. Returns the card's globally-unique short URL — surface that URL in your reply so the user can click into the card. Use this whenever you (PM or engineer) drop a card on the board; do NOT hand-write the markdown file. The tool stamps a UUID `id:`, slugifies the title for the filename, writes the frontmatter + body, and returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}`. Use `filePath` (absolute) — NOT `vaultPath` (vault-relative) — when later editing the card via the `edit` tool, otherwise the edit lands at `<repo>/projects/...` instead of `<repo>/vault/projects/...`. There must never be a `projects/` directory at the repo root.",
 	parameters: Type.Object({
 		project_slug: Type.String({
 			description:
@@ -303,15 +303,33 @@ const boardCreateCard = defineTool({
 
 		const url = `${publicUrl()}/c/${id}`;
 		const vaultPath = `projects/${projectSlug}/board/${cardSlug}.md`;
+		// filePath is the absolute on-disk path the card was written to.
+		// Agents MUST use this (not vaultPath) when subsequently editing the
+		// card via the `edit` tool — passing the vault-relative `vaultPath`
+		// to `edit` would resolve it against the agent's cwd (the repo root),
+		// dropping the write in `<repo>/projects/...` instead of
+		// `<repo>/vault/projects/...`. There must never be a `projects/`
+		// directory at the repo root.
 
 		return {
 			content: [
 				{
 					type: "text",
-					text: `Created ${vaultPath}\nURL: ${url}`,
+					// Use the absolute path in the text so agents copy-pasting
+					// from output can't mistake it for a cwd-relative path.
+					text: `Created ${filePath}\nURL: ${url}`,
 				},
 			],
-			details: { id, projectSlug, cardSlug, url, vaultPath, status, persona: args.persona },
+			details: {
+				id,
+				projectSlug,
+				cardSlug,
+				url,
+				vaultPath,
+				filePath,
+				status,
+				persona: args.persona,
+			},
 		};
 	},
 });
