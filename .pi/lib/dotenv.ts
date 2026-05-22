@@ -72,13 +72,25 @@ export function loadDotenv(envPath: string = join(process.cwd(), ".env")): void 
  * is picked up), but leaves shell-exported values alone — if a key was set
  * in the shell before pi started, it never entered `dotenvKeys`, so we
  * won't touch it. Also picks up keys newly added to `.env` since the last
- * load. If the file goes away on reload, prior dotenv-sourced keys are
- * left in place rather than deleted (avoids surprising disappearance).
+ * load. **Deletes** keys that were previously sourced from `.env` but are
+ * no longer present in the file (so removing a key from `.env` takes effect
+ * on reload without restarting the process). If the file goes away on
+ * reload, prior dotenv-sourced keys are left in place rather than deleted
+ * (avoids surprising disappearance).
  */
 export function reloadDotenv(envPath: string = join(process.cwd(), ".env")): void {
 	const parsed = parseDotenv(envPath);
 	if (!parsed) return;
 
+	// Delete keys that were sourced from .env but are no longer present
+	for (const key of dotenvKeys) {
+		if (!(key in parsed)) {
+			delete process.env[key];
+			dotenvKeys.delete(key);
+		}
+	}
+
+	// Add or update keys from the new .env
 	for (const [key, value] of Object.entries(parsed)) {
 		if (key in process.env && !dotenvKeys.has(key)) continue;
 		process.env[key] = value;
