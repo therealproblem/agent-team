@@ -10,7 +10,7 @@
 
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -195,10 +195,104 @@ const addItem = defineTool({
 	},
 });
 
+const importCsv = defineTool({
+	name: "import_csv",
+	label: "Import CSV to SRS",
+	description:
+		"Batch import SRS items from CSV. Format: 'front,back' (one item per line). Empty lines and lines starting with '#' are ignored. Each item gets a generated UUID.",
+	parameters: Type.Object({
+		csv_path: Type.String(),
+		deck_name: Type.String(),
+		type: Type.Union([Type.Literal("vocab"), Type.Literal("kanji"), Type.Literal("grammar")]),
+		level: Type.Union([
+			Type.Literal("N5"),
+			Type.Literal("N4"),
+			Type.Literal("N3"),
+			Type.Literal("N2"),
+			Type.Literal("N1"),
+		]),
+	}),
+	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		const csvPath = resolve(process.cwd(), params.csv_path);
+		if (!existsSync(csvPath)) {
+			return {
+				content: [{ type: "text", text: `File not found: ${params.csv_path}` }],
+				details: { error: "file_not_found" },
+				isError: true,
+			};
+		}
+
+		const csv = await readFile(csvPath, "utf8");
+		const lines = csv
+			.split("\n")
+			.map((l) => l.trim())
+			.filter((l) => l && !l.startsWith("#"));
+
+		let imported = 0;
+		let failed = 0;
+		let firstError = "";
+
+		const all = await loadState();
+
+		for (const line of lines) {
+			const parts = line.split(",").map((p) => p.trim());
+			if (parts.length < 2) {
+				if (!firstError) firstError = `Invalid format: ${line}`;
+				failed += 1;
+				continue;
+			}
+
+			const [front, ...backParts] = parts;
+			const back = backParts.join(",").trim();
+
+			if (!front || !back) {
+				if (!firstError) firstError = `Empty front or back: ${line}`;
+				failed += 1;
+				continue;
+			}
+
+			const id = `${params.deck_name}-${front.substring(0, 16).replace(/\s/g, "-")}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+			if (all.some((i) => i.front === front && i.level === params.level)) {
+				if (!firstError) firstError = `Duplicate front: ${front}`;
+				failed += 1;
+				continue;
+			}
+
+			const item: SrsItem = {
+				id,
+				type: params.type as SrsItem["type"],
+				level: params.level as SrsItem["level"],
+				front,
+				back,
+				ease: 2.5,
+				interval_days: 0,
+				due_at: new Date().toISOString(),
+				reps: 0,
+				lapses: 0,
+			};
+
+			all.push(item);
+			imported += 1;
+		}
+
+		await saveState(all);
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Imported ${imported} item(s) from ${params.csv_path}. Failed: ${failed}.${firstError ? ` First error: ${firstError}` : ""}`,
+				},
+			],
+			details: { imported, failed, firstError: firstError || undefined },
+		};
+	},
+});
+
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool(listDue);
 	pi.registerTool(recordGrade);
 	pi.registerTool(addItem);
+	pi.registerTool(importCsv);
 }
-
-// TODO: importer for JLPT level vocab/kanji lists (CSV → add_item batch).
