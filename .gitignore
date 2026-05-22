@@ -44,6 +44,7 @@ exports/
 # Pi-managed extension artifacts
 .pi/extensions/**/dist/
 .pi/extensions/**/node_modules/
+.pi/extensions/node_modules
 
 # Pi-installed npm packages (declared in .pi/settings.json; restored via `pi install`)
 .pi/npm/

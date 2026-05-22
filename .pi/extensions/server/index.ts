@@ -233,6 +233,7 @@ export default function (pi: ExtensionAPI): void {
 		const child = spawn("node", nextArgs, {
 			cwd: SERVER_ROOT,
 			stdio: ["ignore", "pipe", "pipe"],
+			env: process.env,
 		});
 		setChild(child);
 		child.stdout?.pipe(log);

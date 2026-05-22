@@ -45,6 +45,7 @@ import { api } from "./api";
 import { parseAllowedChats, type DispatcherContext } from "./dispatcher";
 import * as loop from "./loop";
 import { onAgentEnd, onBeforeAgentStart, setCtx, shutdown as shutdownDriver } from "./driver";
+import * as state from "./state";
 
 loadDotenv();
 
@@ -449,7 +450,8 @@ export default function (pi: ExtensionAPI): void {
 	// `running` flag, the driver's `latestCtx`, etc.) resets on every
 	// transition. To keep the bot alive across these, we:
 	//
-	//   - On session_start (any reason): connect afresh if a token is set.
+	//   - On session_start (any reason): connect afresh if a token is set AND
+	//     this is the primary Pi process (guarded by TELEGRAM_BOT_PRIMARY).
 	//   - On session_shutdown (any reason): cleanly stop *this* module's loop
 	//     BEFORE the runtime is invalidated, so the dying module's dispatcher
 	//     doesn't fire against a stale pi. The next module's session_start
@@ -464,6 +466,28 @@ export default function (pi: ExtensionAPI): void {
 			return;
 		}
 
+		// Guard: only one Pi process should run the Telegram polling loop at a time.
+		// This prevents duplicate getUpdates consumers when:
+		//   - Multiple Pi sessions run concurrently (tmux worktrees, manual spawns)
+		//   - `pi --no-session` is invoked (server PM replies, cron, etc.)
+		//   - Subagent spawns inherit the token but shouldn't poll
+		//
+		// We use a filesystem lock with PID tracking. The first process to start
+		// acquires the lock; others skip polling. Stale locks (dead PID) are
+		// automatically cleaned and re-acquired.
+		//
+		// Manual override: set TELEGRAM_BOT_PRIMARY=1 to force-acquire (useful
+		// when debugging lock issues or if PID-check gives false negatives).
+		const forcePrimary = process.env.TELEGRAM_BOT_PRIMARY === "1";
+		const acquired = forcePrimary || state.tryAcquirePollLock();
+		if (!acquired) {
+			// Another live process holds the lock; stay dormant for polling but
+			// keep API-send capability for tools like board_add_comment.
+			setTg(ctx, "off");
+			return;
+		}
+
+		// At this point: token is set AND we acquired the polling lock.
 		setTg(ctx, "pending");
 
 		void (async () => {
@@ -577,6 +601,7 @@ export default function (pi: ExtensionAPI): void {
 		const cleanup = (): void => {
 			stopPending();
 			loop.stop();
+			state.releasePollLock();
 		};
 		process.on("exit", cleanup);
 		process.on("SIGINT", cleanup);

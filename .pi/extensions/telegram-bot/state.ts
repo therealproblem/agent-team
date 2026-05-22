@@ -81,3 +81,58 @@ export function loadOffset(): number {
 export function saveOffset(offset: number): void {
 	writeJson(OFFSET_PATH, { offset });
 }
+
+// ---------- polling lock ----------
+
+interface LockFile {
+	pid: number;
+	acquiredAt: string;
+}
+
+const LOCK_PATH = join(STATE_DIR, "_poll.lock");
+
+/**
+ * Attempt to acquire the polling lock. Returns true if acquired, false if
+ * another live process holds it. Stale locks (PID no longer running) are
+ * automatically cleaned and re-acquired.
+ */
+export function tryAcquirePollLock(): boolean {
+	ensureDir();
+	const currentPid = process.pid;
+
+	// Check if lock exists
+	const existing = readJson<LockFile>(LOCK_PATH);
+	if (existing) {
+		// Check if the PID is still alive
+		try {
+			// Sending signal 0 checks if process exists without actually sending a signal
+			process.kill(existing.pid, 0);
+			// Process exists — lock is held by another live process
+			return false;
+		} catch (err: unknown) {
+			// Process doesn't exist or we don't have permission to signal it
+			// Treat as stale lock and fall through to acquire
+		}
+	}
+
+	// Acquire lock
+	writeJson(LOCK_PATH, {
+		pid: currentPid,
+		acquiredAt: new Date().toISOString(),
+	});
+	return true;
+}
+
+/**
+ * Release the polling lock if this process holds it.
+ */
+export function releasePollLock(): void {
+	const existing = readJson<LockFile>(LOCK_PATH);
+	if (existing && existing.pid === process.pid) {
+		try {
+			require("node:fs").unlinkSync(LOCK_PATH);
+		} catch {
+			// Best-effort
+		}
+	}
+}
