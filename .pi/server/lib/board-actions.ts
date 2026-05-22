@@ -335,7 +335,12 @@ export async function addComment(input: {
   // The coordinator flips pm_reply_pending → true via setPendingFlag in the
   // same module; we don't need to set it here. Doing both would race.
 
-  await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  try {
+    await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  } catch (e) {
+    console.error(`[addComment] write failed for ${filePath}:`, (e as Error).message);
+    return { ok: false, error: "Couldn't save comment." };
+  }
   revalidatePath(`/projects/${projectSlug}`);
 
   // Lazy self-heal: on the first user comment after a server restart, walk
