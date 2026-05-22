@@ -115,12 +115,17 @@ Each project under `<vault>/projects/<slug>/` has a kanban board served at `http
 
 The page header also carries a **Submit request** form - the only sanctioned UI → vault write path in the whole system. Submissions write a card immediately into the Request column with a placeholder title (first eight words of the description) and `title_pending: true`, then fire Pi in the background to generate a real title; `CardItem` shows an italicised placeholder + spinner while pending and the board polls every 3s (capped at 90s) until everything settles. PM picks up requests via a triage workflow: pick-up → triage → blocked-on-user → engineer feasibility → decide → handoff to engineer to break the request down into Backlog cards.
 
-Cards open into a detail dialog with the body rendered through a CommonMark/GFM pipeline (not MDX - chokes on user text like `**<1s**`), tags pinned right under the status pills so they're visible without scrolling, and `max-h` + `overflow-y-auto` so tall cards don't fall off the viewport. Cards also carry:
+Cards open into a detail dialog with the body rendered through a CommonMark/GFM pipeline (not MDX - chokes on user text like `**<1s**`), tags pinned right under the status pills so they're visible without scrolling, and `max-h` + `overflow-y-auto` so tall cards don't fall off the viewport. `[[wiki-links]]` in the body are resolved to `/v/<slug>` for any matching vault note and rendered as clickable links (with an "unrendered" affordance when the target hasn't been published yet). The kanban view also polls every 3s so cards that agents edit in the background appear without a manual refresh.
 
-- **Comments** - structured frontmatter array `{author, role, ts, body}`. Joseph posts via the dialog; agents append via their own tools. A comment-count chip shows on the column preview.
-- **Priority** - `p0`..`p3` chip on every column card; `?priority=p0..p3` URL filter in the Filters bar alongside persona.
-- **Unblock flow** - button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
-- **Soft delete** - cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
+Cards carry:
+
+- **Unique ID + short link.** Every card has a UUID `id:` stamped at creation. The dialog header carries a *copy link* chip that yields `http://localhost:8080/c/<id>` — the resolver scans every project's `board/` for the matching id and redirects to `/projects/<slug>?card=<cardSlug>`, opening the dialog deep-linked. Closing the dialog strips the `card` query param so a refresh doesn't re-open it. Shared links survive project/card renames; only deletion breaks them.
+- **`board_create_card` Pi tool.** Card creation goes through a typed extension tool, not raw markdown edits. Agents pass `{project_slug, title, persona, body, status?, priority?, ...}`; the tool stamps the UUID, slugifies the title for the filename (collision suffix on dupes), writes the frontmatter + body atomically, and returns `{id, projectSlug, cardSlug, url, vaultPath}`. PM's rule is to **surface the returned `url` in its reply** so a click takes you straight to the card.
+- **Comments + PM auto-reply.** Comments are a structured frontmatter array `{author, role, ts, body}`. You post via the dialog form; the server appends `role: user`, flips `pm_reply_pending: true`, and starts a per-card debounce (default 30s, `AGENTS_TEAM_PM_REPLY_DEBOUNCE_MS`). New comments on the same card reset the timer so PM addresses the whole burst in one reply. When the timer fires, the server spawns `pi --no-session` with a prompt that adopts PM, reads the thread, optionally spawns engineer for feasibility, and posts a `role: pm` comment via the **`board_add_comment`** Pi tool. That clears the spinner and (if Telegram is wired) PM also sends a one-line notice with the card title + `/c/<id>` link via `telegram_send`. The dialog shows a "PM is drafting a reply…" row with a spinner while pending, and `BoardView` polls every 3s (10-min cap for replies) until it lands. A `sweepStalePendings()` self-heal walks the vault on the next user comment after a server restart and re-fires any leftover `pm_reply_pending` flags.
+- **Mark as Done / Reopen.** Buttons in the dialog footer flip `status: done` or move a done card back to `status: backlog` (not `in_progress` — coming off a done streak feels more like backlog than picking up halfway). Atomic write + `updated:` bump in one shot.
+- **Priority + filter.** `p0`..`p3` chip on every column card; `?priority=p0..p3` URL filter in the Filters bar alongside persona.
+- **Unblock flow.** Button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
+- **Soft delete.** Cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
 
 ### scout - file finder on a cheap sub-agent
 
@@ -130,7 +135,7 @@ Cards open into a detail dialog with the body rendered through a CommonMark/GFM 
 
 The same Pi session is reachable from a Telegram bot. The extension runs a `getUpdates` long-poll loop inside Pi - no public URL needed; works from a laptop with no inbound networking.
 
-**When Pi exits the bot goes offline** - the long-poll loop stops, and every allowed chat receives a final `(pi shut down)` message so users know the agent went away (only fires on a real quit, not on a session swap; bounded by a 4s timeout so a hung network can't block exit). There's exactly one Pi session backing all chats - DMs and groups share context. Each turn arrives in Pi prefixed `[From Telegram @<username>] ...` so the agent knows the origin; replies route back to the originating chat automatically.
+**When Pi exits the bot goes offline** - the long-poll loop stops, and every allowed chat receives a final `(pi shut down)` message so users know the agent went away (only fires on a real quit, not on a session swap; bounded by a 4s timeout so a hung network can't block exit). If the long-poll loop errors mid-session — auth revoked, network gone, Telegram side rejecting — the bot broadcasts `(pi disconnected)` instead so users aren't left wondering. There's exactly one Pi session backing all chats - DMs and groups share context. Each turn arrives in Pi prefixed `[From Telegram @<username>] ...` so the agent knows the origin; replies route back to the originating chat automatically. A single-instance polling lock prevents a second Pi session (or a fresh `/reload`) from racing the first for `getUpdates`; the new module waits until the previous lock is released before taking over.
 
 Setup is a single slash command inside Pi: `/telegram-connect`. The first invocation prompts for a bot token from `@BotFather` (or accepts it as `/telegram-connect <token>`), registers slash commands + the Menu button with Telegram, brings the bot online, and - if the allowlist is empty - opens a prompt for the chat id(s) you want to allow. To discover a chat id, DM the bot `/start`: it replies with the chat's id even when not allowlisted (the only message it sends to non-allowlisted chats).
 
@@ -139,6 +144,8 @@ The bot listens "always" in groups (every message enters the context as steering
 Telegram chats can also send `/new` (start a fresh Pi conversation) and `/compact` (compact the current context) - both are routed via `tmux send-keys` to the running Pi pane, and `/start` lists them in the onboarding reply so new chats discover them.
 
 The footer in Pi grows a `| TG ●` cell next to `| SRV ...` when the bot is online. See `.pi/SYSTEM.md` § "Telegram channel" for the rules the agent follows on Telegram-originated turns.
+
+**Outbound `telegram_send` tool.** A Pi-callable tool lets any persona push a proactive message to allowed chats — used by PM to announce comment replies (with the card title + `/c/<id>` deep link), and by `news-cron.sh` to deliver a top-3-per-topic digest to your Telegram after each 07:00 refresh. The server doesn't push directly any more; everything outbound goes through this tool so message formatting, allowlist enforcement, and rate-limit handling live in one place.
 
 ### Working-mood indicator
 
@@ -158,7 +165,7 @@ Where it's heading:
 
 - **Web frontend** - not currently wired in; being rebuilt from scratch. Entry points today are the CLI (`pi` from the repo root) and the Telegram bot (see § Telegram channel above).
 - **Layer 0 meta-review** - surfacing cross-domain patterns and contradictions across profiles as the system accumulates a real model of you.
-- **Richer service surface** - `news-ingest` is wired with a daily 07:00 cron refresh; SRS decks still need seeding; the trade-journal accessor is read-only for now.
+- **Richer service surface** - `news-ingest` is wired with a daily 07:00 cron refresh + Telegram digest push; the `srs` extension grew a `srs.import_csv` tool for batch JLPT vocab seeding (so you can import a CSV deck in one call instead of card-by-card); the trade-journal accessor is read-only for now.
 
 See `AGENTS.md` for the long-form internal design doc, including current build status per component.
 
@@ -241,6 +248,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 | `AGENTS_TEAM_SERVER_TITLE` | `agents-team` | Wordmark in the navbar + suffix on every page's `<title>`. **Read at build time** - re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for changes to take effect. |
 | `AGENTS_TEAM_SERVER_PUBLIC_URL` | `http://localhost:8080` | Base URL the `render-html` / `export` tools return. Set to your named cloudflared tunnel so URLs are share-ready across sessions. Quick-tunnel URLs rotate on every restart - use a named tunnel. Read at runtime, so a Pi restart is enough. |
 | `AGENTS_TEAM_CHROME_PATH` | auto-detected | Override the Chrome binary used for PDF export. Auto-detection covers `/Applications/Google Chrome.app` on macOS plus the standard Linux and Windows locations. Set this only if Chrome lives somewhere unusual. |
+| `AGENTS_TEAM_PM_REPLY_DEBOUNCE_MS` | `30000` | Coalesce window between a user comment landing on a card and the PM-reply Pi spawn. New comments on the same card reset the timer. Set lower for faster replies, higher to batch more aggressively. `0` fires synchronously (mainly a test hook). |
 | `TELEGRAM_BOT_TOKEN` | _unset_ | Bot token from `@BotFather`. Unset → the `telegram-bot` extension stays dormant (no footer cell, no surfaces). Set by `/telegram-connect <token>` in Pi, or pasted into `.env` directly. |
 | `TELEGRAM_ALLOWED_CHATS` | _unset_ | Comma-separated chat ids the bot will respond in. Hard allowlist; anything else is silently dropped. `/start` from any chat bypasses the allowlist to reply with that chat's id. Populated via the interactive prompt that follows `/telegram-connect` when empty. |
 | `TELEGRAM_LONG_POLL_TIMEOUT` | `50` | Seconds to hold each `getUpdates` call open; Telegram caps at 50. |
@@ -255,14 +263,16 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 ├── skills/              Personas + inner skills + shared services
 ├── extensions/          TypeScript tool surfaces (auto-loaded by Pi)
 │   ├── server/             Lifecycle for the Next.js server
-│   ├── telegram-bot/       Telegram bridge (long-poll)
+│   ├── telegram-bot/       Telegram bridge (long-poll + telegram_send tool)
 │   ├── working-mood/       Kaomoji + elapsed-counter working indicator
 │   ├── obsidian-vault/     Vault I/O + render-html / export tool surface
+│   ├── board/              board_create_card + board_add_comment tools
 │   └── ...                   battery, news-ingest, reminders, srs, etc.
-├── server/              Next.js 16 + Nextra 4 app on :8080 - full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid
+├── server/              Next.js 16 + Nextra 4 app on :8080 - full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts
 ├── state/               profiles/, reminders.md, telegram/, meta-logs/, research/<run>/research-tree.json
 ├── lib/                 dotenv loader + shared TUI primitives
 └── settings.json        Declares project-local npm packages
+renders/                 MDX sources for HTML renders (root real dir; was a symlink under .pi/server/)
 scripts/
 ├── setup.sh             Idempotent bootstrap
 ├── news-cron.sh         Daily 07:00 news refresh (installed by setup)
