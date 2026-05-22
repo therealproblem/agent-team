@@ -37,7 +37,7 @@ export function Column({
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">{cards.length}</span>
       </header>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-2">
           {cards.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">No cards</p>
