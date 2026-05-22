@@ -61,6 +61,36 @@ type TgState = "pending" | "ready" | "errored" | "off";
 let pendingTimer: ReturnType<typeof setInterval> | null = null;
 let pendingFrame = 0;
 
+// Tracks the connect/disconnect notification we last delivered to allowlisted
+// chats. Used by setTg to edge-trigger "(pi connected)" / "(pi disconnected)"
+// when the footer state actually toggles. Stored on globalThis (process-level)
+// so it survives Pi's module re-evaluation on /reload, /new, /resume, /fork —
+// the Node process keeps running across those, and we want the new module to
+// see the previous module's "connected" so it doesn't re-announce. Cleared
+// implicitly when the process exits (after /quit).
+const LAST_NOTIFIED_SENTINEL = Symbol.for(
+	"agents-team-telegram-bot-last-notified",
+);
+
+function getLastNotifiedState():
+	| "connected"
+	| "disconnected"
+	| undefined {
+	return (globalThis as { [k: symbol]: unknown })[
+		LAST_NOTIFIED_SENTINEL
+	] as "connected" | "disconnected" | undefined;
+}
+
+function setLastNotifiedState(value: "connected" | "disconnected"): void {
+	(globalThis as { [k: symbol]: unknown })[LAST_NOTIFIED_SENTINEL] = value;
+}
+
+// Wired up by the extension function on each module evaluation. Holds the
+// closure that has access to dctx/acquiredLock and broadcasts via the Telegram
+// API. setTg is module-level (called from the pending-frame timer too) so it
+// can't see those closures directly — this indirection bridges them.
+let notifyTransition: ((target: "connected" | "disconnected") => void) | undefined;
+
 function stopPending(): void {
 	if (pendingTimer) {
 		clearInterval(pendingTimer);
@@ -99,6 +129,27 @@ function setTg(ctx: ExtensionContext | undefined, value: TgState): void {
 	} catch {
 		// best-effort
 	}
+
+	// Edge-trigger Telegram notifications when the footer state actually
+	// toggles between connected (●) and disconnected (✗/off). "pending" is an
+	// in-flight state, not a real transition, so it's ignored. State lives on
+	// globalThis (see LAST_NOTIFIED_SENTINEL above) so /reload doesn't
+	// re-announce — the new module sees the prior "connected" and the
+	// target===previous early-return kicks in. notifyTransition gates on
+	// acquiredLock + writes the sentinel + broadcasts, so only the primary
+	// process drives this side-effect.
+	if (value === "pending") return;
+	const target: "connected" | "disconnected" =
+		value === "ready" ? "connected" : "disconnected";
+	const previous = getLastNotifiedState();
+	if (target === previous) return;
+	// Don't fire "(pi disconnected)" before we've ever fired "(pi connected)"
+	// in this process — a transient initial getMe/bringUp failure would
+	// otherwise send the user a phantom disconnect they didn't expect a
+	// counterpart for. State stays at `undefined` so a later successful
+	// ready→ready transition still announces correctly.
+	if (target === "disconnected" && previous === undefined) return;
+	notifyTransition?.(target);
 }
 
 // ---------- helpers ----------
@@ -227,6 +278,29 @@ export default function (pi: ExtensionAPI): void {
 	// Subagents and non-primary processes leave this false so they don't send
 	// connect/shutdown notices that the primary already covers.
 	let acquiredLock = false;
+
+	function broadcastConnectionStatus(text: string): void {
+		if (!process.env.TELEGRAM_BOT_TOKEN) return;
+		const chats =
+			dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
+		for (const chatId of chats) {
+			api.sendMessage(chatId, text).catch(() => undefined);
+		}
+	}
+
+	// Wire the module-level transition hook to this module instance's
+	// closure. Only the primary process broadcasts; subagents and other
+	// secondary processes stay silent so we don't duplicate notifications.
+	// State is written only when we actually broadcast — a non-primary
+	// observing the transition won't pin the sentinel, so the primary still
+	// sees the prior value and can emit when its setTg fires.
+	notifyTransition = (target) => {
+		if (!acquiredLock) return;
+		setLastNotifiedState(target);
+		broadcastConnectionStatus(
+			target === "connected" ? "(pi connected)" : "(pi disconnected)",
+		);
+	};
 
 	async function configureBot(): Promise<{
 		ok: boolean;
@@ -404,9 +478,23 @@ export default function (pi: ExtensionAPI): void {
 				}
 			}
 
+			// Manual connect — claim primary BEFORE any setTg call so the
+			// "(pi connected)" transition broadcast fires naturally via
+			// notifyTransition when bringUp flips the footer to ready. Skip
+			// if the session_start path already claimed it. tryAcquirePollLock
+			// no-ops if another live PID owns it; in that case that other
+			// process handles notifications and our setTg calls stay silent.
+			if (!acquiredLock) {
+				const forcePrimary = process.env.TELEGRAM_BOT_PRIMARY === "1";
+				if (forcePrimary || state.tryAcquirePollLock()) {
+					acquiredLock = true;
+				}
+			}
+
 			// Always (re-)configure the bot side: register slash commands + Menu
 			// button. Idempotent. Silent on success — the | TG ● footer cell
-			// is the success indicator.
+			// is the success indicator (and the broadcast goes out via the
+			// ready transition below).
 			setTg(ctx, "pending");
 			const cfg = await configureBot();
 			if (!cfg.ok) {
@@ -609,16 +697,14 @@ export default function (pi: ExtensionAPI): void {
 					}
 					await surfaceConnected(ctx, cfg.username ?? "?");
 
-					// On a fresh process boot (mirror of the "quit" shutdown notice),
-					// tell every allowlisted chat we're live. Skipped on reload/new/
-					// resume/fork so /reload doesn't spam every chat.
-					if (event.reason === "startup") {
-						const chats =
-							dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
-						for (const chatId of chats) {
-							api.sendMessage(chatId, "(pi connected)").catch(() => undefined);
-						}
-					}
+					// "(pi connected)" is no longer broadcast from here — the
+					// setTg("ready") inside bringUp above edge-triggers it via
+					// notifyTransition (which writes the globalThis sentinel
+					// and sends the message). The globalThis tracker is what
+					// keeps /reload/new/resume/fork from re-announcing: the
+					// previous module-instance already pinned "connected", so
+					// the new module's setTg("ready") becomes a no-op
+					// (target===previous).
 					return;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
@@ -676,6 +762,7 @@ export default function (pi: ExtensionAPI): void {
 					}),
 				]);
 			}
+			setLastNotifiedState("disconnected");
 		}
 
 		shutdownDriver();
