@@ -19,7 +19,6 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import matter from "gray-matter";
-import { revalidatePath } from "next/cache";
 import { getProjectsDir } from "@/lib/board";
 
 export const dynamic = "force-dynamic";
@@ -115,7 +114,10 @@ export async function POST(req: Request) {
   }
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/projects/${projectSlug}`);
+  // Revalidation is handled by the caller (the server action or the PM reply
+  // coordinator), not here. Calling revalidatePath from this API route can
+  // cause "used revalidatePath during render" errors when PM replies are
+  // triggered asynchronously via sweepStalePendings during a page render.
 
   return NextResponse.json({
     ok: true,

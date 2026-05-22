@@ -236,7 +236,7 @@ async function spawnPmReply(projectSlug: string, cardSlug: string): Promise<{ ok
   });
 }
 
-async function fireReply(projectSlug: string, cardSlug: string): Promise<void> {
+async function fireReply(projectSlug: string, cardSlug: string, shouldRevalidate: boolean): Promise<void> {
   pending.delete(cardKey(projectSlug, cardSlug));
   try {
     const res = await spawnPmReply(projectSlug, cardSlug);
@@ -251,9 +251,12 @@ async function fireReply(projectSlug: string, cardSlug: string): Promise<void> {
     console.error("[pm-reply] fireReply crashed:", (e as Error).message);
     await setPendingFlag(projectSlug, cardSlug, false).catch(() => {});
   }
-  // Revalidation handled by the caller (scheduleReply path) to avoid
-  // calling revalidatePath during render when sweepStalePendings fires
-  // a stale pending from within a server component.
+  // Revalidate only when called from scheduleReply's timer (not from sweep).
+  // Sweep is called lazily from addComment and may happen during a page
+  // render; calling revalidatePath there would trigger Next.js errors.
+  if (shouldRevalidate) {
+    revalidatePath(`/projects/${projectSlug}`);
+  }
 }
 
 /**
@@ -275,15 +278,12 @@ export async function scheduleReply(
   if (ms === 0) {
     // Test hook — fire synchronously.
     pending.delete(key);
-    await fireReply(projectSlug, cardSlug);
-    revalidatePath(`/projects/${projectSlug}`);
+    await fireReply(projectSlug, cardSlug, true);
     return;
   }
 
   const timer = setTimeout(() => {
-    void fireReply(projectSlug, cardSlug).then(() => {
-      revalidatePath(`/projects/${projectSlug}`);
-    });
+    void fireReply(projectSlug, cardSlug, true);
   }, ms);
   // Don't keep the process alive just for this timer.
   if (typeof timer.unref === "function") timer.unref();
@@ -332,7 +332,10 @@ export async function sweepStalePendings(): Promise<void> {
         const data = parsed.data as Record<string, unknown>;
         if (data.pm_reply_pending === true && !pending.has(cardKey(projectSlug, cardSlug))) {
           console.log(`[pm-reply] sweeping stale pending: ${projectSlug}/${cardSlug}`);
-          void fireReply(projectSlug, cardSlug);
+          // Don't revalidate from sweep — it may be called during a render.
+          // The user's next addComment or a manual page refresh will pick up
+          // the PM's reply.
+          void fireReply(projectSlug, cardSlug, false);
         }
       } catch {
         // Parse failure — skip.
