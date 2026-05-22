@@ -38,6 +38,23 @@ export type ProjectStatus = typeof PROJECT_STATUSES[number];
 export const PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
 export type Priority = typeof PRIORITIES[number];
 
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  p0: "P0",
+  p1: "P1",
+  p2: "P2",
+  p3: "P3",
+};
+
+export const COMMENT_ROLES = ["user", "pm", "engineer"] as const;
+export type CommentRole = typeof COMMENT_ROLES[number];
+
+export interface Comment {
+  author: string;
+  role: CommentRole;
+  ts: string;
+  body: string;
+}
+
 export interface Card {
   slug: string;
   title: string;
@@ -50,6 +67,7 @@ export interface Card {
   created: string | null;
   updated: string | null;
   body: string;
+  comments: Comment[];
   titlePending: boolean;
   warning: string | null;
 }

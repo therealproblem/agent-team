@@ -4,11 +4,14 @@ import path from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
 import {
+  COMMENT_ROLES,
   PERSONAS,
   PRIORITIES,
   PROJECT_STATUSES,
   STATUSES,
   type Card,
+  type Comment,
+  type CommentRole,
   type Persona,
   type Priority,
   type Project,
@@ -28,6 +31,13 @@ export function getProjectsDir(): string {
   return path.join(getVaultRoot(), "projects");
 }
 
+const commentSchema = z.object({
+  author: z.string().optional(),
+  role: z.string().optional(),
+  ts: z.union([z.string(), z.date()]).optional(),
+  body: z.string().optional(),
+});
+
 const cardFrontmatterSchema = z.object({
   title: z.string().optional(),
   status: z.string().optional(),
@@ -39,6 +49,7 @@ const cardFrontmatterSchema = z.object({
   created: z.union([z.string(), z.date()]).optional(),
   updated: z.union([z.string(), z.date()]).optional(),
   title_pending: z.boolean().optional(),
+  comments: z.array(commentSchema).optional(),
 });
 
 const projectFrontmatterSchema = z.object({
@@ -89,6 +100,37 @@ function coercePriority(p: unknown): Priority | null {
   return null;
 }
 
+function coerceCommentRole(r: unknown): CommentRole {
+  if (typeof r === "string" && (COMMENT_ROLES as readonly string[]).includes(r)) {
+    return r as CommentRole;
+  }
+  return "user";
+}
+
+function coerceTs(v: unknown): string {
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "string" && v.trim()) return v;
+  return "";
+}
+
+function coerceComments(input: unknown): Comment[] {
+  if (!Array.isArray(input)) return [];
+  const out: Comment[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") continue;
+    const c = raw as Record<string, unknown>;
+    const body = typeof c.body === "string" ? c.body.trim() : "";
+    if (!body) continue;
+    out.push({
+      author: typeof c.author === "string" && c.author.trim() ? c.author : "unknown",
+      role: coerceCommentRole(c.role),
+      ts: coerceTs(c.ts),
+      body,
+    });
+  }
+  return out;
+}
+
 async function parseCard(filePath: string): Promise<Card | null> {
   let raw: string;
   try {
@@ -120,6 +162,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
       created: null,
       updated: null,
       body: raw.trim(),
+      comments: [],
       titlePending: false,
       warning: parseError,
     };
@@ -139,6 +182,7 @@ async function parseCard(filePath: string): Promise<Card | null> {
     created: toIsoDate(obj.created),
     updated: toIsoDate(obj.updated),
     body: body.trim(),
+    comments: coerceComments(obj.comments),
     titlePending: obj.title_pending === true,
     warning: warning ?? (fm.success ? null : "Invalid frontmatter shape"),
   };
@@ -181,14 +225,18 @@ async function readProjectMeta(slug: string, projectDir: string): Promise<Projec
 
 async function listCardsInProject(projectDir: string): Promise<Card[]> {
   const boardDir = path.join(projectDir, "board");
-  let entries: string[];
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
-    entries = await fs.readdir(boardDir);
+    entries = await fs.readdir(boardDir, { withFileTypes: true });
   } catch {
     return [];
   }
+  // Skip _archive/ and dotfiles — archived cards live in board/_archive/<slug>.md.
+  const files = entries
+    .filter((e) => e.isFile() && e.name.endsWith(".md") && !e.name.startsWith("."))
+    .map((e) => e.name);
   const cards = await Promise.all(
-    entries.filter((f) => f.endsWith(".md")).map((f) => parseCard(path.join(boardDir, f))),
+    files.map((f) => parseCard(path.join(boardDir, f))),
   );
   return cards.filter((c): c is Card => c !== null);
 }
@@ -248,9 +296,11 @@ export async function listProjects(): Promise<Project[]> {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const slug = entry.name;
-    if (slug.startsWith(".")) continue;
+    // Skip dotfiles, the template, and the _archive sink.
+    if (slug.startsWith(".") || slug.startsWith("_")) continue;
     const projectDir = path.join(projectsDir, slug);
     const project = await readProjectMeta(slug, projectDir);
+    if (project.status === "archived") continue;
     const cards = await listCardsInProject(projectDir);
     project.cardCounts = countCards(cards);
     projects.push(project);
@@ -267,6 +317,7 @@ export async function listProjects(): Promise<Project[]> {
 }
 
 export async function loadProject(slug: string): Promise<{ project: Project; cards: Card[] } | null> {
+  if (slug.startsWith("_") || slug.startsWith(".")) return null;
   const projectDir = path.join(getProjectsDir(), slug);
   try {
     const stat = await fs.stat(projectDir);
@@ -275,6 +326,7 @@ export async function loadProject(slug: string): Promise<{ project: Project; car
     return null;
   }
   const project = await readProjectMeta(slug, projectDir);
+  if (project.status === "archived") return null;
   const cards = sortCards(await listCardsInProject(projectDir));
   project.cardCounts = countCards(cards);
   return { project, cards };

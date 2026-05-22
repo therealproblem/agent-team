@@ -3,7 +3,9 @@ import type { Project, Status } from "@/lib/board-types";
 import { STATUSES, STATUS_LABELS, PERSONA_LABELS } from "@/lib/board-types";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
 import { PERSONA_THEME, STATUS_TONE } from "./persona-theme";
+import { ProjectDeleteButton } from "./ProjectDeleteButton";
 
 const PROJECT_STATUS_TONE: Record<Project["status"], string> = {
   active: "bg-[var(--color-burnt-umber)] text-[var(--color-white)]",
@@ -84,6 +86,7 @@ export function ProjectIndex({ projects }: { projects: Project[] }) {
           ))}
         </div>
       )}
+      <Toaster />
     </main>
   );
 }
@@ -92,25 +95,26 @@ function ProjectTile({ project }: { project: Project }) {
   const total = totalCount(project.cardCounts);
   const ownerTheme = project.owner ? PERSONA_THEME[project.owner] : null;
   return (
-    <Link
-      href={`/board/${encodeURIComponent(project.slug)}`}
-      className="group"
-      data-no-style
-    >
-      <Card className="h-full gap-3 rounded-xl border border-border/70 px-5 py-4 transition-colors group-hover:border-[var(--color-burnt-umber)]">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="flex-1 font-serif text-lg font-semibold leading-tight text-foreground">
-            {project.name}
-          </h2>
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-              PROJECT_STATUS_TONE[project.status],
-            )}
-          >
-            {project.status}
-          </span>
-        </div>
+    <div className="group relative">
+      <Link
+        href={`/board/${encodeURIComponent(project.slug)}`}
+        className="block"
+        data-no-style
+      >
+        <Card className="h-full gap-3 rounded-xl border border-border/70 px-5 py-4 transition-colors group-hover:border-[var(--color-burnt-umber)]">
+          <div className="flex items-start justify-between gap-2 pr-7">
+            <h2 className="flex-1 font-serif text-lg font-semibold leading-tight text-foreground">
+              {project.name}
+            </h2>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                PROJECT_STATUS_TONE[project.status],
+              )}
+            >
+              {project.status}
+            </span>
+          </div>
 
         {project.description ? (
           <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
@@ -148,8 +152,10 @@ function ProjectTile({ project }: { project: Project }) {
             </span>
           </div>
         ) : null}
-      </Card>
-    </Link>
+        </Card>
+      </Link>
+      <ProjectDeleteButton projectSlug={project.slug} projectName={project.name} />
+    </div>
   );
 }
 

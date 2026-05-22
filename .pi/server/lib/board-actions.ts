@@ -6,6 +6,7 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import matter from "gray-matter";
 import { getProjectsDir } from "@/lib/board";
+import { STATUSES } from "@/lib/board-types";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 4000;
@@ -123,6 +124,10 @@ function slugify(input: string): string {
 }
 
 function isValidProjectSlug(slug: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/.test(slug) && !slug.includes("..");
+}
+
+function isValidCardSlug(slug: string): boolean {
   return /^[a-z0-9][a-z0-9-]*$/.test(slug) && !slug.includes("..");
 }
 
@@ -269,4 +274,197 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
   void generateTitleInBackground(projectSlug, cardSlug, trimmedDescription);
 
   return { ok: true, cardSlug, title: provisional };
+}
+
+const MAX_COMMENT_LENGTH = 4000;
+
+interface ActionResult {
+  ok: boolean;
+  error?: string;
+}
+
+function cardFilePath(projectSlug: string, cardSlug: string): string {
+  return path.join(getProjectsDir(), projectSlug, "board", `${cardSlug}.md`);
+}
+
+async function readCardFile(projectSlug: string, cardSlug: string) {
+  const filePath = cardFilePath(projectSlug, cardSlug);
+  const raw = await fs.readFile(filePath, "utf8");
+  const parsed = matter(raw);
+  return { filePath, parsed, data: { ...(parsed.data as Record<string, unknown>) } };
+}
+
+function todayIso(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
+
+export async function addComment(input: {
+  projectSlug: string;
+  cardSlug: string;
+  body: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "Comment cannot be empty." };
+  if (body.length > MAX_COMMENT_LENGTH) {
+    return { ok: false, error: `Comment too long (max ${MAX_COMMENT_LENGTH} chars).` };
+  }
+
+  let card;
+  try {
+    card = await readCardFile(projectSlug, cardSlug);
+  } catch {
+    return { ok: false, error: "Card not found." };
+  }
+  const { filePath, parsed, data } = card;
+
+  const comments = Array.isArray(data.comments) ? [...(data.comments as unknown[])] : [];
+  comments.push({
+    author: "joseph",
+    role: "user",
+    ts: new Date().toISOString(),
+    body,
+  });
+  data.comments = comments;
+  data.updated = todayIso();
+
+  await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  revalidatePath(`/board/${projectSlug}`);
+  return { ok: true };
+}
+
+async function ensureDir(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
+}
+
+export async function deleteCard(input: {
+  projectSlug: string;
+  cardSlug: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+
+  const src = cardFilePath(projectSlug, cardSlug);
+  const archiveDir = path.join(getProjectsDir(), projectSlug, "board", "_archive");
+  const dst = path.join(archiveDir, `${cardSlug}.md`);
+
+  // Sandbox check — both paths must live inside the project's board dir.
+  const boardDir = path.resolve(path.join(getProjectsDir(), projectSlug, "board"));
+  if (!path.resolve(src).startsWith(boardDir + path.sep)) {
+    return { ok: false, error: "Invalid card path." };
+  }
+
+  try {
+    await fs.access(src);
+  } catch {
+    return { ok: false, error: "Card not found." };
+  }
+  await ensureDir(archiveDir);
+  await fs.rename(src, dst);
+  revalidatePath(`/board/${projectSlug}`);
+  revalidatePath("/board");
+  return { ok: true };
+}
+
+export async function deleteProject(input: { projectSlug: string }): Promise<ActionResult> {
+  const { projectSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+
+  const projectsDir = getProjectsDir();
+  const src = path.join(projectsDir, projectSlug);
+  // Sandbox.
+  const root = path.resolve(projectsDir);
+  if (!path.resolve(src).startsWith(root + path.sep)) {
+    return { ok: false, error: "Invalid project path." };
+  }
+  try {
+    const stat = await fs.stat(src);
+    if (!stat.isDirectory()) return { ok: false, error: "Project not found." };
+  } catch {
+    return { ok: false, error: "Project not found." };
+  }
+
+  const archiveDir = path.join(projectsDir, "_archive");
+  await ensureDir(archiveDir);
+  // Stamp the project file so the archived snapshot reflects the new status.
+  const projectMd = path.join(src, "project.md");
+  try {
+    const raw = await fs.readFile(projectMd, "utf8");
+    const parsed = matter(raw);
+    const data = { ...(parsed.data as Record<string, unknown>) };
+    data.status = "archived";
+    data.updated = todayIso();
+    await fs.writeFile(projectMd, matter.stringify(parsed.content, data), "utf8");
+  } catch {
+    // No project.md or write failed — still archive the directory.
+  }
+
+  // Avoid clobbering an existing archived copy with the same slug.
+  let target = path.join(archiveDir, projectSlug);
+  let suffix = 1;
+  while (await pathExists(target)) {
+    target = path.join(archiveDir, `${projectSlug}-${suffix++}`);
+  }
+  await fs.rename(src, target);
+  revalidatePath("/board");
+  return { ok: true };
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function unblockCard(input: {
+  projectSlug: string;
+  cardSlug: string;
+  comment: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+  const comment = input.comment.trim();
+  if (!comment) {
+    return { ok: false, error: "An unblock comment is required." };
+  }
+  if (comment.length > MAX_COMMENT_LENGTH) {
+    return { ok: false, error: `Comment too long (max ${MAX_COMMENT_LENGTH} chars).` };
+  }
+
+  let card;
+  try {
+    card = await readCardFile(projectSlug, cardSlug);
+  } catch {
+    return { ok: false, error: "Card not found." };
+  }
+  const { filePath, parsed, data } = card;
+
+  if (data.status !== "blocked") {
+    return { ok: false, error: "Card is not blocked." };
+  }
+  if (!(STATUSES as readonly string[]).includes("backlog")) {
+    return { ok: false, error: "Unknown target status." };
+  }
+
+  const comments = Array.isArray(data.comments) ? [...(data.comments as unknown[])] : [];
+  comments.push({
+    author: "joseph",
+    role: "user",
+    ts: new Date().toISOString(),
+    body: `Unblocked: ${comment}`,
+  });
+  data.comments = comments;
+  data.status = "backlog";
+  data.updated = todayIso();
+
+  await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+  revalidatePath(`/board/${projectSlug}`);
+  return { ok: true };
 }

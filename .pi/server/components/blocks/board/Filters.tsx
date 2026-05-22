@@ -2,11 +2,19 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useMemo } from "react";
-import { PERSONAS, PERSONA_LABELS, SUB_PERSONAS, type Persona } from "@/lib/board-types";
+import {
+  PERSONAS,
+  PERSONA_LABELS,
+  PRIORITIES,
+  PRIORITY_LABELS,
+  SUB_PERSONAS,
+  type Persona,
+  type Priority,
+} from "@/lib/board-types";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PERSONA_THEME } from "./persona-theme";
+import { PERSONA_THEME, PRIORITY_DOT } from "./persona-theme";
 
 export function Filters() {
   const router = useRouter();
@@ -15,8 +23,12 @@ export function Filters() {
 
   const personaParam = searchParams.get("persona");
   const subParam = searchParams.get("sub");
+  const priorityParam = searchParams.get("priority");
   const activePersona = (PERSONAS as readonly string[]).includes(personaParam ?? "")
     ? (personaParam as Persona)
+    : null;
+  const activePriority = (PRIORITIES as readonly string[]).includes(priorityParam ?? "")
+    ? (priorityParam as Priority)
     : null;
 
   const setParams = useCallback(
@@ -42,6 +54,17 @@ export function Filters() {
       }
     },
     [activePersona, setParams],
+  );
+
+  const handlePriorityChange = useCallback(
+    (value: string) => {
+      if (value === activePriority || !value) {
+        setParams({ priority: null });
+      } else {
+        setParams({ priority: value });
+      }
+    },
+    [activePriority, setParams],
   );
 
   const subPersonas = useMemo(
@@ -82,16 +105,47 @@ export function Filters() {
             );
           })}
         </ToggleGroup>
-        {(activePersona || subParam) && (
+        {(activePersona || subParam || activePriority) && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs"
-            onClick={() => setParams({ persona: null, sub: null })}
+            onClick={() => setParams({ persona: null, sub: null, priority: null })}
           >
             Clear
           </Button>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          Priority
+        </span>
+        <ToggleGroup
+          type="single"
+          spacing={1}
+          value={activePriority ?? ""}
+          onValueChange={handlePriorityChange}
+          className="flex-wrap"
+        >
+          {PRIORITIES.map((p) => {
+            const active = activePriority === p;
+            return (
+              <ToggleGroupItem
+                key={p}
+                value={p}
+                aria-label={`Filter ${PRIORITY_LABELS[p]}`}
+                className={cn(
+                  "h-7 gap-1.5 rounded-full border border-border/70 px-2.5 text-xs font-medium",
+                  active && "ring-2 ring-offset-1 ring-[var(--color-burnt-umber)]",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", PRIORITY_DOT[p])} />
+                {PRIORITY_LABELS[p]}
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
       </div>
 
       {activePersona && subPersonas.length > 0 ? (

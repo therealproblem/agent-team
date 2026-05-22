@@ -10,11 +10,13 @@ export function Column({
   status,
   cards,
   cardBodies,
+  projectSlug,
   dimmed,
 }: {
   status: Status;
   cards: BoardCard[];
   cardBodies: Record<string, ReactNode>;
+  projectSlug: string;
   dimmed?: boolean;
 }) {
   return (
@@ -39,7 +41,12 @@ export function Column({
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">No cards</p>
           ) : (
             cards.map((c) => (
-              <CardItem key={c.slug} card={c} bodyContent={cardBodies[c.slug] ?? null} />
+              <CardItem
+                key={c.slug}
+                card={c}
+                projectSlug={projectSlug}
+                bodyContent={cardBodies[c.slug] ?? null}
+              />
             ))
           )}
         </div>

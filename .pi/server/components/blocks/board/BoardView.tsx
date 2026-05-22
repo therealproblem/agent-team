@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, FileText, Plus } from "lucide-react";
 import type { Card as BoardCard, Project, Status } from "@/lib/board-types";
-import { STATUSES, PERSONAS, type Persona } from "@/lib/board-types";
+import { STATUSES, PERSONAS, PRIORITIES, type Persona, type Priority } from "@/lib/board-types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +35,7 @@ export function BoardView({
   const searchParams = useSearchParams();
   const personaParam = searchParams.get("persona");
   const subParam = searchParams.get("sub");
+  const priorityParam = searchParams.get("priority");
 
   const hasPendingTitle = useMemo(() => cards.some((c) => c.titlePending), [cards]);
   useEffect(() => {
@@ -53,6 +54,9 @@ export function BoardView({
   const activePersona = (PERSONAS as readonly string[]).includes(personaParam ?? "")
     ? (personaParam as Persona)
     : null;
+  const activePriority = (PRIORITIES as readonly string[]).includes(priorityParam ?? "")
+    ? (priorityParam as Priority)
+    : null;
 
   const [requestOpen, setRequestOpen] = useState(false);
 
@@ -60,9 +64,10 @@ export function BoardView({
     return cards.filter((c) => {
       if (activePersona && c.persona !== activePersona) return false;
       if (subParam && c.sub_persona !== subParam) return false;
+      if (activePriority && c.priority !== activePriority) return false;
       return true;
     });
-  }, [cards, activePersona, subParam]);
+  }, [cards, activePersona, subParam, activePriority]);
 
   const byStatus = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, [] as BoardCard[]])) as Record<
@@ -160,6 +165,7 @@ export function BoardView({
             status={s}
             cards={byStatus[s]}
             cardBodies={cardBodies}
+            projectSlug={project.slug}
             dimmed={s === "done"}
           />
         ))}
