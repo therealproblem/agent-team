@@ -537,9 +537,8 @@ export async function reopenCard(input: {
     return { ok: false, error: "Card is not done." };
   }
 
-  // Revert to in_progress unless the card tracks a better prior state.
-  // For now, we'll use in_progress as the safe default.
-  data.status = "in_progress";
+  // Reopen to backlog so the card can be re-prioritized and picked up again.
+  data.status = "backlog";
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
