@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { Card as BoardCard, Status } from "@/lib/board-types";
 import { STATUS_LABELS } from "@/lib/board-types";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { CardItem } from "./CardItem";
 import { STATUS_TONE } from "./persona-theme";
@@ -37,7 +36,11 @@ export function Column({
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">{cards.length}</span>
       </header>
-      <ScrollArea className="min-h-0 flex-1">
+      {/* Native overflow-y-auto rather than Radix ScrollArea: the Radix
+          variant defaults to type="hover" and injects CSS that hides the
+          native scrollbar, so wheel-scroll has no visible affordance and
+          touchpad users assume the column doesn't scroll. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-2 p-2">
           {cards.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">No cards</p>
@@ -53,7 +56,7 @@ export function Column({
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
     </section>
   );
 }
