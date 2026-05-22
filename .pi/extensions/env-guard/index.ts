@@ -78,6 +78,21 @@ const ALWAYS_REDACT_PATTERNS: RegExp[] = [
 	/^.*_KEY$/i,
 ];
 
+/**
+ * Keys that are *inferred* safe by naming convention, in addition to the
+ * explicit SAFE_KEYS list. Anything containing `PUBLIC` is treated as
+ * non-secret by design — that's the standard convention (e.g.
+ * `NEXT_PUBLIC_*`, `*_PUBLIC_URL`). If you stash a secret in a
+ * `*PUBLIC*` var you're fighting the convention; don't do that.
+ *
+ * The check fires *after* SAFE_KEYS but *before* ALWAYS_REDACT_PATTERNS,
+ * so a key like `PUBLIC_TOKEN` would still be redacted (TOKEN trumps
+ * PUBLIC — a public token is a contradiction, treat it as a secret).
+ */
+const SAFE_KEY_PATTERNS: RegExp[] = [
+	/PUBLIC/i,
+];
+
 interface EnvSecret {
 	key: string;
 	value: string;
@@ -112,9 +127,31 @@ function parseEnvFile(envPath: string): Record<string, string> {
 	return out;
 }
 
-function isSensitiveKey(key: string): boolean {
-	if (SAFE_KEYS.has(key)) return false;
+function matchesAlwaysRedact(key: string): boolean {
 	return ALWAYS_REDACT_PATTERNS.some((p) => p.test(key));
+}
+
+function matchesSafePattern(key: string): boolean {
+	return SAFE_KEY_PATTERNS.some((p) => p.test(key));
+}
+
+/**
+ * Decide whether this env entry is safe to surface in chat replies.
+ *
+ * Precedence:
+ *   1. ALWAYS_REDACT_PATTERNS — wins over everything ("PUBLIC_TOKEN" is
+ *      still a secret).
+ *   2. SAFE_KEYS — explicit allowlist for well-known infrastructure keys.
+ *   3. SAFE_KEY_PATTERNS — naming-convention allowlist (`*PUBLIC*`).
+ *   4. Length heuristic — values shorter than MIN_SECRET_LENGTH are not
+ *      treated as secrets by default (too noisy to redact "true" / "8080" /
+ *      "dev").
+ */
+function isSafeKey(key: string): boolean {
+	if (matchesAlwaysRedact(key)) return false;
+	if (SAFE_KEYS.has(key)) return true;
+	if (matchesSafePattern(key)) return true;
+	return false;
 }
 
 /**
@@ -127,8 +164,10 @@ function rebuildSecrets(): void {
 	const fresh: EnvSecret[] = [];
 	for (const [key, value] of Object.entries(parsed)) {
 		if (!value) continue;
-		const sensitive = isSensitiveKey(key);
-		if (SAFE_KEYS.has(key)) continue;
+		if (isSafeKey(key)) continue;
+		// Otherwise: treat as a secret if the key matches a sensitive pattern,
+		// or if the value is long enough to plausibly be one.
+		const sensitive = matchesAlwaysRedact(key);
 		if (!sensitive && value.length < MIN_SECRET_LENGTH) continue;
 		fresh.push({ key, value });
 	}
