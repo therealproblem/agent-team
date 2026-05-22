@@ -4,6 +4,7 @@ import { STATUSES, STATUS_LABELS, PERSONA_LABELS } from "@/lib/board-types";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
+import { AutoRefresh } from "./AutoRefresh";
 import { PERSONA_THEME, STATUS_TONE } from "./persona-theme";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 
@@ -86,6 +87,7 @@ export function ProjectIndex({ projects }: { projects: Project[] }) {
           ))}
         </div>
       )}
+      <AutoRefresh />
       <Toaster />
     </main>
   );

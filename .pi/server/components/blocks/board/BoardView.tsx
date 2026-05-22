@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Toaster } from "@/components/ui/sonner";
+import { AutoRefresh } from "./AutoRefresh";
 import { Column } from "./Column";
 import { Filters } from "./Filters";
 import { RequestForm } from "./RequestForm";
@@ -38,9 +39,9 @@ export function BoardView({
   const priorityParam = searchParams.get("priority");
   const cardParam = searchParams.get("card");
 
-  // Poll while anything is in-flight: a title is being generated for a fresh
-  // request, OR a PM reply is being drafted in the background. The PM reply
-  // can take longer (engineer spawn, etc.) so the cap is wider.
+  // Faster cadence while anything is in-flight (title gen, PM reply draft) so
+  // the user sees the spinner resolve quickly. The always-on <AutoRefresh />
+  // below handles the idle baseline for agent-driven edits.
   const hasPendingTitle = useMemo(() => cards.some((c) => c.titlePending), [cards]);
   const hasPendingReply = useMemo(() => cards.some((c) => c.pmReplyPending), [cards]);
   const polling = hasPendingTitle || hasPendingReply;
@@ -48,7 +49,8 @@ export function BoardView({
     if (!polling) return;
     const start = Date.now();
     // Title gen is capped at ~45s; PM reply can run a few minutes if it
-    // spawns engineer for feasibility. Stop polling after 10 min either way.
+    // spawns engineer for feasibility. Stop fast-polling after 10 min either
+    // way — the idle <AutoRefresh /> still catches eventual changes.
     const cap = hasPendingReply ? 600_000 : 90_000;
     const interval = setInterval(() => {
       if (Date.now() - start > cap) {
@@ -184,6 +186,7 @@ export function BoardView({
           ))}
         </div>
       </div>
+      <AutoRefresh />
       <Toaster />
     </div>
   );
