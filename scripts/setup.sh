@@ -485,7 +485,70 @@ mkdir -p "$EXPORT_ROOT"
 ok "exports/ root in place"
 
 # ---------------------------------------------------------------------------
-# 13. Nextra server npm install
+# 13. renders/ real directory (generated MDX sources)
+#
+# Generated MDX files now live at <repo>/renders/ (a real directory at repo
+# root, same pattern as exports/ for PDFs). This replaced the prior symlink
+# approach. Idempotent: detects existing symlink pointing to the old location
+# (.pi/server/content/v), migrates files, removes symlink, and creates the
+# real directory. If renders/ already exists as a directory, nothing changes.
+# ---------------------------------------------------------------------------
+
+RENDERS_DIR="${REPO_ROOT}/renders"
+OLD_RENDERS_TARGET="${REPO_ROOT}/.pi/server/content/v"
+
+if [[ -L "$RENDERS_DIR" ]]; then
+	# Symlink exists from the old setup — migrate files and convert to real dir.
+	CURRENT_TARGET="$(readlink "$RENDERS_DIR")"
+	info "migrating renders/ from symlink to real directory…"
+	
+	# Resolve the symlink target to an absolute path.
+	if [[ "$CURRENT_TARGET" == /* ]]; then
+		RESOLVED_TARGET="$CURRENT_TARGET"
+	else
+		RESOLVED_TARGET="${REPO_ROOT}/${CURRENT_TARGET}"
+	fi
+	
+	# Copy files if the target exists and has content.
+	if [[ -d "$RESOLVED_TARGET" ]]; then
+		FILE_COUNT=$(find "$RESOLVED_TARGET" -maxdepth 1 -name "*.mdx" | wc -l | tr -d ' ')
+		if (( FILE_COUNT > 0 )); then
+			info "copying ${FILE_COUNT} .mdx file(s) from ${RESOLVED_TARGET}…"
+			# Create a temporary directory to hold the files.
+			TMP_DIR="${REPO_ROOT}/.renders-migration-tmp"
+			mkdir -p "$TMP_DIR"
+			cp "${RESOLVED_TARGET}/"*.mdx "$TMP_DIR/" 2>/dev/null || true
+			# Remove the symlink.
+			rm "$RENDERS_DIR"
+			# Create the real directory.
+			mkdir -p "$RENDERS_DIR"
+			# Move files from temp to new location.
+			mv "$TMP_DIR/"*.mdx "$RENDERS_DIR/" 2>/dev/null || true
+			rmdir "$TMP_DIR"
+			ok "migrated ${FILE_COUNT} files to renders/"
+		else
+			# No files to migrate — just remove symlink and create directory.
+			rm "$RENDERS_DIR"
+			mkdir -p "$RENDERS_DIR"
+			ok "converted renders/ from symlink to real directory (no files to migrate)"
+		fi
+	else
+		# Target doesn't exist — just remove symlink and create directory.
+		rm "$RENDERS_DIR"
+		mkdir -p "$RENDERS_DIR"
+		ok "converted renders/ from symlink to real directory"
+	fi
+elif [[ -d "$RENDERS_DIR" ]]; then
+	# Already a real directory — nothing to do.
+	ok "renders/ directory already exists"
+else
+	# Nothing at renders/ — create the directory.
+	mkdir -p "$RENDERS_DIR"
+	ok "renders/ directory created"
+fi
+
+# ---------------------------------------------------------------------------
+# 14. Nextra server npm install
 #
 # .pi/server/ is the local Next.js + Nextra app that serves rendered
 # presentations (/v/...) and exported PDFs (/p/...). Its node_modules/ is
@@ -560,7 +623,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 14. Nextra server production build
+# 15. Nextra server production build
 #
 # Pre-build the Next.js app so `pi` (or any caller) can start it via
 # `next start` in production mode instead of `next dev`. Production mode
@@ -595,7 +658,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 15. news-cron crontab entry
+# 16. news-cron crontab entry
 #
 # `scripts/news-cron.sh` calls `pi --no-session` against the news-ingest
 # extension's `refresh_all_topics` tool. Without an installed crontab line
@@ -639,7 +702,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 16. Legacy artifact cleanup
+# 17. Legacy artifact cleanup
 #
 # Removes folders, tmp files, and Docker containers left behind by earlier
 # experiments — old frontend attempts (pi-rpc-shim, Open WebUI, piclaw) and
@@ -683,7 +746,7 @@ if [[ "$removed_any" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 17. Unicode Braille support (loading indicator)
+# 18. Unicode Braille support (loading indicator)
 #
 # Pi and friends animate loading spinners with U+2800–U+28FF Braille Patterns
 # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏). These render correctly only when:

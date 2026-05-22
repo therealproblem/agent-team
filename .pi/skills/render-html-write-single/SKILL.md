@@ -35,7 +35,7 @@ When does the guard trip even though you came from the planner?
 
 1. Refuses early if the threshold guard fires.
 2. Derives the slug as `<YYYY-MM-DD>-<slugify(title)>` — the same derivation the planner used, so the URL matches.
-3. Creates `.pi/server/content/v/` if missing.
+3. Creates `renders/` if missing.
 4. Cleans up any stale `<base-slug>-part-N-…mdx` files left over from a prior multipart render under the same base, so a switch from multipart to single doesn't leave coexisting flavors.
 5. Strips raw HTML / JSX tags from the body (defense-in-depth — MDX is fragile and a stray `<div>` crashes compilation). Reports `html_stripped_count`.
 6. Prepends frontmatter (`title`, `sidebar: false`) and writes the `.mdx`.

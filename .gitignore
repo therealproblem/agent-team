@@ -5,8 +5,7 @@ data/
 # if you'd rather point at your real Obsidian vault.
 vault/
 
-# Legacy file:// renders folder — migrated to the Next.js server's content/v/.
-# Kept ignored so any stray writes stay out of git.
+# Generated MDX renders — runtime content read by Nextra.
 renders/
 
 # Canonical export root for write_export_pdf. The Next.js server serves
@@ -21,9 +20,11 @@ exports/
 .pi/server/.next/
 .pi/server/next-env.d.ts
 *.tsbuildinfo
+# Legacy MDX location (now migrated to root renders/). Kept ignored in case
+# of stray writes during migration or manual edits.
+.pi/server/content/v/
 # Runtime-generated presentation artifacts (URL date-slug paths) and any
 # images/assets the server writes under public/p for them.
-.pi/server/content/v/
 .pi/server/public/p/
 # Transient export-HTML staging — written, rendered to PDF, then deleted.
 # Retained on Chrome failure for manual recovery.

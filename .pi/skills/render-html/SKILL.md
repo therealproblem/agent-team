@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — DISPATCHES rendering of a vault markdown note to an isolated `render-html` subagent so the parent session's context window stays clean. The subagent reads the source, transforms it, plans single vs multipart via `plan_html_render`, writes the `.mdx` file(s) at `<repo>/.pi/server/content/v/`, verifies they compile, and returns the URL(s). The parent's job is just to decide *whether* to delegate (call/skip rules below), compose the task string, and surface returned URLs to the user. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work.
+description: Layer 3 shared skill — DISPATCHES rendering of a vault markdown note to an isolated `render-html` subagent so the parent session's context window stays clean. The subagent reads the source, transforms it, plans single vs multipart via `plan_html_render`, writes the `.mdx` file(s) at `<repo>/renders/`, verifies they compile, and returns the URL(s). The parent's job is just to decide *whether* to delegate (call/skip rules below), compose the task string, and surface returned URLs to the user. Personas call this AFTER `note-taker` has saved the markdown, and only when an interactive reading experience is worth the work.
 ---
 
 # Render HTML (dispatcher)
@@ -30,7 +30,7 @@ This isolation is the point: a long curriculum render that would burn 20k tokens
 Every rendered Mermaid block carries a 1-based `Chart N` caption (numbering resets per part on multipart). When the user references a chart by number — *"render chart 3 as a table"*, *"swap part 2 chart 1 for a bullet list"* — **do not redispatch to the subagent**. The fix is local:
 
 1. Locate the Nth fenced ```mermaid``` block in the vault source `.md`.
-2. Make the same swap in the corresponding `.mdx` under `.pi/server/content/v/`. For multipart, find the part's slug from the user's reference ("part 2") and edit only that file. Single-page renders have one `.mdx` to edit.
+2. Make the same swap in the corresponding `.mdx` under `renders/`. For multipart, find the part's slug from the user's reference ("part 2") and edit only that file. Single-page renders have one `.mdx` to edit.
 3. Replace both with the requested alternative (GFM table, bullet list, prose, etc.). Apply the same content transform to both files so they stay in sync.
 4. No re-dispatch, no replan, no re-verify. `/v/[slug]` is `force-dynamic` — the next page load picks up the change. Tell the user the chart was swapped and the existing URL still works.
 

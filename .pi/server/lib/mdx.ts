@@ -21,7 +21,7 @@ import { mdxComponents } from "@/components/docs/mdx-components";
 import { extractToc, type TocEntry } from "@/lib/toc";
 
 export const CONTENT_DIR = path.resolve(process.cwd(), "content");
-export const V_DIR = path.join(CONTENT_DIR, "v");
+export const V_DIR = path.resolve(process.cwd(), "..", "..", "renders");
 
 export interface CompiledMdx {
   content: React.ReactNode;

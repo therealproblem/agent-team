@@ -9,7 +9,7 @@
  *                          backlinks, and tag search work. Called by the
  *                          `note-taker` skill (Layer 3).
  *   - `write_html_render` — markdown body, written as `.mdx` into the
- *                            Next.js server's `content/v/` directory.
+ *                            root `renders/` directory.
  *                            Nextra serves it at `/v/<YYYY-MM-DD>-<slug>`.
  *                            Re-running the same title on the same day
  *                            overwrites the file; the URL stays stable.
@@ -53,6 +53,7 @@
  *   AGENTS_TEAM_VAULT_PATH        — default: <cwd>/vault
  *   AGENTS_TEAM_SERVER_PATH       — default: <cwd>/.pi/server
  *   AGENTS_TEAM_EXPORT_PATH       — default: <cwd>/exports
+ *   AGENTS_TEAM_RENDERS_PATH      — default: <cwd>/renders
  *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080. If the
  *                                   user has set this (typically to a tunnel
  *                                   hostname), returned URLs use it
@@ -102,6 +103,9 @@ const SERVER_ROOT = resolve(
 );
 const EXPORT_ROOT = resolve(
 	process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
+);
+const RENDERS_ROOT = resolve(
+	process.env.AGENTS_TEAM_RENDERS_PATH ?? join(process.cwd(), "renders"),
 );
 
 // Resolve fresh per call so a `.env` edit after pi launches is picked up
@@ -504,7 +508,7 @@ async function writeMultipartRender(params: MultipartWriteParams) {
 		params.title,
 		params.parts.map((p) => p.title),
 	);
-	const dir = join(SERVER_ROOT, "content", "v");
+	const dir = RENDERS_ROOT;
 	const partsMeta = partSlugs.map((slug, i) => ({
 		slug,
 		title: params.parts[i].title,
@@ -805,7 +809,7 @@ const planHtmlRender = defineTool({
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 		try {
 			const sourceLines = countLines(params.markdown);
-			const dir = join(SERVER_ROOT, "content", "v");
+			const dir = RENDERS_ROOT;
 			const baseSlug = `${todayIso()}-${slugify(params.title)}`;
 
 			const planSingle = (skippedReason?: string) => {
@@ -897,7 +901,7 @@ const writeHtmlRender = defineTool({
 	name: "write_html_render",
 	label: "Write HTML Render",
 	description:
-		"Write a markdown body as a SINGLE `.mdx` page into the local Nextra server's `content/v/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. **This tool is the single-page leg of the `render-html` skill family — it does not split.** The orchestrator skill must call `plan_html_render` first; if that returns `mode: single` (or you have a specific reason to force a single page on a long body) call this tool. If the body exceeds ~1200 lines and `force_single` is not set, this tool refuses and tells you to plan first, since a single page would render unreadably. Markdown body only — no `<!doctype>`, `<html>`, `<head>`, `<style>`, `<script>`. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a markdown body as a SINGLE `.mdx` page into the root `renders/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. **This tool is the single-page leg of the `render-html` skill family — it does not split.** The orchestrator skill must call `plan_html_render` first; if that returns `mode: single` (or you have a specific reason to force a single page on a long body) call this tool. If the body exceeds ~1200 lines and `force_single` is not set, this tool refuses and tells you to plan first, since a single page would render unreadably. Markdown body only — no `<!doctype>`, `<html>`, `<head>`, `<style>`, `<script>`. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -942,7 +946,7 @@ const writeHtmlRender = defineTool({
 			}
 
 			const slug = `${todayIso()}-${slugify(params.title)}`;
-			const dir = join(SERVER_ROOT, "content", "v");
+			const dir = RENDERS_ROOT;
 			const path = join(dir, `${slug}.mdx`);
 			const url = `${serverPublicUrl()}/v/${slug}`;
 
@@ -1028,7 +1032,7 @@ const writeHtmlRender = defineTool({
  * too large to render on a single HTML page (rule of thumb: ~2000+ lines,
  * or any curriculum / research doc whose single-page render visibly bloats
  * the browser). The caller supplies an array of parts; each part becomes
- * its own `.mdx` file at `content/v/<base>-part-<N>-<part-slug>.mdx` and
+ * its own `.mdx` file at `renders/<base>-part-<N>-<part-slug>.mdx` and
  * its frontmatter carries the full `parts` list plus the current
  * `part_slug`, which the DocLayout reads to render a "Parts" nav block
  * above the on-page TOC. Re-running on the same overall title on the same
@@ -1040,7 +1044,7 @@ const writeHtmlRenderMultipart = defineTool({
 	name: "write_html_render_multipart",
 	label: "Write HTML Render (multi-part)",
 	description:
-		"Write a long markdown source as a SET of `.mdx` part pages into the local Next.js server's `content/v/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. **This is the multi-part leg of the `render-html` skill family.** The orchestrator skill calls `plan_html_render` first; when it returns `mode: multipart`, pass `parts: plan.parts` directly into this tool (the planner produces the exact part shape this tool expects — same titles, same ordering, same markdown bodies). Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. URLs from the plan match the URLs this tool serves — same slug derivation. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a long markdown source as a SET of `.mdx` part pages into the root `renders/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. **This is the multi-part leg of the `render-html` skill family.** The orchestrator skill calls `plan_html_render` first; when it returns `mode: multipart`, pass `parts: plan.parts` directly into this tool (the planner produces the exact part shape this tool expects — same titles, same ordering, same markdown bodies). Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. URLs from the plan match the URLs this tool serves — same slug derivation. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:

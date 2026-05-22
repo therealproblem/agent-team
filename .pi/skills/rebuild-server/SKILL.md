@@ -44,7 +44,7 @@ If you're iterating on server code frequently, dev mode is faster. For one-off f
 
 - **Server won't start after rebuild:** Check `.pi/state/server.log` for spawn errors. Common causes: port 8080 already bound, missing `node_modules/`, syntax error in server code.
 - **Rebuild fails:** `cd .pi/server && npm run build` directly to see the error. Usually a TypeScript error, missing dependency, or invalid Next.js config.
-- **Routes still 404 after rebuild:** Verify the `.mdx` file exists at `.pi/server/content/v/<slug>.mdx` or `.pi/server/content/p/<slug>/index.mdx`. If it's there, check the file compiles (no syntax errors in the MDX). If it's missing, the `render-html` skill may have been skipped or errored — check the card outcome.
+- **Routes still 404 after rebuild:** Verify the `.mdx` file exists at `renders/<slug>.mdx` or `.pi/server/content/p/<slug>/index.mdx`. If it's there, check the file compiles (no syntax errors in the MDX). If it's missing, the `render-html` skill may have been skipped or errored — check the card outcome.
 
 ## See also
 
