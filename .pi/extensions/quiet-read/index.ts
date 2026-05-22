@@ -13,7 +13,8 @@
  * built-in are dropped. If you need those back, adjust here.
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readFileSync, stat } from "node:fs";
+import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -37,6 +38,21 @@ const readSchema = Type.Object({
 	),
 });
 
+interface PersonaRegistry {
+	personas: Record<string, unknown>;
+	subagents: Record<string, unknown>;
+}
+
+let personaNames: Set<string> | null = null;
+
+function loadPersonaNames(): Set<string> {
+	if (personaNames) return personaNames;
+	const registryPath = resolve(REPO_ROOT, ".pi/state/persona-registry.json");
+	const registry: PersonaRegistry = JSON.parse(readFileSync(registryPath, "utf-8"));
+	personaNames = new Set(Object.keys(registry.personas));
+	return personaNames;
+}
+
 /**
  * Describe what a file is *for*, given its absolute path. Falls back
  * to `read <basename>` when nothing more specific fits.
@@ -46,11 +62,16 @@ function describePurpose(absolutePath: string): string {
 		? absolutePath.slice(REPO_ROOT.length + 1)
 		: absolutePath;
 
-	const persona = rel.match(/^\.pi\/skills\/(pm|engineer|educator|language|trader)\/SKILL\.md$/);
-	if (persona) return `adopt ${persona[1]} persona`;
-
-	const skill = rel.match(/^\.pi\/skills\/([^/]+)\/SKILL\.md$/);
-	if (skill) return `load ${skill[1]} skill`;
+	// Check if it's a persona skill
+	const personaMatch = rel.match(/^\.pi\/skills\/([^/]+)\/SKILL\.md$/);
+	if (personaMatch) {
+		const skillName = personaMatch[1];
+		const personas = loadPersonaNames();
+		if (personas.has(skillName)) {
+			return `adopt ${skillName} persona`;
+		}
+		return `load ${skillName} skill`;
+	}
 
 	const profile = rel.match(/^\.pi\/state\/profiles\/([^/]+)\.md$/);
 	if (profile) return `load ${profile[1]} profile`;
@@ -87,7 +108,7 @@ const quietRead = defineTool({
 		if (signal?.aborted) throw new Error("Operation aborted");
 
 		try {
-			await stat(absolutePath);
+			await statAsync(absolutePath);
 		} catch (e) {
 			return {
 				content: [
@@ -100,7 +121,7 @@ const quietRead = defineTool({
 			};
 		}
 
-		const buf = await readFile(absolutePath);
+		const buf = await readFileAsync(absolutePath);
 		if (signal?.aborted) throw new Error("Operation aborted");
 
 		const text = buf.toString("utf-8");

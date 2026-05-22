@@ -169,8 +169,8 @@ export function BoardView({
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1600px] flex-1 overflow-hidden px-4 pb-6 md:px-6 md:pb-8">
-        <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
+      <div className="mx-auto w-full max-w-[1600px] flex-1 overflow-x-auto px-4 pb-6 md:px-6 md:pb-8">
+        <div className="grid h-full min-h-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-7">
           {STATUSES.map((s) => (
             <Column
               key={s}

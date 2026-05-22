@@ -658,6 +658,20 @@ export default function (pi: ExtensionAPI): void {
 			return;
 		}
 
+		// Belt-and-braces: check for duplicate Pi processes at startup. The file
+		// lock prevents simultaneous polling within a race window, but if multiple
+		// Pi processes are alive concurrently (e.g., user ran `pi` twice in
+		// different panes), they'll alternate acquiring the lock as they
+		// start/restart, causing persistent 409 conflicts. Surface a warning so
+		// the user knows to kill the duplicates.
+		const dupCheck = state.checkForDuplicatePiProcesses();
+		if (dupCheck.hasDuplicates) {
+			surface(
+				pi,
+				`telegram-bot: WARNING — ${dupCheck.pids.length} other Pi process${dupCheck.pids.length === 1 ? "" : "es"} detected (PID${dupCheck.pids.length === 1 ? "" : "s"}: ${dupCheck.pids.join(", ")}). Kill duplicate${dupCheck.pids.length === 1 ? "" : "s"} to prevent 409 conflicts: kill ${dupCheck.pids.join(" ")}`,
+			);
+		}
+
 		// At this point: token is set AND we acquired the polling lock.
 		acquiredLock = true;
 		setTg(ctx, "pending");
@@ -742,6 +756,16 @@ export default function (pi: ExtensionAPI): void {
 		acquiredLock = false;
 		stopPending();
 		loop.stop();
+
+		// Release the poll lock if this instance acquired it, so the next
+		// module instance (on /reload, /new, /resume) can immediately re-acquire
+		// without waiting for the 10-minute stale-lock timeout. Without this,
+		// session swaps within the same process leave the lock file pointing at
+		// the current PID, and tryAcquirePollLock correctly treats "same PID,
+		// fresh timestamp" as "held by another live module" → fails to acquire.
+		if (wasPrimary) {
+			state.releasePollLock();
+		}
 
 		// Only the primary process (the one that owned the poll lock) sends the
 		// shutdown notice. Subagents and other non-primary processes inherit the

@@ -25,13 +25,32 @@
  *
  * Other pi slash commands (/resume, /fork, /export, …) are not routed yet —
  * /resume needs a session picker, /fork needs an entry id, etc.
+ *
+ * Personas are loaded from `.pi/state/persona-registry.json` — the canonical
+ * registry. Adding/removing/renaming a persona requires updating only that
+ * file plus the persona's SKILL.md. Engineer is included as a valid mention
+ * target (routes via pm) even though it's a subagent, not a persona.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { TelegramUpdate } from "./api";
 import { loadChatState } from "./state";
 
-export const PERSONAS = ["pm", "engineer", "educator", "language", "trader"] as const;
-export type Persona = (typeof PERSONAS)[number];
+interface PersonaRegistry {
+	personas: Record<string, unknown>;
+	subagents: Record<string, unknown>;
+}
+
+function loadPersonas(): string[] {
+	const registryPath = resolve(process.cwd(), ".pi/state/persona-registry.json");
+	const registry: PersonaRegistry = JSON.parse(readFileSync(registryPath, "utf-8"));
+	// Include both personas and engineer subagent as valid mention targets
+	return [...Object.keys(registry.personas), "engineer"];
+}
+
+export const PERSONAS = loadPersonas();
+export type Persona = string;
 
 export type Decision =
 	| {

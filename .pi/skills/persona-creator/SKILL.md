@@ -45,9 +45,9 @@ Files always land at:
 Pi auto-discovers files in `.pi/skills/`, `.pi/agents/`, and `.pi/extensions/`, so the new component is *callable* the moment the file exists. But it isn't *findable by humans or other agents* until you patch the human-readable indexes:
 
 - **New persona** → all of:
-  - Add a row to `AGENTS.md` "Directory layout" table and `.pi/SYSTEM.md` "Personas" table.
-  - **`.pi/extensions/statusline/index.ts`** — append the persona slug to the `PERSONAS` array AND to the `SKILL_REGEX` alternation. Without this the persona never lights up on the footer's persona row, even when adopted, and the `tool_call` hook that watches for SKILL.md reads will ignore it.
-  - **`.pi/extensions/quiet-read/index.ts`** — extend the `persona` regex in `describePurpose` to include the new slug so `read .pi/skills/<new>/SKILL.md` renders as `adopt <new> persona` instead of the generic skill label.
+  - **`.pi/state/persona-registry.json`** — add a new key under `personas` with `label` (2-4 uppercase chars for statusline), `description`, `skillPath`, and `innerSkills` array. This is the canonical source of truth. Statusline, Telegram bot, quiet-read, and board docs all load from this registry.
+  - Add a row to `.pi/SYSTEM.md` "Personas" table (the "Domain" and "When to adopt" columns are prose that can't be auto-generated from the registry).
+  - Add the persona to the "Directory layout" comment block in `AGENTS.md` if not already present.
 - **New inner skill** → add it under the owner persona's `## Inner skills` list in `.pi/skills/<persona>/SKILL.md` AND under "Inner skills" in `AGENTS.md`'s directory layout.
 - **New Layer 3 skill** → add it to every persona's `## Layer 3 services` section and to `.pi/SYSTEM.md`'s "Shared services" block.
 - **New reviewer** → add a row to `.pi/SYSTEM.md` "Reviewers" table, and to the spawning persona's `## Isolated reviewer` section. Also list it in `AGENTS.md` "Pi mapping" and "Directory layout" sections.

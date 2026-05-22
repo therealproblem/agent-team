@@ -6,7 +6,7 @@ This replaces the earlier "Distributor" routing model: domain agents are no long
 
 ## Personas — inline skills
 
-Adopt one of these by loading its skill (read its `SKILL.md` and follow its instructions). The persona owns the rest of the turn (or until the topic shifts).
+Adopt one of these by loading its skill (read its `SKILL.md` and follow its instructions). The persona owns the rest of the turn (or until the topic shifts). The canonical registry of personas, their labels, and inner skills is maintained in `.pi/state/persona-registry.json`.
 
 | Persona | Domain | When to adopt |
 |---|---|---|

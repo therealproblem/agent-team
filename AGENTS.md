@@ -21,14 +21,16 @@ Layer 3   SHARED SERVICES     skills any persona can call inline
 
 The earlier model used a Distributor that spawned each domain as a separate Pi sub-session — paying a model loop per turn. **Path B** (current) pulls domain agents inline as personas: the root session reads a persona's `SKILL.md` and operates under those rules. Reviewers stay as sub-processes only when contamination would corrupt their judgment.
 
+**Canonical persona registry:** `.pi/state/persona-registry.json` defines all top-level personas, their labels, skill paths, and inner skills. Adding/removing/renaming a persona requires updating only that file plus the persona's SKILL.md — statusline, docs, board validation, and Telegram dispatcher consume the registry.
+
 ## Pi mapping
 
 | Architectural concept | Pi artifact |
 |---|---|
 | Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. |
-| Personas (pm, engineer, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. |
-| Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) + scout | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness. Reviewers use isolation for blindness; `scout` uses it for cheap-model offload + context-noise isolation. |
-| Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona. |
+| Personas (pm, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. Registered in `.pi/state/persona-registry.json`. |
+| Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) + scout + steelman + engineer | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness (reviewers) or model isolation (engineer, scout). Reviewers use isolation for blindness; `scout` uses it for cheap-model offload + context-noise isolation; `engineer` uses it for Sonnet execution with a clean card-focused context. |
+| Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona or subagent. Inner skills available under each persona/subagent are listed in the registry. |
 | Layer 3 services (note-taker, show-md, render-html, export, news, scribe, research, summary, reminders, scout) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. `scout` is a thin facade — the SKILL.md dispatches to `.pi/agents/scout.md` so the file-hunting work runs on a cheap model (`openai/gpt-5-mini` via Pi's `ELICE_GPT_5_MINI` provider) in an isolated sub-process. |
 | Tool surfaces | TypeScript extensions in `.pi/extensions/` register tools via `defineTool` + `pi.registerTool`. |
 

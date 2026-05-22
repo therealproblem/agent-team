@@ -24,7 +24,7 @@ export function Column({
   return (
     <section
       className={cn(
-        "flex h-full w-full flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
+        "flex h-full min-h-0 w-full flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
         dimmed && "opacity-70",
       )}
     >

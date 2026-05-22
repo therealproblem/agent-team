@@ -21,8 +21,14 @@
  * Re-renders are triggered by Pi's `setExtensionStatus` (which calls
  * `requestRender`), so persona changes piggyback by toggling a sentinel
  * status key after updating module state.
+ *
+ * Personas and labels are loaded from `.pi/state/persona-registry.json` —
+ * the canonical registry. Adding/removing/renaming a persona requires
+ * updating only that file plus the persona's SKILL.md.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -35,17 +41,37 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 
-const PERSONAS = ["pm", "educator", "language", "trader"] as const;
-type Persona = (typeof PERSONAS)[number];
+interface PersonaRegistryEntry {
+	label: string;
+	skillPath: string;
+	description: string;
+	innerSkills?: string[];
+}
 
-const PERSONA_LABELS: Record<Persona, string> = {
-	pm: "PM",
-	educator: "ED",
-	language: "LAN",
-	trader: "TRD",
-};
+interface PersonaRegistry {
+	personas: Record<string, PersonaRegistryEntry>;
+	subagents: Record<string, unknown>;
+}
 
-const SKILL_REGEX = /\.pi\/skills\/(pm|educator|language|trader)\/SKILL\.md$/;
+let PERSONAS: readonly string[];
+let PERSONA_LABELS: Record<string, string>;
+let SKILL_REGEX: RegExp;
+
+function loadRegistry(): void {
+	const registryPath = resolve(process.cwd(), ".pi/state/persona-registry.json");
+	const registry: PersonaRegistry = JSON.parse(readFileSync(registryPath, "utf-8"));
+	PERSONAS = Object.keys(registry.personas);
+	PERSONA_LABELS = Object.fromEntries(
+		PERSONAS.map((key) => [key, registry.personas[key].label]),
+	);
+	// No escaping needed — persona keys are alphanumeric slugs
+	const pattern = PERSONAS.join("|");
+	SKILL_REGEX = new RegExp("\\.pi/skills/(" + pattern + ")/SKILL\\.md$");
+}
+
+loadRegistry();
+
+type Persona = string;
 
 let activePersona: Persona | null = null;
 
@@ -181,7 +207,7 @@ export default function (pi: ExtensionAPI): void {
 		if (typeof raw !== "string") return undefined;
 		const m = raw.match(SKILL_REGEX);
 		if (!m) return undefined;
-		const persona = m[1] as Persona;
+		const persona = m[1];
 		if (activePersona === persona) return undefined;
 		activePersona = persona;
 		// Trigger a footer re-render. setExtensionStatus calls requestRender
