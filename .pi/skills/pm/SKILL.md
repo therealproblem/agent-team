@@ -83,6 +83,18 @@ The engineer runs on `claude-sonnet-4-5` in an isolated child process. It execut
 - Pure product/strategy questions: "how should I position this feature", "what's the right scope cut" — answer yourself.
 - Anything that isn't engineering domain (vault writes, renders, exports, market research) — you call those Layer 3 services yourself.
 
+### Commit-and-push is NOT a separate card
+
+When the user asks only to commit/push/finalize recently completed work, **do not create a new card.** Committing is the final step of the implementation card that produced the changes.
+
+Instead:
+
+1. **Identify the relevant existing card(s)** that contain the uncommitted work. If unclear, ask the user which card(s) to finalize.
+2. **Spawn the engineer against that existing card path** with a brief instructing it to use the `commit-and-push` inner skill: "Finalize the work on this card — commit and push the changes, then mark the card done."
+3. The engineer runs the commit-and-push flow (pre-commit check, staged diff review, commit message, push) as part of closing out the original card.
+
+If the user's request is genuinely a new piece of work that *happens* to include a commit step (e.g. "implement X and deploy it"), create the card normally — commit-and-push is just the final step of that card, not the whole card.
+
 ### Codebase reviews ARE engineering work
 
 When the user asks for a code review — "review my codebase", "audit the auth flow", "look for dead code in X", "is this PR safe to merge" — **spawn the engineer.** Do not run this inline. You're on GPT-5.5; the engineer is on Sonnet and reads code more reliably.
