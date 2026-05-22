@@ -778,6 +778,65 @@ const refreshAllTopics = defineTool({
 	},
 });
 
+// ---------- daily_digest tool ----------
+
+const DailyDigestParams = Type.Object({
+	count: Type.Optional(
+		Type.Number({
+			description: "Items per topic. Default: 3.",
+		}),
+	),
+});
+
+/**
+ * Compose a top-N-per-topic digest from today's news store. Pure read —
+ * never touches the network. Returns a pre-formatted plain-text body in
+ * `content[0].text` that the caller can hand to `telegram_send` verbatim,
+ * plus structured per-topic counts in `details.topics`.
+ *
+ * Topics with 0 items today are skipped, so a sparse store produces a
+ * short digest instead of a wall of empty headings.
+ */
+const dailyDigest = defineTool({
+	name: "daily_digest",
+	label: "Daily News Digest",
+	description:
+		"Build a top-N-per-topic news digest from today's store and return it as plain text ready to send via telegram_send. Reads `.pi/state/news.json` only — does NOT hit the network. Run `refresh_all_topics` first if you want fresh items. Topics with no items today are omitted from the digest.",
+	parameters: DailyDigestParams,
+
+	async execute(_toolCallId, params) {
+		const count = params.count ?? 3;
+		const sources = loadSources();
+		const topics = Object.keys(sources);
+		const date = new Date().toISOString().slice(0, 10);
+
+		const sections: string[] = [];
+		const summary: { topic: string; count: number }[] = [];
+
+		for (const topic of topics) {
+			const items = readToday(topic, count);
+			if (items.length === 0) continue;
+			summary.push({ topic, count: items.length });
+			const lines = items.map((it) => `• ${it.title}\n  ${it.url}`);
+			sections.push(`*${topic}*\n${lines.join("\n")}`);
+		}
+
+		const header = `📰 Daily news — ${date}`;
+		const text =
+			sections.length > 0
+				? `${header}\n\n${sections.join("\n\n")}`
+				: `${header}\n\n(no items in store)`;
+
+		return {
+			content: [{ type: "text", text }],
+			details: {
+				topics: summary,
+				total: summary.reduce((s, t) => s + t.count, 0),
+			},
+		};
+	},
+});
+
 // ---------- TUI surface (status line + /news-refresh) ----------
 
 function surface(pi: ExtensionAPI, text: string, details?: object): void {
@@ -804,6 +863,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerTool(queryToday);
 	pi.registerTool(getItem);
 	pi.registerTool(refreshAllTopics);
+	pi.registerTool(dailyDigest);
 	pi.registerMessageRenderer("news", createBoxRenderer());
 
 	pi.on("session_start", (_event, ctx) => {
