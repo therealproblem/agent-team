@@ -674,7 +674,19 @@ export default function (pi: ExtensionAPI): void {
 
 		// At this point: token is set AND we acquired the polling lock.
 		acquiredLock = true;
-		setTg(ctx, "pending");
+		// Only flash the "pending" spinner if we weren't already in a
+		// connected state coming into this session_start. On /reload, /new,
+		// /resume, /fork the previous module instance left the footer at
+		// "| TG ●" and the globalThis sentinel at "connected" — overwriting
+		// with the spinner just flickers "reconnecting" at the user for no
+		// good reason; bringUp's setTg("ready") will see no transition and
+		// the footer stays steady at ●. Fresh boot (no prior state) and
+		// recovery-after-error (prior state "disconnected") both fall through
+		// and do show the spinner since that's an honest indicator of work
+		// in flight.
+		if (getLastNotifiedState() !== "connected") {
+			setTg(ctx, "pending");
+		}
 
 		void (async () => {
 			// Retry transient network failures: laptop wake-from-sleep, DNS not
