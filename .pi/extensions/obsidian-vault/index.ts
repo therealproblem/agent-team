@@ -151,6 +151,49 @@ function todayIso(): string {
 }
 
 /*
+ * Snap LLM-drifted hex colors in the cream/parchment family to canonical
+ * Kami tokens. The render-pdf agent occasionally emits near-but-not-equal
+ * hex values (`#fbf7ef`, `#f2eadc`, `#f6efe3`) where the prescribed palette
+ * has `#f5f4ed` / `#ebe9e0` / `#e7e5e4`. The CSS `@page { background-color }`
+ * and the Chrome `--default-background-color` flag both paint the canonical
+ * `#f5f4ed` for the page canvas, so any wrapper element with a drift hex
+ * renders as a visibly different shade and the reader sees a "frame"
+ * between the @page margin gutter and the body content area.
+ *
+ * Narrow normalization: only colors in the very-light family (R, G, B all
+ * >= 220) within Euclidean distance 15 of a token get snapped. Everything
+ * else — accent, mid/dark neutrals, custom diagram fills — passes through.
+ * Threshold 15 catches every observed drift (dist 7-12 to nearest token)
+ * without grabbing `#ffffff` (dist ~23) or other distinct light tones.
+ */
+function snapKamiCanvasDrift(html: string): string {
+	const tokens: Array<[string, [number, number, number]]> = [
+		["#e7e5e4", [0xe7, 0xe5, 0xe4]],
+		["#ebe9e0", [0xeb, 0xe9, 0xe0]],
+		["#f5f4ed", [0xf5, 0xf4, 0xed]],
+	];
+	const SNAP_THRESHOLD = 15;
+	return html.replace(/#([0-9a-fA-F]{6})\b/g, (match) => {
+		const lower = match.toLowerCase();
+		const r = parseInt(lower.slice(1, 3), 16);
+		const g = parseInt(lower.slice(3, 5), 16);
+		const b = parseInt(lower.slice(5, 7), 16);
+		if (r < 220 || g < 220 || b < 220) return match;
+		let bestHex: string | null = null;
+		let bestDist = Infinity;
+		for (const [hex, [pr, pg, pb]] of tokens) {
+			const d = Math.hypot(r - pr, g - pg, b - pb);
+			if (d < bestDist) {
+				bestDist = d;
+				bestHex = hex;
+			}
+		}
+		if (bestDist > 0 && bestDist < SNAP_THRESHOLD && bestHex) return bestHex;
+		return match;
+	});
+}
+
+/*
  * Strip raw HTML / JSX tags from a markdown body while preserving fenced
  * code blocks (``` and ~~~) and inline code (backticks). MDX is permissive
  * about HTML, but a stray `<div>` or unclosed `<br>` is enough to crash
@@ -1142,7 +1185,9 @@ const writeExportPdf = defineTool({
 		try {
 			if (!existsSync(pdfDir)) await mkdir(pdfDir, { recursive: true });
 			if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
-			await writeFile(htmlPath, params.html, { encoding: "utf8" });
+			await writeFile(htmlPath, snapKamiCanvasDrift(params.html), {
+				encoding: "utf8",
+			});
 
 			const chrome = resolveChromeBinary();
 			if (!chrome) {
