@@ -151,6 +151,65 @@ function todayIso(): string {
 }
 
 /*
+ * Detect the "whole-body callout" anti-pattern in render-pdf output.
+ *
+ * Symptom: the agent wraps the entire document body in a single
+ * `<div class="callout">` (or similar tinted block) and dumps raw
+ * markdown / unstyled text inside, so every section heading collapses
+ * to plain text and the reader sees one giant tinted box covering the
+ * page from gutter to gutter. The `.callout` class is reserved for
+ * deliberate labelled notes (`> [!NOTE]` in the source, executive
+ * summary blocks, pull quotes) — wrapping the whole body in one defeats
+ * the document's structural typography.
+ *
+ * This is a defense-in-depth lint at the tool boundary (sibling to the
+ * `cde8b77` agent-prompt rule). If a single callout-class element holds
+ * more than 40% of the body's visible text, reject the export and tell
+ * the agent to restructure. 40% threshold catches the obvious whole-body
+ * case while leaving legitimate large executive-summary callouts (which
+ * sit alongside, not instead of, the document body) untouched.
+ */
+function detectWholeBodyCallout(html: string): string | null {
+	const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+	if (!bodyMatch) return null; // can't locate body — skip lint
+	const body = bodyMatch[1];
+	const stripTags = (s: string) =>
+		s
+			.replace(/<[^>]+>/g, "")
+			.replace(/\s+/g, " ")
+			.trim();
+	const bodyTextLen = stripTags(body).length;
+	// Don't lint very short bodies — a small doc legitimately can be one
+	// callout (e.g. a single-paragraph note).
+	if (bodyTextLen < 400) return null;
+
+	const calloutRe =
+		/<(div|aside|section)\b[^>]*class\s*=\s*["'][^"']*\bcallout\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi;
+	let largestCalloutTextLen = 0;
+	let m: RegExpExecArray | null;
+	while ((m = calloutRe.exec(body)) !== null) {
+		const inner = stripTags(m[2]);
+		if (inner.length > largestCalloutTextLen) {
+			largestCalloutTextLen = inner.length;
+		}
+	}
+
+	const ratio = largestCalloutTextLen / bodyTextLen;
+	if (ratio > 0.4) {
+		return (
+			`Whole-body callout detected: a single .callout element holds ${Math.round(
+				ratio * 100,
+			)}% of the body's text (${largestCalloutTextLen} of ${bodyTextLen} chars). ` +
+			`The .callout class is for deliberate labelled notes only (e.g. \`> [!NOTE]\` blocks, executive-summary blocks). ` +
+			`Restructure {{BODY}} so sections use top-level <h2>/<h3>/<p>/<ul>/<table> directly on the parchment body, ` +
+			`and reserve <div class="callout"> for the short labelled blocks the source actually called out. ` +
+			`See the "Body conversion" + "Callout discipline" sections in the render-pdf agent prompt, then re-call write_export_pdf with the restructured HTML.`
+		);
+	}
+	return null;
+}
+
+/*
  * Snap LLM-drifted hex colors in the cream/parchment family to canonical
  * Kami tokens. The render-pdf agent occasionally emits near-but-not-equal
  * hex values (`#fbf7ef`, `#f2eadc`, `#f6efe3`) where the prescribed palette
@@ -1183,6 +1242,27 @@ const writeExportPdf = defineTool({
 		const pdfUrl = `${serverPublicUrl()}/p/${slug}.pdf`;
 
 		try {
+			// Structural lint — refuse to render the whole-body-callout
+			// anti-pattern. Runs before any disk I/O so nothing gets
+			// persisted on rejection and the agent gets an actionable
+			// error to fix and re-call.
+			const calloutViolation = detectWholeBodyCallout(params.html);
+			if (calloutViolation) {
+				return {
+					content: [{ type: "text", text: calloutViolation }],
+					details: {
+						html_path: null,
+						pdf_path: null,
+						pdf_url: null,
+						title: params.title,
+						source_md_path: params.source_md_path,
+						template: params.template,
+						error: "whole_body_callout",
+					},
+					isError: true,
+				};
+			}
+
 			if (!existsSync(pdfDir)) await mkdir(pdfDir, { recursive: true });
 			if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
 			await writeFile(htmlPath, snapKamiCanvasDrift(params.html), {
