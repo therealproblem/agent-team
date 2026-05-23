@@ -9,8 +9,8 @@ Layer 3 orchestrator. Online research for any persona, running a 9-skill pipelin
 ```
 research-frame → research-tree.start_run → research-survey → source-rank →
   tff-fetch_url × N  ↔  research-branch (mid-flight discoveries)
-                          ↳ triangulate (on factual claims)
-                          ↳ steelman (on tentative conclusions)
+→ research-corpus-check (pre-synthesis gate; may loop back to source-rank or survey)
+→ triangulate (on factual claims) → steelman (on tentative conclusions)
 → synthesize → research-stop-check → note-taker → render-html / export → research-tree.complete_run
 ```
 
@@ -24,11 +24,12 @@ This skill also owns the **fetch-reliability ladder** (later in this doc) — th
 | 2 | `research-tree` | state | Layer 3 skill — tree-shaped state file with per-claim provenance |
 | 3 | `research-survey` | 2. Survey | Layer 3 skill — shallow parallel searches → terrain map |
 | 4 | `source-rank` | 3. Plan | Layer 3 skill — score candidates, pick deep reads |
-| 5 | `triangulate` | 4. Cross-check | Layer 3 skill — fact verification + common-origin check |
-| 6 | `steelman` | 4.5 Disconfirm | Sub-agent (isolated context) — strongest-opposing-case pass |
-| 7 | `research-branch` | cross-cutting | Layer 3 skill — discovery-driven branching loop |
-| 8 | `synthesize` | 5. Synthesize | Layer 3 skill — structured deliverable from tree + sources |
-| 9 | `research-stop-check` | 6. Capture gate | Layer 3 skill — 6-point checklist before handoff |
+| 5 | `research-corpus-check` | 3.5 Corpus gate | Layer 3 skill — pre-synthesis fitness check; loops back to source-rank if lopsided |
+| 6 | `triangulate` | 4. Cross-check | Layer 3 skill — fact verification + common-origin check |
+| 7 | `steelman` | 4.5 Disconfirm | Sub-agent (isolated context) — strongest-opposing-case pass |
+| 8 | `research-branch` | cross-cutting | Layer 3 skill — discovery-driven branching loop |
+| 9 | `synthesize` | 5. Synthesize | Layer 3 skill — structured deliverable from tree + sources |
+| 10 | `research-stop-check` | 6. Capture gate | Layer 3 skill — 6-point checklist before handoff |
 
 ## Tool surface — Camoufox extension
 
@@ -106,19 +107,27 @@ Fetch each picked URL via `tff-fetch_url` (markdown by default). For each fetch:
 - If a discovery fires (prereq / parent / sibling / pivot / citation / disqualifier), call `research-branch` — it may spawn child nodes, escalate to user, or stop the run.
 - On success, store the source via `research-tree.add_source(...)` and any extracted claims via `research-tree.add_claim(...)`.
 
-### 6. Verify factual claims
+### 6. Corpus-readiness check
+
+Call `research-corpus-check` with `{ frame, tree, survey_diagnostics }`. Returns `{ passed, checks, loop_back_to, warnings }`. Catches lopsided corpora (single-domain, single-voice, missing recency, uncovered success criteria) before the expensive phases burn budget.
+
+If `passed: false`:
+- Loop back to the phase named in `loop_back_to` (typically `source-rank`; `survey` only if the queries themselves need rethinking).
+- Max 1 loop per run on this check. If still failing, surface to user with the corpus issue. User can explicitly bypass ("ship it") — failures appear in a `## Known corpus gaps` section appended to the synthesis.
+
+### 7. Verify factual claims
 
 For any load-bearing factual claim the synthesis will assert, call `triangulate`. Required when `deliverable_shape: "fact-check"`. Optional but recommended for `decision` and `comparison` shapes where a single bad fact would change the verdict.
 
-### 7. Disconfirming pass
+### 8. Disconfirming pass
 
 For `deliverable_shape ∈ {decision, fact-check, comparison}`, spawn the `steelman` subagent with the tentative conclusion. Required for `deep` depth_budget on any shape. The agent runs in an isolated child process — its result feeds into synthesize.
 
-### 8. Synthesize
+### 9. Synthesize
 
 Call `synthesize` with `{ frame, tree, sources, triangulate_results, steelman_result }`. Returns a structured markdown body matching the deliverable_shape contract.
 
-### 9. Stop-check
+### 10. Stop-check
 
 Call `research-stop-check` with the synthesis and tree. If `passed: true`, proceed. If `passed: false`:
 
@@ -126,11 +135,11 @@ Call `research-stop-check` with the synthesis and tree. If `passed: true`, proce
 - Max 2 loops per check. If still failing, surface to user with the failure detail.
 - User can explicitly bypass ("ship it") — then the failures appear in a `## Known gaps` section of the synthesis.
 
-### 10. Capture
+### 11. Capture
 
 Call `note-taker.save({ ... })` with the synthesized markdown. By default, follow with `render-html` (see "Default downstream action" below). Get the artifact URL back.
 
-### 11. Complete the run
+### 12. Complete the run
 
 Call `research-tree.complete_run({ run_id, deliverable_artifact: <url> })`. The run is now immutable in the tree.
 

@@ -37,9 +37,19 @@ Shallow, breadth-first orientation pass. Goal: a *terrain map* of the field — 
   ],
   "timeline_signal": "settled | active | moving-target",
   "recommended_deep_reads": ["<url>", "..."],
-  "open_questions_surfaced": ["<question>", "..."]
+  "open_questions_surfaced": ["<question>", "..."],
+  "corpus_diagnostics": {
+    "unique_domains": <int>,
+    "unique_voices": <int>,
+    "date_spread": { "last_6mo": <int>, "1-2yr": <int>, "older": <int> },
+    "stance_spread": { "with_position": <int>, "against_position": <int>, "neutral": <int> },
+    "classics_found": true | false | null,
+    "warning": null | "homogeneous_domain" | "homogeneous_voice" | "homogeneous_stance" | "no_recency_signal"
+  }
 }
 ```
+
+`corpus_diagnostics` is a signal for the orchestrator (and `research-corpus-check`) — survey does NOT loop back on its own warnings. `classics_found: null` means the classics round didn't run (not `deep` budget, or signal wasn't `settled`).
 
 ## Steps
 
@@ -59,8 +69,24 @@ Shallow, breadth-first orientation pass. Goal: a *terrain map* of the field — 
      - `active` = current debate, lots of 2024–2026 results with different positions
      - `moving-target` = breaking changes within last 6 months; recent results contradict older ones
 5. **Pick 3–7 recommended deep reads.** Prefer: official docs > primary sources (papers, RFCs, vendor announcements) > maintainer / canonical-voice blog posts > well-cited synthesis pieces. Avoid: vendor "vs the competition" pages, listicles, content-marketed tutorials.
-6. **Surface open questions.** Anything the snippets hint at but don't resolve — feeds `research-branch` later if any becomes a prereq.
-7. **Return the JSON.** Caller hands it to `source-rank`.
+6. **Classics round (deep + settled only).** Run ONLY if `depth_budget == "deep"` AND `timeline_signal == "settled"`. Otherwise skip and set `corpus_diagnostics.classics_found: null`.
+   - One extra `tff-search_web` query: `"<topic>" foundational OR seminal OR canonical OR "original paper"`.
+   - Scan the snippets already gathered: any URL referenced by 3+ different domain sources is a candidate classic.
+   - Prepend 0–3 classics to `recommended_deep_reads` (source-rank's authority axis will rank them naturally).
+   - Set `corpus_diagnostics.classics_found: true` if any were added, else `false`. Absence of canon is itself a finding — do NOT loop trying to find non-existent classics.
+7. **Surface open questions.** Anything the snippets hint at but don't resolve — feeds `research-branch` later if any becomes a prereq.
+8. **Compute corpus diagnostics.** From the snippets read across all queries:
+   - `unique_domains` — count distinct eTLD+1 across all returned results.
+   - `unique_voices` — count distinct named authors/orgs visible in snippets.
+   - `date_spread` — bucket dated snippets into `{ last_6mo, 1-2yr, older }`. Snippets without dates don't count.
+   - `stance_spread` — for each snippet, classify roughly as `with_position` / `against_position` / `neutral` relative to the framed question's implied claim.
+   - Set `warning` (first trigger wins):
+     - `"homogeneous_domain"` — any single domain holds >50% of results.
+     - `"homogeneous_voice"` — `unique_voices < 5` AND `depth_budget != "fast"`.
+     - `"homogeneous_stance"` — `stance_spread.against_position == 0` AND `deliverable_shape ∈ {comparison, decision, fact-check}`.
+     - `"no_recency_signal"` — `date_spread.last_6mo == 0` AND `timeline_signal != "settled"`.
+     - Else `null`.
+9. **Return the JSON.** Caller hands it to `source-rank`. The orchestrator (or `research-corpus-check`) decides whether `warning` warrants a re-survey.
 
 ## Steering by deliverable shape
 
@@ -93,3 +119,5 @@ Shallow, breadth-first orientation pass. Goal: a *terrain map* of the field — 
 - **Don't declare consensus from one search.** Three independent queries surfacing the same names is signal; one query is noise.
 - **Don't pre-decide the answer.** Survey returns terrain, not a conclusion. The deep-read + synthesize phases form the answer.
 - **Don't skip survey because "I already know this field."** The recency check alone is worth the call — your knowledge has a training-data cutoff; the field doesn't.
+- **Don't gate on `corpus_diagnostics.warning`.** Survey always returns. The warning is a signal to the orchestrator and to `research-corpus-check` — the decision to re-survey or proceed is theirs.
+- **Don't loop the classics round.** If `classics_found: false` after running it, accept that and move on. "No canonical work surfaced" is a useful finding for the user — manufacturing one is worse than reporting none.

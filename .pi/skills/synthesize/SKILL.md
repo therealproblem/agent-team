@@ -74,7 +74,9 @@ A **markdown body** (no frontmatter — `note-taker` adds frontmatter and title 
 | `timeline` | "<Subject> evolved from A to B over <span>" | Chronological, dated section per era | "What changed each turning point" |
 | `decision` | The recommendation | Recommendation, conditions, what could reverse it | "Failure modes" (mandatory) |
 | `fact-check` | The verdict | Verdict; supporting/contradicting per source class | "Confidence" + "Caveats" |
-| `landscape-map` | "The field of X in 2026" | Vocabulary, schools, voices, recency — straight from `research-survey` enriched by deep reads | "Open questions in the field" |
+| `landscape-map` | "The field of X in 2026" | Vocabulary, schools, voices, recency — straight from `research-survey` enriched by deep reads | "What's unexplored" + "Open questions in the field" |
+
+**On `landscape-map` "What's unexplored":** Plot the field as a 2-axis grid — one axis is `schools` (positions / approaches from the survey), the other is a second dimension surfaced from the vocabulary (methods, domains, target user types, time horizons — pick the one the field naturally divides on). Cells with 0–1 supporting sources after the deep reads are candidate gaps. Name 1–3 with one sentence each on *why* the intersection is empty: nobody's tried it (real gap), tried and abandoned (informative — say what failed), or the combination doesn't make sense (skip — not a gap, just incompatibility). Empty cells are signal; manufactured cells are noise. If everything is covered, say "no obvious unexplored intersections at this depth" rather than padding.
 
 ## Style rules
 
