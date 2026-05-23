@@ -1173,6 +1173,17 @@ const writeExportPdf = defineTool({
 					"--disable-gpu",
 					"--no-pdf-header-footer",
 					"--no-sandbox",
+					// Paint the page canvas parchment BEFORE CSS layout, so any
+					// `@page { margin }` area renders in-band with the body even
+					// when the rendered HTML happens to omit `@page {
+					// background-color }`. The render-pdf agent is LLM-driven
+					// and occasionally drifts off the prescribed CSS — without
+					// this flag, a missing @page bg yields a thick white frame
+					// around the parchment content. Flag value is RRGGBBAA
+					// (NOT AARRGGBB — that order paints a peach tone).
+					// Harmless when the CSS is correct: parchment over
+					// parchment.
+					"--default-background-color=f5f4edFF",
 					"--virtual-time-budget=5000",
 					`--print-to-pdf=${pdfPath}`,
 					`file://${htmlPath}`,
