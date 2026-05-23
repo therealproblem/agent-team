@@ -487,7 +487,7 @@ export function CardItem({
               ) : null}
               <h3
                 className={cn(
-                  "text-sm font-medium leading-snug",
+                  "text-sm font-medium leading-snug break-words",
                   card.titlePending
                     ? "italic text-muted-foreground"
                     : "text-foreground",

@@ -172,7 +172,7 @@ export function BoardView({
       </div>
 
       <div className="mx-auto w-full max-w-[1600px] flex-1 overflow-x-auto px-4 pb-6 md:px-6 md:pb-8">
-        <div className="grid h-full min-h-0 grid-cols-[minmax(300px,1fr)] grid-rows-[minmax(0,1fr)] gap-3 md:grid-cols-[repeat(2,minmax(300px,1fr))] lg:grid-cols-[repeat(7,minmax(300px,1fr))]">
+        <div className="flex h-full min-h-0 gap-3">
           {STATUSES.map((s) => (
             <Column
               key={s}

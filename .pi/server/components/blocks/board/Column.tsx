@@ -23,7 +23,8 @@ export function Column({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 w-full flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
+        "flex h-full w-[calc(100vw-2.5rem)] flex-shrink-0 flex-col rounded-xl border border-border/60 bg-[color-mix(in_oklab,var(--color-cloud-fog)_30%,var(--color-parchment-white))]",
+        "md:w-auto md:min-w-[300px]",
         dimmed && "opacity-70",
       )}
     >
