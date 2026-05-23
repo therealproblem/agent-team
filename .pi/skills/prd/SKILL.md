@@ -26,6 +26,21 @@ Make sure each of these is covered. If the user hasn't given you the answer, **a
 
 Do not stall the user with a Q1–Q12 wizard. Cover the gaps in the natural flow of the conversation; cite back what you already know.
 
+### Propose, don't interrogate
+
+Before asking the user for a discovery item, try to infer it from `project.md`, the conversation, or the code. When you have signal to guess plausibly, **propose 2–3 candidates and a recommendation** instead of asking an open question.
+
+> Instead of "what segment is affected?", say:
+>
+> > From what you've said, the affected segment is most likely:
+> > 1. Power users hitting the export flow daily (recommended — matches the volume signal)
+> > 2. New users still in onboarding
+> > 3. Internal ops users running batch jobs
+> >
+> > Reply `1`, `2`, `3`, or correct me.
+
+Items where this fits well: affected segment, scope cut, non-goals, alternatives considered, risks. Stick to open questions only when you genuinely have no signal — and never make the user author structure (sections, scope boundaries, non-goal lists) when you can draft a starting point.
+
 ## Structure
 
 ```
