@@ -161,7 +161,7 @@ function Blockquote({ className, ...rest }: ComponentProps<"blockquote">) {
   return (
     <blockquote
       className={cn(
-        "my-6 border-l-4 border-primary bg-muted px-4 py-2 italic",
+        "my-6 border-l-4 border-muted-stone bg-muted px-4 py-2 italic",
         className,
       )}
       {...rest}
