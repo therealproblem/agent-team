@@ -1,8 +1,8 @@
 /**
  * statusline — replaces Pi's default footer with a two-line layout:
  *
- *   Line 1: pwd (left)               context%/window  model (right)
- *   Line 2: pm | educator | ...      | NEWS N | REM M | SRV port |
+ *   Line 1: pwd (left)                                            context%/window  model (right)
+ *   Line 2: pm | educator | ...        (active-project)            NEWS N REM M SRV port
  *
  * Active persona is detected by hooking the `tool_call` event: when the
  * agent `read`s `.pi/skills/<persona>/SKILL.md`, that persona becomes
@@ -11,6 +11,13 @@
  * personaless, which matches the root-agent's actual state on a fresh
  * boot. The earlier file-based approach leaked stale personas into new
  * sessions where the agent had not actually adopted anything.
+ *
+ * Active project is detected the same way — Pi handles many projects in
+ * parallel, and PM in particular needs to be visibly grounded so the user
+ * can spot when it's reasoning against the wrong project and redirect.
+ * Signals (most-recent wins): `board_create_card` / `board_add_comment`
+ * (explicit `project_slug` arg), or any `read`/`edit`/`write` whose path
+ * sits under `vault/projects/<slug>/`. Reset on session_start.
  *
  * Pi's built-in `FooterComponent` is bypassed entirely — we render both
  * lines ourselves. Line 1 reuses the same data sources Pi reads
@@ -74,6 +81,12 @@ loadRegistry();
 type Persona = string;
 
 let activePersona: Persona | null = null;
+let activeProject: string | null = null;
+
+/** Matches `vault/projects/<slug>/...` in both relative and absolute paths. */
+const PROJECT_PATH_REGEX = /(?:^|\/)vault\/projects\/([a-z0-9][a-z0-9-]*)(?:\/|$)/;
+/** Project-aware tools that carry an explicit `project_slug` arg. */
+const PROJECT_TOOLS = new Set(["board_create_card", "board_add_comment"]);
 
 /** Sanitiser matching what Pi applies internally to extension statuses. */
 function sanitiseStatus(text: string): string {
@@ -172,6 +185,30 @@ class TwoLineFooter implements Component {
 		const extStatuses = extPlain ? this.theme.fg("dim", extPlain) : "";
 		const extW = visibleWidth(extPlain);
 
+		// Project indicator sits between personas (left) and statuses (right).
+		// Rendered in accent (no bold) so it's visibly the "thing I'm grounded
+		// on" without competing with the active persona's accent+bold.
+		const projectPlain = activeProject ? `(${activeProject})` : "";
+		const projectCell = activeProject
+			? this.theme.fg("accent", projectPlain)
+			: "";
+		const projectW = visibleWidth(projectPlain);
+
+		// Layout priority: if all three fit with a 2-col gap on each side of
+		// the project cell, render the three-column layout (centered project).
+		if (projectW > 0 && personasW + 2 + projectW + 2 + extW <= width) {
+			const gap = width - personasW - projectW - extW;
+			const leftGap = Math.floor(gap / 2);
+			const rightGap = gap - leftGap;
+			return (
+				personasLeft +
+				" ".repeat(leftGap) +
+				projectCell +
+				" ".repeat(rightGap) +
+				extStatuses
+			);
+		}
+
 		if (personasW + 2 + extW <= width) {
 			return personasLeft + " ".repeat(width - personasW - extW) + extStatuses;
 		}
@@ -189,30 +226,69 @@ class TwoLineFooter implements Component {
 
 export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
-		// Always start personaless. Adoption only happens via the agent
-		// reading SKILL.md within the current session (handler below).
+		// Always start personaless / projectless. Adoption / project pickup
+		// happens only via the agent's own tool calls within the session
+		// (handler below) — never inherited across sessions.
 		activePersona = null;
+		activeProject = null;
 		ctx.ui.setFooter((_tui, theme, footerData) => {
 			return new TwoLineFooter(ctx, theme, footerData);
 		});
 	});
 
-	// Detect persona adoption: agent reads `.pi/skills/<persona>/SKILL.md`.
-	// Matches the protocol in .pi/SYSTEM.md ("Adopt one of these by loading
-	// its skill — read its SKILL.md and follow its instructions").
 	pi.on("tool_call", (event, ctx) => {
-		if (event.toolName !== "read") return undefined;
-		const input = event.input as { path?: string; file_path?: string };
-		const raw = input.file_path ?? input.path;
-		if (typeof raw !== "string") return undefined;
-		const m = raw.match(SKILL_REGEX);
-		if (!m) return undefined;
-		const persona = m[1];
-		if (activePersona === persona) return undefined;
-		activePersona = persona;
-		// Trigger a footer re-render. setExtensionStatus calls requestRender
-		// even when the underlying map doesn't change.
-		ctx.ui.setStatus("9render", undefined);
+		let changed = false;
+
+		// Persona adoption: agent reads `.pi/skills/<persona>/SKILL.md`.
+		// Matches the protocol in .pi/SYSTEM.md ("Adopt one of these by loading
+		// its skill — read its SKILL.md and follow its instructions").
+		if (event.toolName === "read") {
+			const input = event.input as { path?: string; file_path?: string };
+			const raw = input.file_path ?? input.path;
+			if (typeof raw === "string") {
+				const m = raw.match(SKILL_REGEX);
+				if (m && activePersona !== m[1]) {
+					activePersona = m[1];
+					changed = true;
+				}
+			}
+		}
+
+		// Project pickup: most recent signal wins.
+		//   - board_create_card / board_add_comment carry `project_slug`
+		//     directly. Authoritative.
+		//   - read / edit / write whose path sits under `vault/projects/<slug>/`
+		//     is a reliable signal too (PM reads `project.md` on adoption,
+		//     edits cards under `board/`, etc.).
+		// Other tools (ls, grep, find, bash) are noisy — skipped.
+		let detectedProject: string | null = null;
+		if (PROJECT_TOOLS.has(event.toolName)) {
+			const input = event.input as { project_slug?: unknown };
+			if (typeof input.project_slug === "string" && input.project_slug.trim()) {
+				detectedProject = input.project_slug.trim();
+			}
+		} else if (
+			event.toolName === "read" ||
+			event.toolName === "edit" ||
+			event.toolName === "write"
+		) {
+			const input = event.input as { path?: string; file_path?: string };
+			const raw = input.file_path ?? input.path;
+			if (typeof raw === "string") {
+				const m = raw.match(PROJECT_PATH_REGEX);
+				if (m) detectedProject = m[1];
+			}
+		}
+		if (detectedProject && detectedProject !== activeProject) {
+			activeProject = detectedProject;
+			changed = true;
+		}
+
+		if (changed) {
+			// Trigger a footer re-render. setStatus calls requestRender
+			// even when the underlying map doesn't change.
+			ctx.ui.setStatus("9render", undefined);
+		}
 		return undefined;
 	});
 }
