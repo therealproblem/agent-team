@@ -28,7 +28,7 @@ export async function SiteHeader() {
         <div className="flex min-w-0 items-center gap-2">
           {/* Portal slot for per-page mobile menu (e.g. DocLayout TOC sheet).
               Empty on pages that don't render into it. */}
-          <div id="site-header-mobile-slot" className="flex md:hidden" />
+          <div id="site-header-mobile-slot" className="flex lg:hidden" />
           <Link
             href="/"
             className="font-serif text-base font-semibold tracking-tight text-foreground truncate"

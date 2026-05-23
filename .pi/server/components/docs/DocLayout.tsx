@@ -37,13 +37,13 @@ export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
       <MobileTocSheet entries={toc} parts={parts} currentSlug={currentSlug} />
       <MermaidErrorToast />
       <div className="mx-auto flex max-w-6xl gap-10 px-4 py-8 md:px-6 md:py-12">
-        <aside className="hidden md:block md:w-56 md:shrink-0 -my-8 md:-my-12">
+        <aside className="hidden lg:block lg:w-56 lg:shrink-0 -my-8 lg:-my-12">
           <div className="scrollbar-hide sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto pr-2 py-6">
             <PartsNav parts={parts} currentSlug={currentSlug} />
             <Toc entries={toc} />
           </div>
         </aside>
-        <article className="min-w-0 flex-1 max-w-3xl mx-auto md:mx-0">
+        <article className="min-w-0 flex-1 max-w-3xl mx-auto lg:mx-0">
           {title ? (
             <h1 className="font-serif font-light text-[40px] leading-[1.15] tracking-[-0.8px] text-foreground mb-10 mt-0">
               {title}
