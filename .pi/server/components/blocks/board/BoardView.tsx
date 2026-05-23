@@ -90,7 +90,7 @@ export function BoardView({
   }, [filtered]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden">
       <div className="mx-auto w-full max-w-[1600px] shrink-0 px-4 py-6 md:px-6 md:py-8">
         <div className="mb-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
