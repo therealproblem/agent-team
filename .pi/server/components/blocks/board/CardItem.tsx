@@ -7,7 +7,7 @@ import { AlertTriangle, CheckCircle2, Link2, Loader2, MessageSquarePlus, RotateC
 import { toast } from "sonner";
 import type { Card as BoardCard, Comment } from "@/lib/board-types";
 import { PERSONA_LABELS, STATUS_LABELS } from "@/lib/board-types";
-import { addComment, deleteCard, markCardDone, reopenCard, unblockCard } from "@/lib/board-actions";
+import { addComment, deleteCard, markCardDone, reopenCard, unarchiveCard, unblockCard } from "@/lib/board-actions";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -357,6 +357,7 @@ function DeleteCardButton({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [undoPending, setUndoPending] = useState(false);
 
   const onConfirm = () => {
     startTransition(async () => {
@@ -367,7 +368,22 @@ function DeleteCardButton({
       }
       onDone();
       router.refresh();
-      toast.success("Card archived.");
+      toast.success("Card archived.", {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            setUndoPending(true);
+            const undoRes = await unarchiveCard({ projectSlug, cardSlug });
+            setUndoPending(false);
+            if (!undoRes.ok) {
+              toast.error(undoRes.error ?? "Couldn't undo archive.");
+              return;
+            }
+            router.refresh();
+            toast.success("Card restored.");
+          },
+        },
+      });
     });
   };
 

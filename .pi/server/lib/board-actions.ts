@@ -389,6 +389,47 @@ export async function deleteCard(input: {
   return { ok: true };
 }
 
+export async function unarchiveCard(input: {
+  projectSlug: string;
+  cardSlug: string;
+}): Promise<ActionResult> {
+  const { projectSlug, cardSlug } = input;
+  if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
+  if (!isValidCardSlug(cardSlug)) return { ok: false, error: "Invalid card." };
+
+  const archiveDir = path.join(getProjectsDir(), projectSlug, "board", "_archive");
+  const src = path.join(archiveDir, `${cardSlug}.md`);
+  const dst = cardFilePath(projectSlug, cardSlug);
+
+  // Sandbox check — both paths must live inside the project's board dir.
+  const boardDir = path.resolve(path.join(getProjectsDir(), projectSlug, "board"));
+  if (!path.resolve(src).startsWith(boardDir + path.sep)) {
+    return { ok: false, error: "Invalid card path." };
+  }
+  if (!path.resolve(dst).startsWith(boardDir + path.sep)) {
+    return { ok: false, error: "Invalid card path." };
+  }
+
+  try {
+    await fs.access(src);
+  } catch {
+    return { ok: false, error: "Archived card not found." };
+  }
+
+  // Check if a card with the same slug already exists in the active board.
+  try {
+    await fs.access(dst);
+    return { ok: false, error: "A card with this slug already exists in the board." };
+  } catch {
+    // Expected — the destination should not exist.
+  }
+
+  await fs.rename(src, dst);
+  revalidatePath(`/projects/${projectSlug}`);
+  revalidatePath("/projects");
+  return { ok: true };
+}
+
 export async function deleteProject(input: { projectSlug: string }): Promise<ActionResult> {
   const { projectSlug } = input;
   if (!isValidProjectSlug(projectSlug)) return { ok: false, error: "Invalid project." };
