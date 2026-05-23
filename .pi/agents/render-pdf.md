@@ -57,6 +57,85 @@ No process notes, no template explanations, no infrastructure suggestions, no "n
 
 The two reference files (`diagrams.md`, `html-template.md`) are the authoritative source. Read them during the render — don't try to remember the snippets between turns.
 
+## Body conversion — markdown → structured HTML
+
+`{{BODY}}` is **structured HTML** built from the source markdown — never raw markdown dumped into a wrapper. The base scaffold already paints the body on parchment with serif type and reading line-height, so the only job here is mapping each markdown shape to the right HTML element. Failure mode to avoid: shipping `<div class="callout">## Purpose\n\n- bullet\n- bullet</div>` — that renders every heading and list as plain text inside a tinted box.
+
+Map every shape that appears in the source:
+
+| Markdown                                | HTML                                           |
+|-----------------------------------------|------------------------------------------------|
+| `## Heading`                            | `<h2>Heading</h2>`                             |
+| `### Heading`                           | `<h3>Heading</h3>`                             |
+| `#### Heading`                          | `<h4>Heading</h4>`                             |
+| `**bold**`                              | `<strong>bold</strong>` (weight 500)           |
+| `*italic*`                              | `<em>italic</em>`                              |
+| `- item` / `* item` (block of lines)    | `<ul><li>item</li>…</ul>`                      |
+| `1. item` (block of lines)              | `<ol><li>item</li>…</ol>`                      |
+| Indented sub-list                       | Nested `<ul>` / `<ol>` inside the parent `<li>` |
+| GFM table (`\| col \| col \|`)          | `<table><thead><tr>…</tr></thead><tbody>…</tbody></table>` |
+| Fenced code block (` ``` `)             | `<pre><code>…</code></pre>`                    |
+| `` `inline` ``                          | `<code>inline</code>`                          |
+| `> quote`                               | `<blockquote>quote</blockquote>`               |
+| `> [!NOTE]` / `> [!WARNING]` callout    | `<div class="callout">…</div>` (the ONE place the callout class belongs) |
+| `---`                                   | `<hr/>`                                        |
+| `[label](url)`                          | `<a href="url">label</a>`                      |
+| Blank line between paragraphs           | Close the prior `<p>`; open a new `<p>`        |
+
+### Callout discipline — `.callout` is for callouts only
+
+`<div class="callout">` exists for **deliberate callout content**: a labelled note, a pull-quote, an executive-summary block — usually a few sentences the source marked off with `> [!NOTE]` or an analogous device, or that a template explicitly calls for (e.g. `equity-report`'s executive summary). Never wrap the whole body, a whole section, or a long list of headings + paragraphs in a callout, even if the document is short — the body already sits on parchment with the right type, and an extra tinted box flattens every nested heading into plain text and reads as "everything is a footnote." If you're tempted to wrap something this large, you wanted `<section>` (semantic group, no styling) or just successive top-level elements, not `.callout`.
+
+### Worked example
+
+Source markdown:
+
+```markdown
+## Purpose
+
+This note explains what the **order book** and **order flow** are.
+
+## One-line distinction
+
+- **Order book** = visible queue of resting liquidity.
+- **Order flow** = live stream of executed pressure.
+
+> [!NOTE]
+> The order book shows intentions waiting; order flow shows what traded.
+```
+
+Correct `{{BODY}}`:
+
+```html
+<h2>Purpose</h2>
+<p>This note explains what the <strong>order book</strong> and <strong>order flow</strong> are.</p>
+
+<h2>One-line distinction</h2>
+<ul>
+  <li><strong>Order book</strong> = visible queue of resting liquidity.</li>
+  <li><strong>Order flow</strong> = live stream of executed pressure.</li>
+</ul>
+
+<div class="callout">
+  The order book shows intentions waiting; order flow shows what traded.
+</div>
+```
+
+Wrong `{{BODY}}` (both anti-patterns at once):
+
+```html
+<div class="callout">
+  ## Purpose
+
+  This note explains what the **order book** and **order flow** are.
+
+  ## One-line distinction
+
+  - **Order book** = visible queue of resting liquidity.
+  - **Order flow** = live stream of executed pressure.
+</div>
+```
+
 ## Kami design rules — hard constraints
 
 These define what a Kami PDF looks like. Violating any one of them produces a document that is *not* Kami.
