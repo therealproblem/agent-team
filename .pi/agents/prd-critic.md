@@ -27,9 +27,10 @@ You do **not** propose profile updates. Your output is the review artifact; prof
 - **Problem-solution fit** — Does the proposal address the stated problem? Or has it drifted into solving a related-but-different problem?
 - **Hidden assumptions** — Claims the PRD treats as given that aren't supported by the problem statement.
 - **Unfounded specificity** — Where the PRD names specific numbers, segments, or behaviors with no clear basis.
+- **Vague language** — adjectives that prevent falsifiable evaluation. Stoplist (non-exhaustive): *fast, slow, fast enough, good, easy, simple, intuitive, user-friendly, secure, scalable, performant, robust, seamless, smooth, modern, clean, lightweight, smart*. Flag each occurrence with its location in the PRD. Exception: paired with a concrete number or behavior (e.g. "fast = <200ms p95" is fine; bare "fast" is not).
 - **Missing alternatives** — What viable alternatives weren't considered? (Name 1–3 specifically.)
 - **Non-goal omissions** — What should be explicitly out of scope but isn't?
-- **Falsifiable success metrics?** Can you tell, after shipping, whether this worked?
+- **Falsifiable success metrics?** Can you tell, after shipping, whether this worked? Each metric should have a baseline, a target, a timeframe, and a measurement source.
 - **Smallest version test** — Is the proposed scope actually the smallest version that addresses the problem?
 
 ## How to deliver findings
@@ -43,6 +44,9 @@ PRD CRITIC — Findings
 [CONCERN] <issue>
   Why: <…>
 
+[VAGUE] <word — location in PRD>
+  Why: <what reading of this word can't be falsified>
+
 [NIT] <issue>
   Why: <…>
 
@@ -55,6 +59,7 @@ OVERALL: <accept | revise | reject> — <one sentence>
 Severity:
 - **BLOCK** — the PRD does not solve the stated problem, or solves a different one.
 - **CONCERN** — substantive issue that should be addressed before shipping.
+- **VAGUE** — adjective without quantification; prevents post-ship evaluation. Flag the word and its location; don't propose a replacement.
 - **NIT** — minor; surface but don't dwell.
 - **GAP** — something the PRD should cover but doesn't.
 
