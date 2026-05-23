@@ -34,7 +34,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { TelegramUpdate } from "./api";
+import type { TelegramMessage, TelegramUpdate } from "./api";
 import { loadChatState } from "./state";
 
 interface PersonaRegistry {
@@ -52,6 +52,18 @@ function loadPersonas(): string[] {
 export const PERSONAS = loadPersonas();
 export type Persona = string;
 
+/**
+ * An image-bearing attachment we plan to forward to pi as `ImageContent`.
+ * The dispatcher emits descriptors (file_ids); the driver downloads bytes.
+ * `mimeHint` carries a known mime from a Telegram document; absent means the
+ * driver will guess from the file URL extension.
+ */
+export interface ImageAttachment {
+	fileId: string;
+	mimeHint?: string;
+	source: "photo" | "document" | "sticker";
+}
+
 export type Decision =
 	| {
 			kind: "ingest";
@@ -59,6 +71,7 @@ export type Decision =
 			chatTitle: string;
 			fromUsername: string;
 			line: string;
+			attachments?: ImageAttachment[];
 	  }
 	| {
 			kind: "invoke";
@@ -68,6 +81,7 @@ export type Decision =
 			persona: Persona;
 			line: string;
 			replyToMessageId: number;
+			attachments?: ImageAttachment[];
 	  }
 	| {
 			kind: "stop";
@@ -127,6 +141,44 @@ function fromUsername(from: { username?: string; first_name?: string } | undefin
 	return from.username ?? from.first_name ?? "unknown";
 }
 
+/**
+ * Collect image-bearing attachments from a Telegram message. Pure: emits
+ * file_id descriptors only; the driver does the actual download.
+ *
+ * Covers what pi can render as `ImageContent`:
+ *   - `photo`     — largest resolution by area (defensive against Telegram's
+ *                   ascending-order convention).
+ *   - `document`  — only when `mime_type` starts with `image/`. The mime is
+ *                   preserved as `mimeHint`.
+ *   - `sticker`   — only static stickers (not animated, not video). Telegram
+ *                   stickers are WebP.
+ *
+ * Voice, audio, video, animation, and animated/video stickers are not
+ * forwarded — pi has no content type for them. Any caption on those messages
+ * still flows through as text.
+ */
+function collectImageAttachments(msg: TelegramMessage): ImageAttachment[] {
+	const out: ImageAttachment[] = [];
+	if (msg.photo && msg.photo.length > 0) {
+		let best = msg.photo[0];
+		for (const p of msg.photo) {
+			if (p.width * p.height > best.width * best.height) best = p;
+		}
+		out.push({ fileId: best.file_id, source: "photo" });
+	}
+	if (msg.document?.mime_type?.startsWith("image/")) {
+		out.push({
+			fileId: msg.document.file_id,
+			mimeHint: msg.document.mime_type,
+			source: "document",
+		});
+	}
+	if (msg.sticker && !msg.sticker.is_animated && !msg.sticker.is_video) {
+		out.push({ fileId: msg.sticker.file_id, mimeHint: "image/webp", source: "sticker" });
+	}
+	return out;
+}
+
 export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision {
 	// ---- callback_query branch ----
 	const cb = update.callback_query;
@@ -162,9 +214,18 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 	if (!msg) return { kind: "ignore", reason: "no message or callback_query" };
 
 	const chatId = msg.chat.id;
-	const text = msg.text ?? "";
+	// Captions on photo/document/sticker messages act as the text body for
+	// routing — `/persona`, `@persona`, `/stop`, etc. all work on captions.
+	const text = msg.text ?? msg.caption ?? "";
 	const title = chatTitle(msg);
 	const sender = fromUsername(msg.from);
+	const attachments = collectImageAttachments(msg);
+	const attachmentsOrUndef = attachments.length > 0 ? attachments : undefined;
+	// When the message is image-only (no text/caption), give the agent a
+	// non-empty body. Matches the `"(no message body)"` fallback used in the
+	// persona-slash branch below.
+	const fallbackLine = (body: string): string =>
+		body.length > 0 ? body : attachments.length > 0 ? "(image)" : body;
 
 	// /start bypasses the allowlist — it's the bootstrap path for discovering
 	// chat ids before they can be allowlisted. Always-on, replies with the
@@ -230,8 +291,9 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 			chatTitle: title,
 			fromUsername: sender,
 			persona,
-			line: body.length > 0 ? body : "(no message body)",
+			line: body.length > 0 ? body : attachments.length > 0 ? "(image)" : "(no message body)",
 			replyToMessageId: msg.message_id,
+			attachments: attachmentsOrUndef,
 		};
 	}
 
@@ -245,8 +307,9 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 			chatTitle: title,
 			fromUsername: sender,
 			persona,
-			line: text,
+			line: fallbackLine(text),
 			replyToMessageId: msg.message_id,
+			attachments: attachmentsOrUndef,
 		};
 	}
 
@@ -264,8 +327,9 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 			chatTitle: title,
 			fromUsername: sender,
 			persona,
-			line: text,
+			line: fallbackLine(text),
 			replyToMessageId: msg.message_id,
+			attachments: attachmentsOrUndef,
 		};
 	}
 
@@ -282,12 +346,33 @@ export function decide(update: TelegramUpdate, ctx: DispatcherContext): Decision
 			chatTitle: title,
 			fromUsername: sender,
 			persona,
-			line: text,
+			line: fallbackLine(text),
 			replyToMessageId: msg.message_id,
+			attachments: attachmentsOrUndef,
 		};
 	}
 
-	// Group with no @-mention — pure steering.
+	// Group with image but no trigger: invoke instead of buffering. An image
+	// without a trigger is itself a clear "look at this" signal — silently
+	// holding it in the steering buffer until the next text invoke loses the
+	// timing and risks the image being stale by the time the agent sees it.
+	// Default persona for groups is engineer.
+	if (attachments.length > 0) {
+		const chat = loadChatState(chatId, title);
+		const persona = (chat.lastAssistantPersona ?? "engineer") as Persona;
+		return {
+			kind: "invoke",
+			chatId,
+			chatTitle: title,
+			fromUsername: sender,
+			persona,
+			line: fallbackLine(text),
+			replyToMessageId: msg.message_id,
+			attachments: attachmentsOrUndef,
+		};
+	}
+
+	// Group with no @-mention and no image — pure steering.
 	return {
 		kind: "ingest",
 		chatId,

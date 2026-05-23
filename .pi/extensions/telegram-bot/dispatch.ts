@@ -27,6 +27,10 @@ function traceOn(): boolean {
 	return (process.env.TELEGRAM_TRACE ?? "").toLowerCase() === "on";
 }
 
+function imageTag(count: number | undefined): string {
+	return count && count > 0 ? ` (+${count} img)` : "";
+}
+
 export async function dispatch(
 	update: TelegramUpdate,
 	pi: ExtensionAPI,
@@ -36,13 +40,16 @@ export async function dispatch(
 	switch (decision.kind) {
 		case "ingest":
 			if (traceOn())
-				surface(pi, `telegram-bot: ingested from @${decision.fromUsername} in "${decision.chatTitle}"`);
+				surface(
+					pi,
+					`telegram-bot: ingested from @${decision.fromUsername} in "${decision.chatTitle}"${imageTag(decision.attachments?.length)}`,
+				);
 			return handleIngest(decision);
 		case "invoke":
 			if (traceOn())
 				surface(
 					pi,
-					`telegram-bot: invoke ${decision.persona} from @${decision.fromUsername} in "${decision.chatTitle}"`,
+					`telegram-bot: invoke ${decision.persona} from @${decision.fromUsername} in "${decision.chatTitle}"${imageTag(decision.attachments?.length)}`,
 				);
 			return handleInvoke(decision, pi);
 		case "stop":

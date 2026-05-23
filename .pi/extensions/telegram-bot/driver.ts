@@ -24,9 +24,10 @@
  */
 
 import { spawn } from "node:child_process";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { api, type InlineKeyboardMarkup, type TelegramUpdate } from "./api";
-import type { Decision, Persona } from "./dispatcher";
+import type { Decision, ImageAttachment, Persona } from "./dispatcher";
 import { PERSONAS } from "./dispatcher";
 import { loadChatState, saveChatState } from "./state";
 
@@ -62,6 +63,7 @@ interface SteeringEntry {
 	chatTitle: string;
 	fromUsername: string;
 	line: string;
+	images?: ImageContent[];
 	ts: number;
 }
 
@@ -105,14 +107,54 @@ function renderSteeringPrefix(drain: SteeringEntry[]): string {
 	return `${lines.join("\n")}\n`;
 }
 
+/**
+ * Download each attachment's bytes from Telegram and assemble `ImageContent`.
+ * Best-effort: a per-attachment failure is logged and that image is dropped;
+ * the turn proceeds with whatever did download (the text portion always
+ * goes through). Returns an empty array when there's nothing to fetch.
+ *
+ * `mimeHint` from the dispatcher (set for documents and stickers) overrides
+ * the URL-extension guess in `downloadFileBytes`.
+ */
+async function downloadAttachments(
+	attachments: ImageAttachment[] | undefined,
+	chatId: number,
+	chatTitle: string,
+	fromUsername: string,
+): Promise<ImageContent[]> {
+	if (!attachments || attachments.length === 0) return [];
+	const out: ImageContent[] = [];
+	for (const att of attachments) {
+		try {
+			const meta = await api.getFile(att.fileId);
+			if (!meta.file_path) {
+				console.error(
+					`[telegram-bot] no file_path for ${att.source} ${att.fileId} from @${fromUsername} in "${chatTitle}" (chat ${chatId})`,
+				);
+				continue;
+			}
+			const { base64, mimeType } = await api.downloadFileBytes(meta.file_path);
+			out.push({ type: "image", data: base64, mimeType: att.mimeHint ?? mimeType });
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			console.error(
+				`[telegram-bot] ${att.source} download failed for @${fromUsername} in "${chatTitle}" (chat ${chatId}): ${msg}`,
+			);
+		}
+	}
+	return out;
+}
+
 // ---------- ingest ----------
 
 export async function handleIngest(d: Decision & { kind: "ingest" }): Promise<void> {
+	const images = await downloadAttachments(d.attachments, d.chatId, d.chatTitle, d.fromUsername);
 	steeringBuffer.push({
 		chatId: d.chatId,
 		chatTitle: d.chatTitle,
 		fromUsername: d.fromUsername,
 		line: d.line,
+		images: images.length > 0 ? images : undefined,
 		ts: Date.now(),
 	});
 
@@ -135,7 +177,22 @@ export async function handleInvoke(
 
 	const prefix = renderSteeringPrefix(drained);
 	const header = renderHeader(d.fromUsername);
-	const prompt = `${prefix}${header} ${d.line}`;
+	const promptText = `${prefix}${header} ${d.line}`;
+
+	// Collect images from drained steering entries in submission order, then
+	// append this turn's own attachments. Order matches the text layout
+	// (steering lines come before the trigger line in `promptText`).
+	const steeringImages: ImageContent[] = [];
+	for (const e of drained) {
+		if (e.images) steeringImages.push(...e.images);
+	}
+	const myImages = await downloadAttachments(
+		d.attachments,
+		d.chatId,
+		d.chatTitle,
+		d.fromUsername,
+	);
+	const allImages = [...steeringImages, ...myImages];
 
 	const pending: PendingInvoke = {
 		chatId: d.chatId,
@@ -153,8 +210,19 @@ export async function handleInvoke(
 	state.lastActivityAt = new Date().toISOString();
 	saveChatState(state);
 
-	// Send to pi. `deliverAs: "followUp"` queues if pi is mid-stream.
-	pi.sendUserMessage(prompt, { deliverAs: "followUp" });
+	// Send to pi. `deliverAs: "followUp"` queues if pi is mid-stream. When
+	// images are attached, switch to the array form so pi receives them as
+	// `ImageContent` parts; `before_agent_start.prompt` still carries the
+	// joined text including our TG_PREFIX sigil, so FIFO claim is unchanged.
+	if (allImages.length > 0) {
+		const content: (TextContent | ImageContent)[] = [
+			{ type: "text", text: promptText },
+			...allImages,
+		];
+		pi.sendUserMessage(content, { deliverAs: "followUp" });
+	} else {
+		pi.sendUserMessage(promptText, { deliverAs: "followUp" });
+	}
 
 	// Start typing indicator for this chat. The heartbeat continues until
 	// agent_end clears `currentInvoke`. If we're not yet the current invoke
