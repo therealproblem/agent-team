@@ -68,7 +68,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
@@ -207,6 +207,170 @@ function detectWholeBodyCallout(html: string): string | null {
 		);
 	}
 	return null;
+}
+
+/*
+ * Detect invented SVG labels — node text that does not trace back to the
+ * source markdown. Defense-in-depth lint sibling to detectWholeBodyCallout.
+ *
+ * The render-pdf agent occasionally coins domain concepts to fill chart
+ * nodes — "Live auction", "Matching engine", "Decision", "Pipeline" — that
+ * are nowhere in the source markdown. The chart then argues for a frame
+ * the author did not take: a *distinction* between two concepts gets
+ * silently redrawn as a *process* between them, with an invented middle
+ * node bridging the two. The reader sees the agent's theory, not the
+ * author's. The canonical broken example is `Order book → Live auction →
+ * Order flow` redrawing "the core distinction between order book and
+ * order flow" — neither "Live" nor "auction" appears in the source.
+ *
+ * Lint mechanics:
+ *   - Read the source markdown from VAULT_ROOT/source_md_path. If we can't
+ *     locate it (inline export, missing file), skip — best effort.
+ *   - Extract every <text>...</text> element from every <svg> in the body.
+ *   - For each label, tokenise into significant words (≥4 chars, not a
+ *     stopword). Single-word labels are exempt (axis values, category
+ *     tags, percentages — "Q1", "Yes", "62%", "Setup A").
+ *   - For multi-word labels, require at least one significant word to
+ *     appear as a substring of the lowercased source markdown. A label
+ *     with zero anchors is an invented concept; flag it.
+ *   - If any flagged labels exist, refuse the export and tell the agent
+ *     which labels failed and why the fix is usually "wrong diagram", not
+ *     "rename the label".
+ *
+ * Substring matching (not token-equality) handles plurals and obvious
+ * inflections — "trader" matches "traders" in source, "order" matches
+ * "orders". It is intentionally lenient: the lint catches the egregious
+ * "fully invented node" case while letting close paraphrases through.
+ */
+const SVG_LABEL_STOPWORDS = new Set([
+	"about",
+	"after",
+	"again",
+	"also",
+	"been",
+	"being",
+	"both",
+	"could",
+	"does",
+	"doing",
+	"done",
+	"each",
+	"even",
+	"every",
+	"from",
+	"have",
+	"into",
+	"just",
+	"more",
+	"most",
+	"much",
+	"only",
+	"other",
+	"over",
+	"should",
+	"some",
+	"such",
+	"than",
+	"that",
+	"then",
+	"there",
+	"these",
+	"they",
+	"this",
+	"those",
+	"under",
+	"very",
+	"were",
+	"what",
+	"when",
+	"where",
+	"which",
+	"while",
+	"will",
+	"with",
+	"would",
+	"your",
+]);
+
+async function detectInventedSvgLabels(
+	html: string,
+	sourceMdPath: string | undefined,
+): Promise<string | null> {
+	if (!sourceMdPath) return null; // inline export — no source to compare against
+
+	// Tolerate both "learning/foo.md" and "vault/learning/foo.md" — the agent
+	// prompt says "vault-relative" but the leading "vault/" segment is a
+	// common drift that should not silently disable the lint.
+	const relPath = sourceMdPath.replace(/^vault\//, "");
+	const sourcePath = join(VAULT_ROOT, relPath);
+	let sourceMd: string;
+	try {
+		sourceMd = await readFile(sourcePath, "utf8");
+	} catch {
+		return null; // can't read source — skip lint
+	}
+
+	const sourceNormalised = sourceMd.toLowerCase();
+
+	const svgRe = /<svg\b[\s\S]*?<\/svg>/gi;
+	const textRe = /<text\b[^>]*>([\s\S]*?)<\/text>/gi;
+
+	type Flag = { label: string; words: string[] };
+	const flagged: Flag[] = [];
+
+	const svgs = html.match(svgRe);
+	if (!svgs || svgs.length === 0) return null;
+
+	for (const svg of svgs) {
+		let m: RegExpExecArray | null;
+		textRe.lastIndex = 0;
+		while ((m = textRe.exec(svg)) !== null) {
+			const raw = m[1]
+				.replace(/<[^>]+>/g, "")
+				.replace(/&[a-z#0-9]+;/gi, " ")
+				.replace(/\s+/g, " ")
+				.trim();
+			if (!raw) continue;
+
+			const words = raw
+				.toLowerCase()
+				.split(/[^a-z0-9]+/)
+				.filter((w) => w.length >= 4 && !SVG_LABEL_STOPWORDS.has(w));
+
+			// Single-word or zero-significant-word labels are exempt — axis
+			// values, single-word category names, percentages.
+			if (words.length < 2) continue;
+
+			const anyAnchored = words.some((w) => sourceNormalised.includes(w));
+			if (!anyAnchored) {
+				flagged.push({ label: raw, words });
+			}
+		}
+	}
+
+	if (flagged.length === 0) return null;
+
+	const shown = flagged.slice(0, 5);
+	const more = flagged.length > shown.length
+		? `\n  ... and ${flagged.length - shown.length} more.`
+		: "";
+	const lines = shown
+		.map(
+			(f) =>
+				`  • "${f.label}" — none of [${f.words.join(", ")}] appear in the source markdown.`,
+		)
+		.join("\n");
+
+	return (
+		`Invented SVG label(s) detected — every multi-word label in a Kami chart must trace back to the source markdown (heading, bullet, bold, or prose):\n` +
+		lines +
+		more +
+		`\n\nThis pattern almost always means the wrong diagram was chosen, not that the labels need renaming. ` +
+		`If the source frames two-or-more parallel concepts as a *distinction* — parallel \`###\` subsections, "vs", "distinction", "two …", "compared" — it is a comparison, not a process. ` +
+		`Drop the SVG and use a \`.grid-2\` of bordered \`.card\`s per the exit-conditions table in \`.pi/skills/export/diagrams.md\`. ` +
+		`See the "Vocabulary constraint" section in that file for the full rule (canonical failure: \`Order book → Live auction → Order flow\` redrawing a distinction as a process). ` +
+		`Then re-call write_export_pdf with the restructured HTML.`
+	);
 }
 
 /*
@@ -1258,6 +1422,32 @@ const writeExportPdf = defineTool({
 						source_md_path: params.source_md_path,
 						template: params.template,
 						error: "whole_body_callout",
+					},
+					isError: true,
+				};
+			}
+
+			// Structural lint — refuse SVGs whose multi-word labels were
+			// invented by the agent (no anchor in the source markdown).
+			// Catches the "redraw a distinction as a process with an
+			// invented middle node" failure (e.g. Order book → Live
+			// auction → Order flow). Best-effort: skips silently when
+			// the source markdown can't be read.
+			const inventedLabels = await detectInventedSvgLabels(
+				params.html,
+				params.source_md_path,
+			);
+			if (inventedLabels) {
+				return {
+					content: [{ type: "text", text: inventedLabels }],
+					details: {
+						html_path: null,
+						pdf_path: null,
+						pdf_url: null,
+						title: params.title,
+						source_md_path: params.source_md_path,
+						template: params.template,
+						error: "invented_svg_labels",
 					},
 					isError: true,
 				};
