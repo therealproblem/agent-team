@@ -55,6 +55,34 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 
 Reviewers all run through Pi's `openai-completions` / `openai-responses` shim but stay tool-light (read-only) so shim risk stays low.
 
+#### Renaming the model providers to match your Pi login
+
+The `model:` strings in this repo are pinned to **my** Pi-configured provider aliases — prefixed `ELICE_*` (e.g. `ELICE_GPT_5_5/openai/gpt-5.5`, `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5`). The `ELICE_` half is the provider alias I set up with `pi login` / `pi provider`; the half after the slash is the upstream model id. **These aliases will not exist on your machine.** Pi will fail to spawn the subagent with an unknown-provider error until you swap them for aliases that match your own login.
+
+Where to rename:
+
+| File | What to change |
+|---|---|
+| `.pi/agents/engineer.md` | `model:` frontmatter — currently `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5` |
+| `.pi/agents/uat-tester.md` | same as engineer |
+| `.pi/agents/prd-critic.md` | `ELICE_GPT_5_4/openai/gpt-5.4` |
+| `.pi/agents/assessment-grader.md` | same as prd-critic |
+| `.pi/agents/red-team.md` | `ELICE_GPT_5_5/openai/gpt-5.5` |
+| `.pi/agents/render-pdf.md` | same as red-team |
+| `.pi/agents/render-html.md` | `ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview` |
+| `.pi/agents/jlpt-examiner.md` | same as render-html |
+| `.pi/agents/scout.md` | `ELICE_GPT_5_MINI/openai/gpt-5-mini` |
+| `.pi/agents/steelman.md` | same as scout |
+| `.pi/SYSTEM.md` | Root-session model hint, if you've pinned one for `pi` itself (default config picks this up from your `pi login`, but search for `gpt-5.5` if you've customised it) |
+
+To list the provider aliases you actually have logged in:
+
+```bash
+pi provider list
+```
+
+The fastest swap is a project-wide find-replace from `ELICE_<TIER>/` to your matching alias prefix (e.g. `MY_OPENAI/`, `ANTHROPIC/`, etc.) — keep the upstream model id after the slash intact unless you also want to swap models. If your provider only exposes one model, you can drop the slash form and use the bare alias.
+
 ### Pi mapping
 
 | Concept | Pi artifact |
