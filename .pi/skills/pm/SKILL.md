@@ -54,13 +54,14 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `research` — online research via stealth browser (`tff-fetch_url`, `tff-search_web`). Pull competitor pricing pages, public roadmaps, vendor changelogs, regulatory filings, industry reports
 - `reminders` — capture "remind me X" items and resolve on explicit user say-so. Surfaced at session start by the `reminders` extension
 
-## Isolated reviewer — spawned via `subagent`
+## Isolated reviewers — spawned via `subagent`
 
 ```
-subagent({ agentScope: "project", agent: "prd-critic", task: "<self-contained brief>" })
+subagent({ agentScope: "project", agent: "prd-critic" | "design-critic", task: "<self-contained brief>" })
 ```
 
 - `prd-critic` — blind reviewer that critiques a PRD against the problem it claims to solve. **Spawn whenever you finish a PRD draft.** It does not see your reasoning, only the PRD and the original problem statement, so it surfaces gaps you can't see from the inside. Brief it with only the PRD body + problem statement, never your reasoning history.
+- `design-critic` — blind reviewer that critiques a designer bundle against its brief + acceptance criteria. Spawn after the `designer` subagent returns a bundle, **when the surface is mission-critical** (brand-defining, accessibility-sensitive, or flagged by the user). Skip for throwaway internal mocks or single-component variants. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history, no designer's notes. Findings get appended to the card body as a `## Design critic` section.
 
 ## Engineering execution — spawned via `subagent`
 
@@ -185,11 +186,37 @@ If the user approves, use `edit` to apply. Don't propose updates for things obse
 
 ## Design language flow (when the PRD has a UI)
 
+Two escalation tiers — pick one based on the product. **Default to the light tier**; escalate to designer when the brief warrants it.
+
+### Light tier — inline `uiux` (default)
+
+Good for: backend products with thin UI, design-language picks that just need a `design.md`, fast iteration where the engineer will figure out the rest.
+
 1. **Formulate a search query** from the product concept — 2–4 words capturing the visual register you'd expect (`monochrome interface`, `data-dense dashboard`, `editorial minimal`, `consumer playful`). If you're uncertain, propose 2–3 queries and ask the user to pick before fetching.
 2. **Fetch** `https://styles.refero.design/?q=<search-query>` via the `research` service (`tff-fetch_url`). The page is a grid of design references — extract 3–5 candidates with: name, source URL, one-line description, and any palette/type/density notes you can read from the listing.
 3. **Hand to `uiux`** — adopt the skill's *Design language evaluation* procedure with: the product brief (audience, tone, content shape, must-have components) and the candidate list. The skill returns a scored comparison, a pick, and the body of a `design.md`.
 4. **Save** the returned body via `note-taker` to `pm/design/` with title `Design — <product slug>`. The engineer reads this when implementing UI.
 5. **Surface** the chosen reference URL to the user with the 2–3 sentence rationale. If the user rejects the pick, re-run with a different query or a manually-supplied candidate set.
+
+### Heavy tier — `designer` subagent (escalation)
+
+Escalate when **any** is true:
+- The surface is brand-defining (homepage, landing, primary signup, hero product UI).
+- The user asked for a mockup or storyboard, not just a design.md.
+- The brief spans generative media (photoreal imagery, AI video, AI music, voiceover) — designer emits a `prompts/` pack the user can paste into their external tool.
+- The product spans multiple screens / scenes that benefit from one cohesive visual treatment.
+- The user explicitly said "design this properly" or named a tier-1 reference brand.
+
+1. **Create a `persona: designer` card** via `board_create_card` with `sub_persona: <design-brief | landing | dashboard | brand>` (free-form is fine), `status: in_progress`, a `priority`, the card `title`, and a `body` containing: brief, audience, must-include surfaces, mood / tone hints, banned colors / fonts / phrasings, and any reference URLs the user has named.
+2. **Spawn `designer`** with the card path and the inline brief:
+   ```
+   subagent({ agentScope: "project", agent: "designer", task: "<self-contained brief — slug, card path, brief body, pointers to PRD/inspirations>" })
+   ```
+3. **Designer returns** `DONE: <one-line outcome>` + `Bundle: vault/ux/<slug>/` + card status. Read the bundle's `README.md` to see which design system was picked, which skills were applied, which dimensions defaulted, and what alternates were considered. Do not paste the storyboard or DESIGN.md into your reasoning — surface the URL only.
+4. **Optional — spawn `design-critic`** for blind review when the surface is mission-critical. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history. Critic writes findings into the card body. If a `[BLOCK]` lands, decide whether to re-spawn designer with revisions or accept and move on.
+5. **Hand to engineer.** Create the implementation card next; link `vault/ux/<slug>/DESIGN.md` as the design pointer in the brief. Engineer reads it (and the bundle's `README.md`) before writing code. Do NOT also save a `pm/design/<slug>.md` — the bundle's DESIGN.md is the contract.
+
+The two tiers don't mix. If you ran the light flow and decide you need the heavy one, archive the `pm/design/<slug>.md` (don't delete; trail matters) and start the designer card fresh.
 
 ## Content plan flow (when the product has pages)
 

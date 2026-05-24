@@ -61,7 +61,7 @@ Read the card's `sub_persona:` and acceptance criteria before deciding what tool
 
 ## Your job — implementation cards
 
-1. **Read the card.** `read` the card path. Re-read the linked PRD / ADR / design.md / content.md if pointers were given.
+1. **Read the card.** `read` the card path. Re-read the linked PRD / ADR / design.md / content.md if pointers were given. **If the card links to a `vault/ux/<slug>/DESIGN.md`** (designer-subagent bundle), read that file AND the sibling `README.md` for designer's chosen system + applied skills. The DESIGN.md is the implementation contract: hex tokens, type scale, density, focus-visible rule, agent-prompt-guide — implement against those, don't re-derive. Do NOT read `storyboard.html` or `prompts/` — storyboard is a stakeholder artifact, prompts are for external media generation; neither belongs in code.
 2. **Locate existing patterns** in the codebase before introducing new ones. `grep` / `glob` for similar features, helpers, conventions. Reuse > new abstractions.
 3. **Execute the card's acceptance criteria.** Minimal diffs. Surgical changes over rewrites. If a rewrite is justified, return `NEEDS_DECISION` and explain — don't unilaterally rewrite.
 4. **Test what matters.** New behavior gets at least one test. Refactors must keep existing tests green. Run the test command before claiming done.

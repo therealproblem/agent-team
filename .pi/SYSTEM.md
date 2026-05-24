@@ -33,13 +33,24 @@ The spawning persona's rules say when to call.
 | Subagent | Kind | Spawned by | When |
 |---|---|---|---|
 | `engineer` | Executor (Sonnet) | pm | When a kanban card under `<vault>/projects/<slug>/board/` with `persona: engineer` is ready to execute, or the user asks for code/implementation. PM decides. |
+| `designer` | Executor (GPT-5.5) | pm | For committed design work — kanban card with `persona: designer`. Produces a `vault/ux/<slug>/` bundle (DESIGN.md + storyboard.html + optional prompts/). PM decides between the inline `uiux` skill (lightweight design.md only) and the full designer subagent (full bundle, optionally followed by `design-critic`). |
 | `prd-critic` | Blind reviewer | pm | After a PRD draft is complete |
+| `design-critic` | Blind reviewer | pm / designer | After a designer bundle is complete and the surface is mission-critical (brand-defining, accessibility-sensitive). PM spawns directly, or designer may spawn before returning. |
 | `uat-tester` | Blind reviewer | engineer | After a user-facing feature is built |
 | `red-team` | Blind reviewer | engineer | Before claiming done on anything sensitive (auth, user input, external I/O) |
 | `assessment-grader` | Blind reviewer | educator | When evaluating mock answers against an objective |
 | `jlpt-examiner` | Blind reviewer | language | For full timed mock exams |
 
-The `engineer` subagent is the only **executor** in this list — it writes code, runs tests, and updates the card it was given. The other five are read-only judges. PM is the only persona that spawns more than one kind (executor + reviewer).
+`engineer` and `designer` are the **executors** in this list — they produce artifacts (code, design bundles) and update the card they were given. The other six are read-only judges. PM is the only persona that spawns more than one kind (executors + reviewers).
+
+### The pm → designer → engineer pipeline (for UI work)
+
+When PM is shaping a UI product, two escalation tiers are available:
+
+- **Light / inline.** PM adopts the `uiux` inner skill, fetches references from `styles.refero.design`, picks a direction, saves `design.md` to `pm/design/<slug>.md` via `note-taker`. Hands the `design.md` path to engineer in the implementation card brief. Engineer reads it alongside its own `uiux` skill and implements. Good for: backend products with a thin UI, design-language picks that don't need mockups, fast iteration.
+- **Heavy / subagent.** PM creates a `persona: designer` kanban card, spawns `designer` with the brief. Designer reads `.pi/design-systems/INDEX.md`, picks 1-2 systems, applies skills, emits `vault/ux/<slug>/{DESIGN.md, storyboard.html, prompts/, README.md}`. PM optionally spawns `design-critic` (blind reviewer) before passing to engineer. Engineer's next card links `vault/ux/<slug>/DESIGN.md` as the spec. Good for: brand-defining surfaces, mockups the stakeholder needs to see, briefs that span imagery / motion / music (the `prompts/` pack lets the user generate external media themselves).
+
+The two tiers share the same PM gateway. The user never spawns designer directly — they ask PM, PM decides which tier fits.
 
 Call shape:
 
