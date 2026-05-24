@@ -60,6 +60,12 @@ scribe.write({
 5. Honor `preserve` — never alter listed fields.
 6. Return the rephrased text only. No commentary about the rewrite.
 
+## Final pass for customer-facing audiences
+
+When `audience` is `customer` or `non-technical`, apply the [stop-slop](../stop-slop/SKILL.md) rules to the rewrite before returning — strip AI tells (filler, em-dashes, passive voice, false agency, throat-clearing, vague declaratives). Aim for a stop-slop score ≥ 35/50.
+
+Skip the stop-slop pass for `exec`, `engineer`, and `learner-N5..N1` — the rules conflict with deliberate jargon density (engineer), telegraphic structure (exec), and pedagogical phrasing (JLPT learners).
+
 ## Don't
 
 - Don't add facts not present in `source`.

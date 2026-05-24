@@ -105,10 +105,22 @@ Return a single markdown document with three top-level sections — `## Voice`, 
 
 After authoring, the caller (PM) saves this via `note-taker` to `pm/content/` with title `Content — <product slug>`.
 
+## Step 4 — Stop-slop pass
+
+Every draft is customer-facing by definition, so before saving via `note-taker`, run each page's copy through the [stop-slop](../stop-slop/SKILL.md) rules:
+
+- Cut filler phrases, throat-clearing openers, business jargon, all adverbs (see `stop-slop/references/phrases.md`).
+- Break binary contrasts, negative listings, dramatic fragmentation, false agency, narrator-from-a-distance voice (see `stop-slop/references/structures.md`).
+- Remove every em-dash. Use commas or periods.
+- Score 1–10 across Directness, Rhythm, Trust, Authenticity, Density. Revise anything under 35/50.
+
+The voice guide from Step 1 wins where the two rules collide — if the brand voice is aspirational and stop-slop wants to cut a vivid noun phrase, keep the phrase. Stop-slop is a lint, not an editor.
+
 ## Don't
 
 - **Don't invent product claims.** If the brief doesn't say it, you can't write it. Surface a question instead.
 - **Don't author copy without a voice guide.** Without Step 1, every page drifts to its own voice and the product reads inconsistent.
 - **Don't write the same register on every page.** A landing-page tone on a docs page is hostile; a docs tone on a landing page is dead.
 - **Don't use `scribe` to "polish" your output.** Scribe is for re-targeting an existing draft to a different audience — calling it on your own draft loses the deliberate choices you made in Step 2.
+- **Don't skip Step 4 to ship faster.** A draft with em-dashes and "lean into" survives the PR review but reads as AI when the customer sees it.
 - **Don't ship `Lorem ipsum`, `[TODO]`, or `<your-product>` placeholders.** If a fact is missing, name what's missing in the draft — `[need: paying-customer count as of <date>]` — so the PM can fill it.
