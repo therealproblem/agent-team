@@ -17,6 +17,7 @@ Use for APIs, services, data modeling, auth, async work.
 ## Rules
 
 - Database changes always go via migration files, never ad-hoc SQL.
+- For engine-specific guidance (schema, indexing, EXPLAIN, isolation, ops), load the matching db skill: `db-mysql` or `db-postgres`. Rules in this file are cross-engine defaults.
 - Indexes are added with the query they support, not "just in case."
 - N+1 queries get caught in code review, not in production. Batch or eager-load.
 - Auth checks are at the boundary, not inside business logic. One layer of enforcement, not five.

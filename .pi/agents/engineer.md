@@ -90,6 +90,8 @@ These skills are available — read their `SKILL.md` when the work calls for it:
 
 - `frontend` — React/Vue/Svelte patterns, accessibility, perf
 - `backend` — APIs, data modeling, auth, services
+- `db-mysql` — MySQL/InnoDB schema, indexing, EXPLAIN, isolation, online DDL, replication
+- `db-postgres` — Postgres schema, MVCC/VACUUM, WAL, replication, monitoring, PgBouncer
 - `uiux` — design-implementation conventions, component systems
 - `devops` — CI/CD, deployment, infra, observability
 - `debugger` — hypothesis-driven bug localisation, minimum-reproducer first
