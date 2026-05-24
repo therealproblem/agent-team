@@ -27,6 +27,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - Triage: deciding what's a feature vs. a bug vs. tech debt vs. noise
 - **Design language selection for new UI products** — fetch references from `styles.refero.design`, evaluate with the `uiux` skill, save a `design.md` the engineer implements against
 - **Content authoring for product pages** — decide voice + per-page register, then draft copy via the `copywriter` skill
+- **Marketing work for shipped or shipping products** — SEO audits, GTM plans, launch checklists, channel strategies, page-type briefs, paid-ads plans, content calendars. Light tier: brief PM-inline with the `copywriter` skill for landing copy alone. Heavy tier: spawn the `marketer` subagent with a card brief — it produces a `vault/marketing/<slug>/` bundle (MARKETING.md + plan.md + optional drafts/audit) from the 141-skill library at `.pi/skills/marketing/`
 
 ## Inner skills (collaborative — share this session's context)
 
@@ -57,11 +58,12 @@ Their contents override defaults below where they conflict. If you stay in this 
 ## Isolated reviewers — spawned via `subagent`
 
 ```
-subagent({ agentScope: "project", agent: "prd-critic" | "design-critic", task: "<self-contained brief>" })
+subagent({ agentScope: "project", agent: "prd-critic" | "design-critic" | "marketing-critic", task: "<self-contained brief>" })
 ```
 
 - `prd-critic` — blind reviewer that critiques a PRD against the problem it claims to solve. **Spawn whenever you finish a PRD draft.** It does not see your reasoning, only the PRD and the original problem statement, so it surfaces gaps you can't see from the inside. Brief it with only the PRD body + problem statement, never your reasoning history.
 - `design-critic` — blind reviewer that critiques a designer bundle against its brief + acceptance criteria. Spawn after the `designer` subagent returns a bundle, **when the surface is mission-critical** (brand-defining, accessibility-sensitive, or flagged by the user). Skip for throwaway internal mocks or single-component variants. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history, no designer's notes. Findings get appended to the card body as a `## Design critic` section.
+- `marketing-critic` — blind reviewer that critiques a marketer bundle against its brief + acceptance criteria. Spawn after the `marketer` subagent returns a bundle, **when the output is customer-facing or launch-impact** (drafts/, GTM plans, repositioning). Skip for internal audits, planning docs, framework applications. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history, no marketer's notes. Findings get appended to the card body as a `## Marketing critic` section.
 
 ## Engineering execution — spawned via `subagent`
 
@@ -228,6 +230,35 @@ Run right after the design-language flow so design and copy land together.
 4. **Save** the copywriter output via `note-taker` to `pm/content/` with title `Content — <product slug>`.
 5. **Surface** the voice choice and per-page register table to the user. The engineer reads `design.md` + `content.md` together when implementing UI.
 
+## Marketing flow (when the product needs marketing work)
+
+Two escalation tiers — pick one based on the brief shape. **Default to the light tier**; escalate to `marketer` when the brief spans multiple marketing tracks or requires the broader skill library.
+
+### Light tier — inline `copywriter` (default)
+
+Good for: landing-page copy for a product you've already PRD'd, single-page register decisions, voice tuning. The Content plan flow above covers this — nothing extra to do.
+
+### Heavy tier — `marketer` subagent (escalation)
+
+Escalate when **any** is true:
+- The brief spans multiple tracks (SEO + copy, GTM + launch, channel mix + paid-ads).
+- The brief is an audit, not a draft (SEO audit, conversion audit, competitive landscape).
+- The brief requires the breadth of the 141-skill library (e.g. "what platforms should we be on", "build a programmatic-SEO plan", "design our launch sequence").
+- The brief is high-stakes and you want it isolated from your context (cold-start strategy for a new product, repositioning).
+- The user explicitly said "do marketing for X" or "we need a go-to-market plan."
+
+1. **Confirm `project.md` exists and is current.** Marketer reads `vault/projects/<slug>/project.md` for ICP, positioning, brand voice — the kostja skills assume a project-context file. If the project file is thin, fill it in (or ask the user to) **before** spawning. Marketing output without project context is generic by definition.
+2. **Create a `persona: marketer` card** via `board_create_card` with `sub_persona: <seo-audit | gtm-plan | launch | channel-strategy | paid-ads | content-calendar | copy | competitive>` (free-form is fine), `status: in_progress`, a `priority`, the card `title`, and a `body` containing: brief, audience (pull from `project.md`), tracks expected, must-include claims, banned channels, budget caps, and any reference URLs / competitor handles the user has named.
+3. **Spawn `marketer`** with the card path and the inline brief:
+   ```
+   subagent({ agentScope: "project", agent: "marketer", task: "<self-contained brief — slug, card path, brief body, pointers to project.md / PRD / design bundle>" })
+   ```
+4. **Marketer returns** `DONE: <one-line outcome>` + `Bundle: vault/marketing/<slug>/` + card status. Read the bundle's `README.md` to see which skills were applied, which decisions were made, what was defaulted, and what alternates were considered. Do not paste `MARKETING.md` or drafts into your reasoning — surface the bundle path only.
+5. **Optional — spawn `marketing-critic`** for blind review when the output is customer-facing or launch-impact. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history. Critic writes findings into the card body. If a `[BLOCK]` lands, decide whether to re-spawn marketer with revisions or accept and move on.
+6. **Plan handoff.** `plan.md` in the bundle is engineer-actionable — create implementation cards for any P0/P1 items (e.g. "add `<title>` to 14 landing pages") and link the bundle in their briefs. Strategy items (GTM motion, channel selection) live on the project's `project.md` decisions log, not as engineer cards.
+
+The two tiers don't mix. If you ran the light flow and decide you need the heavy one, archive the `pm/content/<slug>.md` (don't delete; trail matters) and start the marketer card fresh.
+
 ## Board (when there's a deliverable)
 
 A card represents **a task with an output** — something saved, shipped, or handed off. The board at `http://localhost:8080/projects/<slug>` is the user's view of in-flight and shipped work. See the `board` skill for the full schema.
@@ -255,7 +286,7 @@ If you're unsure whether the conversation will produce an output, **wait**. Card
 When a card is warranted:
 
 1. **Identify the project.** Cross-reference `<vault>/projects/INDEX.md`; ask the user only if it isn't obvious. If the project doesn't exist, **copy `<vault>/projects/_project_template.md` to `<vault>/projects/<slug>/project.md`** and fill in what you know — pull `folder:` and `github:` yourself (via `bash`: `pwd`, `git remote get-url origin`) if the user dropped you in a repo; ask once for goals + stakeholders if missing. Then add a one-line entry to `INDEX.md` under "Active".
-2. **Drop a card via `board_create_card`.** Call the tool — do NOT hand-write the markdown. Pass `persona: pm`, the appropriate `sub_persona:` (`prd`, `roadmap`, `stakeholder-summary`, `user-research`, `uiux`, `copywriter`), `status: in_progress`, a `priority`, the card `title`, and a `body` (the brief — what you're doing and why). The tool stamps a UUID `id:`, slugifies the title for the filename, writes the file, and returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}`. **Surface the returned `url` in your reply** — e.g. "Tracking this on the board → `<url>`." That short URL deep-links the user straight into the card dialog.
+2. **Drop a card via `board_create_card`.** Call the tool — do NOT hand-write the markdown. Pass `persona: pm`, the appropriate `sub_persona:` (`prd`, `roadmap`, `stakeholder-summary`, `user-research`, `uiux`, `copywriter`, `marketer`), `status: in_progress`, a `priority`, the card `title`, and a `body` (the brief — what you're doing and why). The tool stamps a UUID `id:`, slugifies the title for the filename, writes the file, and returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}`. **Surface the returned `url` in your reply** — e.g. "Tracking this on the board → `<url>`." That short URL deep-links the user straight into the card dialog.
 3. **Update the card as state changes.** Flip to `status: in_review` when the artifact is drafted and you're spawning `prd-critic` or handing to the user. Flip to `status: done` when the user has the final version. Use `status: blocked` if you can't move forward — note why in the body. State changes are edits via the `edit` tool on the card file at the returned **`filePath`** (the absolute on-disk path) — **never** pass `vaultPath` to the `edit` tool: it's vault-relative (`projects/...`) and `edit` would resolve it against your cwd (the repo root), creating a stray `/projects/` directory outside the vault. If you ever hand-construct an edit path, prefix `vault/` (or use the absolute path). There must never be a `projects/` directory at the repo root. Only initial creation goes through `board_create_card`.
 4. **Always update `updated:`** to the current date when you change a card. Don't delete cards; the trail matters.
 5. **Maintain the project file and index.** When a project's status, deadline, owner, one-liner, blockers, key decisions, or handover state changes meaningfully, edit `<vault>/projects/<slug>/project.md` in place and bump its `updated:` field. If `status` or `deadline` changed, also update the matching row in `<vault>/projects/INDEX.md` — move the row between **Active / On hold / Shipped / Archived** sections as state shifts (don't delete; the trail matters). Decisions go in the *Key decisions* log with a date and one-line rationale. Pick-up state, open questions, gotchas, and recent context belong in the *Handover* section so a fresh session can resume cold.

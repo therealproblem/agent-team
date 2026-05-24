@@ -16,6 +16,14 @@
       "description": "ISOLATED blind reviewer of designer bundles. Receives bundle path + brief + acceptance criteria only. Mirrors prd-critic for design.",
       "agentPath": ".pi/agents/design-critic.md"
     },
+    "marketer": {
+      "description": "ISOLATED marketing executor. PM spawns it with a brief; it produces a vault/marketing/<slug>/ bundle (MARKETING.md + plan.md + optional drafts/ + audit/ + README.md) from the 141-skill library at .pi/skills/marketing/ (vendored from kostja94/marketing-skills).",
+      "agentPath": ".pi/agents/marketer.md"
+    },
+    "marketing-critic": {
+      "description": "ISOLATED blind reviewer of marketer bundles. Receives bundle path + brief + acceptance criteria only. Mirrors design-critic for marketing.",
+      "agentPath": ".pi/agents/marketing-critic.md"
+    },
     "uat-tester": {},
     "red-team": {},
     "assessment-grader": {},
