@@ -8,7 +8,7 @@ The aim is a long-running personal operating layer: you talk to it from the CLI 
 
 A single Pi session that **adopts a persona** for the work in front of it instead of routing every request to a separate sub-agent. The PM persona drafts a PRD and hands a kanban card to the `engineer` subagent (Sonnet, isolated child process) to build against it; the educator persona writes a lesson plan; the language persona drills you on JLPT vocab. Same session, same memory of you - different rules and skills active depending on which persona is on.
 
-Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman) and a handful of utility executors (`engineer`, `scout`, `render-html`, `render-pdf`) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost. `engineer` is an executor subagent spawned by PM, not an inline persona.
+Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman, design-critic, marketing-critic) and executor sub-agents (`engineer`, `designer`, `marketer`, `scout`, `render-html`, `render-pdf`) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost. `engineer`, `designer`, and `marketer` are executor subagents spawned by PM, not inline personas.
 
 Everything that matters gets written to a **markdown-first Obsidian vault**. HTML renders and PDF exports are on-demand derivatives served by a local Next.js + Nextra site on port 8080. Application pages (board, projects, news) sit behind a token gate; published artifacts (`/v/*`, `/p/*`) stay public so a shared URL just works.
 
@@ -25,12 +25,12 @@ Layer 1   ROOT SESSION        one Pi session - adopts personas inline
           │   no extra model loop per turn; the root IS the persona while it's on
           │   engineering requests route through pm, which spawns the engineer subagent
           │
-          ├── Executors (sub-agents)  engineer (Sonnet 4.5) · designer (GPT-5.5)
-          │   isolated child processes — code, tests, kanban cards · design bundles
+          ├── Executors (sub-agents)  engineer (Sonnet 4.5) · designer (GPT-5.5) · marketer (GPT-5.5)
+          │   isolated child processes — code, tests, kanban cards · design bundles · marketing bundles
           │
           └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
                                       assessment-grader · jlpt-examiner · steelman
-                                      design-critic
+                                      design-critic · marketing-critic
               blind by isolation - adversarial second opinion
 Layer 3   SHARED SERVICES     skills any persona can call inline
                               note-taker · show-md · render-html · export
@@ -49,7 +49,8 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 | Root session | `openai/gpt-5.5` (1M ctx) | Long-running session needs the context window |
 | `engineer`, `uat-tester` | `anthropic/claude-sonnet-4-5` | Tool-heavy code work + multi-step interpretation |
 | `designer` | `openai/gpt-5.5` (thinking: high) | Long-form design bundles — needs context + reasoning to compose `DESIGN.md` + `storyboard.html` + `prompts/` from the open-design skill library |
-| `design-critic`, `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor artifact audit + grading |
+| `marketer` | `openai/gpt-5.5` (thinking: high) | Long-form marketing bundles — same shape as designer; composes `MARKETING.md` + `plan.md` + optional `drafts/` + `audit/` from the 141-skill marketing library |
+| `design-critic`, `marketing-critic`, `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor artifact audit + grading |
 | `red-team` | `openai/gpt-5.5` | Adversarial review on the 1M-ctx model - same vendor as root |
 | `jlpt-examiner`, `render-html` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `render-pdf` | `openai/gpt-5.5` | PDF body conversion + Kami-token fidelity (swapped off Gemini after layout drift) |
@@ -68,9 +69,11 @@ Where to rename:
 | `.pi/agents/engineer.md` | `model:` frontmatter — currently `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5` |
 | `.pi/agents/uat-tester.md` | same as engineer |
 | `.pi/agents/designer.md` | `ELICE_GPT_5_5/openai/gpt-5.5` (also has `thinking: high`) |
+| `.pi/agents/marketer.md` | same as designer |
 | `.pi/agents/prd-critic.md` | `ELICE_GPT_5_4/openai/gpt-5.4` |
 | `.pi/agents/assessment-grader.md` | same as prd-critic |
 | `.pi/agents/design-critic.md` | same as prd-critic |
+| `.pi/agents/marketing-critic.md` | same as prd-critic |
 | `.pi/agents/red-team.md` | `ELICE_GPT_5_5/openai/gpt-5.5` |
 | `.pi/agents/render-pdf.md` | same as red-team |
 | `.pi/agents/render-html.md` | `ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview` |
@@ -163,6 +166,12 @@ Cards carry:
 - **Unblock flow.** Button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
 - **Soft delete.** Cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
 
+### engineer — code execution subagent
+
+PM spawns `engineer` to execute kanban cards — one card per spawn, isolated child process on Sonnet 4.5. Inner skills it auto-discovers under `.pi/skills/`: `frontend`, `backend`, `db-mysql`, `db-postgres`, `uiux`, `devops`, `debugger`, `refactor`, `review-artifact`, `corpus-learning`, `planning`, `research`, `commit-and-push`. After build it spawns `uat-tester` (user-facing features) and `red-team` (anything touching auth, user input, or external network I/O); their findings land on the card body, not in chat.
+
+`db-mysql` and `db-postgres` are vendored from [planetscale/database-skills](https://github.com/planetscale/database-skills) (MIT) — 2 SKILL.md + 40 references covering schema, indexing, EXPLAIN, isolation, deadlocks, online DDL, replication, MVCC/VACUUM, WAL, PgBouncer. The PlanetScale hosting-recommendation blockquote is stripped from each SKILL.md and reference links are rewritten to local paths so the skills work offline. The `ps-*` Postgres reference files (pscale CLI, PgBouncer config) are kept as operational depth — useful even off-PlanetScale, ignorable when not relevant. Auto-loaded when card text mentions MySQL or Postgres.
+
 ### designer — heavy-tier design bundles
 
 PM has two design escalation tiers:
@@ -173,6 +182,17 @@ PM has two design escalation tiers:
 Designer runs on `openai/gpt-5.5` with `thinking: high` — the artifact is long-form, multi-section, and references skill-library conventions that need the larger context window. `design-critic` (mirroring `prd-critic`) is the blind reviewer PM spawns after the bundle lands.
 
 The library itself is vendored: **95 skills** in `.pi/skills/` (24 paid-API wrappers + 12 hard skips omitted) and **150 design systems** under `.pi/design-systems/`. **57 of the 95 vendored skills are catalog-only stubs** that point at the upstream repo — see `.pi/STUBS.md` for the catalog + upstream URLs if you want to wire any of them in.
+
+### marketer — heavy-tier marketing bundles
+
+PM has two marketing escalation tiers:
+
+- **Light** — the `copywriter` inner skill runs inline under the PM persona for single-page copy (landing hero, pricing table, CTA voice). Output lands in `vault/pm/content/`.
+- **Heavy** — when the brief spans multiple tracks (SEO audit + GTM plan, channel mix + paid-ads, cold-start strategy + content calendar) or requires the breadth of the marketing library, PM spawns the `marketer` subagent. Marketer reads `.pi/skills/marketing/INDEX.md`, picks two or three skills by brief match, and produces a `vault/marketing/<slug>/` bundle: `MARKETING.md` (top-level synthesis), `plan.md` (engineer-actionable priorities), optional `drafts/` (landing copy, ad copy, email sequences, social posts), optional `audit/` (SEO findings, competitor analysis, conversion gaps), and `README.md` (transparency receipt). Returns a one-line outcome + the bundle path. PM passes P0/P1 plan items to engineer as implementation cards; strategy items go to the project's decisions log.
+
+Marketer runs on `openai/gpt-5.5` with `thinking: high` — same model and shape as designer because marketing artifacts are long-form synthesis pulling from a large skill library. `marketing-critic` (mirroring `design-critic`) is the blind reviewer PM spawns on customer-facing or launch-impact bundles.
+
+The library is vendored from [kostja94/marketing-skills](https://github.com/kostja94/marketing-skills) (MIT): **141 of 172 skills** under `.pi/skills/marketing/<category>/<skill>/SKILL.md` across SEO (33), strategies (27), channels (12), platforms (9), paid-ads (11), content (5), pages (40), and analytics (4). Nested under `marketing/` rather than flat in `.pi/skills/` so they stay scoped to the marketer subagent and don't pollute root pi auto-discovery; every frontmatter is patched with `disable-model-invocation: true` as belt+suspenders, and the marketer routes discovery through `INDEX.md` before reading any `SKILL.md` body. Skipped 31: `components/*` (designer's turf), `content/copywriting` (pi's `copywriter` is more opinionated), three pure-UX `pages/utility/*` (404, signup-login, status), `analytics/tracking` (needs runtime GA wiring), and the `legal/legal` meta page-generator. See `.pi/SOURCE.md` for the full provenance ledger.
 
 ### scout - file finder on a cheap sub-agent
 
