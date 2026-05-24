@@ -154,6 +154,7 @@ A 200 status is not success. Pages that returned 16KB of "Sign in" CTAs, empty S
 - **The entity you were looking for** (tweet body, article paragraph, code snippet, table row, definition) is **not anywhere in `details.markdown`** — page rendered, but not what you needed.
 - **`details.truncated: true`** AND the missing tail is where the answer would live — body cap hit before the relevant section.
 - **Body is mostly nav/footer/recommendation/CTA boilerplate** with no prose density — skim before quoting.
+- **Body is paginated** (next-page link, `« prev | next »`, `1 2 3 … N` pager, "Showing 1–25 of 200", "Page 1 of 8") and the answer plausibly lives past page 1 — forum thread, search-results list, comment tree, archive index, issue/PR comments.
 - **Status 403, 451, 429, or 5xx** — outright block, geo-block, rate-limit, server fault. Don't retry the same URL immediately.
 
 If any apply, walk the ladder. Don't fetch the same URL twice with the same parameters. Each rung is "different enough" from the last that a new attempt has real signal.
@@ -203,7 +204,36 @@ Many sites expose plain-text / JSON / RSS / print variants alongside the rendere
 - **Print variant:** try appending `?print=true`, `/print`, `print.html`, `?view=print` (older newsrooms).
 - **`view-source:` equivalents:** if the page is an SPA, fetching the underlying JSON endpoint (visible in the network tab of the live page, but you can often guess: `/api/v1/<resource>/<id>`, `/_next/data/<build>/<path>.json` for Next.js sites, `/page-data/<route>/page-data.json` for Gatsby).
 
-### Step 5 — Search-back from a partial signal
+### Step 5 — Walk the pagination
+
+When the fetch succeeded but the answer plausibly lives past page 1 (forum thread, search results, comment list, archive index, issue/PR comments), don't declare done at page 1.
+
+**Primary — follow the next link from page 1's body.** Most paginated UIs render the "Next →" affordance in static HTML. Search `details.markdown` for `[Next](...)`, `[Next →](...)`, `[« Prev | Next »](...)`, numbered `[2](...) [3](...) [4](...)` pagers, or `Page 1 of N` / `Showing 1–25 of 200` totals. Extract the href, fetch it, repeat until the answer is found, the next link disappears, or you hit the **5-page cap** (bump explicitly if the question demands it). Don't guess from the URL shape when the body already tells you the right next URL.
+
+**Fallback — guess the URL pattern.** When the body hides pagination behind JS, try the convention for the host:
+
+| Pattern | Common on |
+|---|---|
+| `?page=N` | Discourse, generic |
+| `/page/N/` | WordPress, Ghost, blogs |
+| `?start=N` (offset, not page) | phpBB, vBulletin |
+| `thread-<id>-<N>-1.html` | Discuz |
+| `?after=<id>` / `?before=<id>` cursor | reddit JSON, Mastodon, modern APIs |
+| `?max_id=<id>` | Twitter-style timelines |
+| `&offset=N` / `&from=N` | Elastic-backed search, GitHub search |
+
+For cursor pagination you **cannot guess** the next cursor — extract it from the response body's `next` / `pagination.next` / last-item id, or fall back to a JSON mirror that exposes it.
+
+**Search-results pagination.** `tff-search_web` has no `page` param — bump `max_results` and re-query (refining with `-<noisy-top-term>` often surfaces what page 2 of a SERP would have shown).
+
+**When not to paginate:**
+
+- The fetched page already contains the entity you needed — stop.
+- A Step-2 JSON mirror covers the whole thing in one shot (reddit `.json`, HN Algolia, SE API, GitHub API) — use that instead.
+- The question is "what does this thread say overall" not "is X mentioned anywhere" — page 1 + "thread continues for N more pages" is an honest answer, don't burn budget reading 200 posts for the gist.
+- 5-page cap reached — surface "looked through first 5 pages, didn't find <X>" rather than silently fetching 50.
+
+### Step 6 — Search-back from a partial signal
 
 If you got *any* unique phrase from a partial fetch (a title, a sentence, a distinctive claim), `tff-search_web` for it in quotes. Re-hosts, mirrors, news aggregators, and quote sites will surface where else the same content lives.
 
@@ -212,7 +242,7 @@ Examples:
 - `tff-search_web '"<unique sentence from the lede>"'` → quote-aggregators, Hacker News submissions
 - `tff-search_web 'site:archive.org <url>'` → check Wayback indexing without hitting Wayback directly
 
-### Step 6 — Author-direct
+### Step 7 — Author-direct
 
 For an individual's content (tweet, blog post, talk, paper), the canonical home is usually findable in two hops:
 
@@ -221,7 +251,7 @@ For an individual's content (tweet, blog post, talk, paper), the canonical home 
 
 Once you have the canonical site, fetch directly — bypasses every mirror's quirks.
 
-### Step 7 — Triangulate from secondary sources
+### Step 8 — Triangulate from secondary sources
 
 When the goal is a **fact** (a statistic, a definition, a date, a quote attributed to someone), not a specific source's wording:
 
