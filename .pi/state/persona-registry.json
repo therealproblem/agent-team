@@ -1,0 +1,28 @@
+{
+  "personas": {
+    "pm": { "label": "PM" },
+    "educator": { "label": "EDU" },
+    "language": { "label": "LANG" },
+    "trader": { "label": "TRD" }
+  },
+  "subagents": {
+    "engineer": {},
+    "designer": {
+      "description": "ISOLATED design executor. PM spawns it with a brief; it produces a vault/ux/<slug>/ bundle (DESIGN.md + storyboard.html + optional prompts/ pack + README.md).",
+      "agentPath": ".pi/agents/designer.md"
+    },
+    "prd-critic": {},
+    "design-critic": {
+      "description": "ISOLATED blind reviewer of designer bundles. Receives bundle path + brief + acceptance criteria only. Mirrors prd-critic for design.",
+      "agentPath": ".pi/agents/design-critic.md"
+    },
+    "uat-tester": {},
+    "red-team": {},
+    "assessment-grader": {},
+    "jlpt-examiner": {},
+    "steelman": {},
+    "scout": {},
+    "render-html": {},
+    "render-pdf": {}
+  }
+}
