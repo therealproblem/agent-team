@@ -8,6 +8,14 @@ export default {
   reactStrictMode: true,
   // Don't leak local filesystem paths in production source maps.
   productionBrowserSourceMaps: false,
+  // Allow HMR from the public domain in dev mode.
+  ...(process.env.NODE_ENV === 'development' && process.env.AGENTS_TEAM_SERVER_PUBLIC_URL
+    ? {
+        allowedDevOrigins: [
+          new URL(process.env.AGENTS_TEAM_SERVER_PUBLIC_URL).origin,
+        ],
+      }
+    : {}),
   // `@terrastruct/d2` ships a 21MB WASM blob + a 100k-line ELK bundle.
   // Letting webpack pull all of that into the server bundle on every dev
   // request takes minutes per page. Externalizing it makes Next.js

@@ -75,7 +75,7 @@ The project's `slug` is the directory name. A card's `slug` is its filename with
 
 ## Who uses it
 
-Only the **pm** and **engineer** personas write to the board. The other top-level personas (educator, language, trader) don't track work this way — their workflows are managed by their own extensions (`srs`, `trade-journal`, etc.) and don't belong on a kanban.
+Only the **pm** persona and the **engineer** subagent write to the board. The other top-level personas (educator, language, trader) don't track work this way — their workflows are managed by their own extensions (`srs`, `trade-journal`, etc.) and don't belong on a kanban.
 
 ## `project.md` schema
 

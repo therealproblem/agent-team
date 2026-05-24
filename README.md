@@ -1,6 +1,6 @@
 # agents-team
 
-A personal **team of AI agents** built on the [Pi coding-agent harness](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). One terminal session, many roles - product manager, engineer, educator, language coach, trading student - each with its own skills, reviewers, and memory of who you are in that domain.
+A personal **team of AI agents** built on the [Pi coding-agent harness](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). One terminal session, many roles - product manager, educator, language coach, trading student - each with its own skills, reviewers, and memory of who you are in that domain. Engineering work routes through the PM persona, which spawns an isolated `engineer` subagent to execute code tasks.
 
 The aim is a long-running personal operating layer: you talk to it from the CLI or from Telegram, it writes to your Obsidian vault, renders artifacts as web pages or PDFs, and learns your preferences across sessions.
 
@@ -8,7 +8,7 @@ The aim is a long-running personal operating layer: you talk to it from the CLI 
 
 A single Pi session that **adopts a persona** for the work in front of it instead of routing every request to a separate sub-agent. The PM persona drafts a PRD and hands a kanban card to the `engineer` subagent (Sonnet, isolated child process) to build against it; the educator persona writes a lesson plan; the language persona drills you on JLPT vocab. Same session, same memory of you - different rules and skills active depending on which persona is on.
 
-Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman) and a handful of utility executors (engineer, scout, render-html, render-pdf) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost.
+Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman) and a handful of utility executors (`engineer`, `scout`, `render-html`, `render-pdf`) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost. `engineer` is an executor subagent spawned by PM, not an inline persona.
 
 Everything that matters gets written to a **markdown-first Obsidian vault**. HTML renders and PDF exports are on-demand derivatives served by a local Next.js + Nextra site on port 8080. Application pages (board, projects, news) sit behind a token gate; published artifacts (`/v/*`, `/p/*`) stay public so a shared URL just works.
 
@@ -88,7 +88,7 @@ The fastest swap is a project-wide find-replace from `ELICE_<TIER>/` to your mat
 | Concept | Pi artifact |
 |---|---|
 | Root agent (Layer 0 + 1) | The Pi session itself. `.pi/SYSTEM.md` is its system prompt. |
-| Personas | `.pi/skills/<name>/SKILL.md` - adopted inline by reading the file. (No `engineer` persona - engineering routes through `pm`, which spawns the `engineer` subagent.) |
+| Personas | `.pi/skills/<name>/SKILL.md` - adopted inline by reading the file. Four personas: `pm`, `educator`, `language`, `trader`. Engineering routes through `pm`, which spawns the `engineer` subagent. |
 | Executor + reviewer subagents | `.pi/agents/<name>.md` - spawned as isolated sub-Pi processes via the `subagent` extension. Per-agent model pinned in frontmatter. |
 | Inner skills (prd, frontend, kanji, journal, ...) | `.pi/skills/<name>/SKILL.md` - Pi auto-discovers and loads on demand. |
 | Shared services | Same shape as inner skills, available under every persona. |

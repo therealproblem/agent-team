@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { ThemeProvider } from "@/components/site/ThemeProvider";
@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   title: { default: SITE_TITLE, template: `%s · ${SITE_TITLE}` },
   description: "",
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

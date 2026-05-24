@@ -198,8 +198,12 @@ async function generateTitleInBackground(
     console.error("[submitRequest] background title gen failed:", e);
     await clearTitlePending(projectSlug, cardSlug).catch(() => {});
   }
-  revalidatePath(`/projects/${projectSlug}`);
-  revalidatePath("/projects");
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+    revalidatePath("/projects");
+  } catch (e) {
+    console.warn("[generateTitleInBackground] revalidation failed:", (e as Error).message);
+  }
 }
 
 export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRequestResult> {
@@ -269,8 +273,12 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
   const body = `## Request\n\n${trimmedDescription}\n`;
 
   await fs.writeFile(filePath, frontmatter + body, "utf8");
-  revalidatePath(`/projects/${projectSlug}`);
-  revalidatePath("/projects");
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+    revalidatePath("/projects");
+  } catch (e) {
+    console.warn("[submitRequest] revalidation failed:", (e as Error).message);
+  }
 
   // Fire and forget — the response goes back to the client now; Pi keeps
   // running and rewrites the card title when it returns.
@@ -341,7 +349,12 @@ export async function addComment(input: {
     console.error(`[addComment] write failed for ${filePath}:`, (e as Error).message);
     return { ok: false, error: "Couldn't save comment." };
   }
-  revalidatePath(`/projects/${projectSlug}`);
+  // Revalidation may fail if called during render; catch and log.
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+  } catch (e) {
+    console.warn(`[addComment] revalidation failed (likely during render):`, (e as Error).message);
+  }
 
   // Lazy self-heal: on the first user comment after a server restart, walk
   // the vault for stale `pm_reply_pending` flags and re-fire them.
@@ -384,8 +397,12 @@ export async function deleteCard(input: {
   }
   await ensureDir(archiveDir);
   await fs.rename(src, dst);
-  revalidatePath(`/projects/${projectSlug}`);
-  revalidatePath("/projects");
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+    revalidatePath("/projects");
+  } catch (e) {
+    console.warn("[archiveCard] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }
 
@@ -425,8 +442,12 @@ export async function unarchiveCard(input: {
   }
 
   await fs.rename(src, dst);
-  revalidatePath(`/projects/${projectSlug}`);
-  revalidatePath("/projects");
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+    revalidatePath("/projects");
+  } catch (e) {
+    console.warn("[restoreCard] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }
 
@@ -470,7 +491,11 @@ export async function deleteProject(input: { projectSlug: string }): Promise<Act
     target = path.join(archiveDir, `${projectSlug}-${suffix++}`);
   }
   await fs.rename(src, target);
-  revalidatePath("/projects");
+  try {
+    revalidatePath("/projects");
+  } catch (e) {
+    console.warn("[deleteProject] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }
 
@@ -526,7 +551,11 @@ export async function unblockCard(input: {
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/projects/${projectSlug}`);
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+  } catch (e) {
+    console.warn("[updateCardStatus] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }
 
@@ -554,7 +583,11 @@ export async function markCardDone(input: {
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/projects/${projectSlug}`);
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+  } catch (e) {
+    console.warn("[markCardDone] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }
 
@@ -583,6 +616,10 @@ export async function reopenCard(input: {
   data.updated = todayIso();
 
   await fs.writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
-  revalidatePath(`/projects/${projectSlug}`);
+  try {
+    revalidatePath(`/projects/${projectSlug}`);
+  } catch (e) {
+    console.warn("[reopenCard] revalidation failed:", (e as Error).message);
+  }
   return { ok: true };
 }

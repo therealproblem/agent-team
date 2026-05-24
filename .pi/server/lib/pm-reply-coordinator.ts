@@ -255,7 +255,11 @@ async function fireReply(projectSlug: string, cardSlug: string, shouldRevalidate
   // Sweep is called lazily from addComment and may happen during a page
   // render; calling revalidatePath there would trigger Next.js errors.
   if (shouldRevalidate) {
-    revalidatePath(`/projects/${projectSlug}`);
+    try {
+      revalidatePath(`/projects/${projectSlug}`);
+    } catch (e) {
+      console.warn(`[pm-reply] revalidation failed:`, (e as Error).message);
+    }
   }
 }
 

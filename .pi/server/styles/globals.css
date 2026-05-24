@@ -217,6 +217,76 @@ body {
   background: var(--color-parchment-white);
 }
 
+/* Mobile viewport containment — prevents horizontal overflow on /v pages.
+ * Applied at the html/body level so every child respects device width.
+ * Also enforces max-width and word-breaking on potentially wide elements. */
+html {
+  overflow-x: hidden;
+}
+body {
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
+}
+
+/* Aggressive mobile overflow prevention for all potentially-wide content.
+ * Target prose elements, code blocks, tables, images, and embedded content. */
+@media (max-width: 768px) {
+  /* Constrain all direct children of article to viewport */
+  article > * {
+    max-width: 100% !important;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+  
+  /* Force code blocks to scroll internally rather than push layout */
+  article pre,
+  article code {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    display: block;
+  }
+  
+  /* Images never exceed viewport */
+  article img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  
+  /* Break long URLs and text strings */
+  article a {
+    word-break: break-all;
+    overflow-wrap: break-word;
+  }
+  
+  /* Mermaid diagrams scroll if needed */
+  article svg,
+  article [data-mermaid-svg],
+  article [data-mermaid-lightbox] {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  
+  /* Mobile table handling: equal column widths, no horizontal scroll.
+   * Force table to 100% width and distribute columns equally via table-layout.
+   * Content wraps inside cells. Override the shadcn Table component's
+   * whitespace-nowrap default so text wraps instead of forcing horizontal scroll. */
+  article table {
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  
+  article th,
+  article td {
+    /* Override whitespace-nowrap from shadcn Table component */
+    white-space: normal !important;
+    /* Allow content to wrap naturally inside cells */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
+
 /* Hide the scrollbar UI but keep wheel/trackpad scrolling. Used on the
  * sticky TOC sidebar so the panel reads as editorial chrome rather than
  * a control — the TOC's own rail-and-fill indicator carries the position
@@ -252,7 +322,8 @@ svg[aria-roledescription="timeline"] .lineWrapper line {
 }
 
 /* GFM alert callouts — restyled to Delphi: 16px radius, Cloud Fog tint
- * for NOTE, Muted Stone border by default. Soft, scholarly, never harsh. */
+ * for NOTE, Muted Stone border by default. Soft, scholarly, never harsh.
+ * Mobile: constrained width, word wrapping enabled. */
 .markdown-alert {
   background: var(--color-parchment-white);
   border: 1px solid rgba(148, 135, 124, 0.4);
@@ -261,6 +332,9 @@ svg[aria-roledescription="timeline"] .lineWrapper line {
   border-radius: 16px;
   padding: 16px 20px;
   margin: 1.5em 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 .markdown-alert * { color: var(--color-deep-cognac); }
 .markdown-alert .markdown-alert-title {

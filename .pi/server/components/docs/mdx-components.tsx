@@ -35,7 +35,7 @@ function H1({ children, id, className, ...rest }: ComponentProps<"h1">) {
     <h1
       id={id}
       className={cn(
-        "group mt-0 mb-6 font-serif text-4xl font-semibold tracking-tight",
+        "group mt-0 mb-6 font-serif text-4xl font-semibold tracking-tight break-words",
         className,
       )}
       {...rest}
@@ -51,7 +51,7 @@ function H2({ children, id, className, ...rest }: ComponentProps<"h2">) {
     <h2
       id={id}
       className={cn(
-        "group mt-12 mb-3 font-serif text-2xl font-semibold tracking-tight",
+        "group mt-12 mb-3 font-serif text-2xl font-semibold tracking-tight break-words",
         className,
       )}
       {...rest}
@@ -67,7 +67,7 @@ function H3({ children, id, className, ...rest }: ComponentProps<"h3">) {
     <h3
       id={id}
       className={cn(
-        "group mt-8 mb-2 font-serif text-xl font-semibold tracking-tight",
+        "group mt-8 mb-2 font-serif text-xl font-semibold tracking-tight break-words",
         className,
       )}
       {...rest}
@@ -124,7 +124,7 @@ function H6({ children, id, className, ...rest }: ComponentProps<"h6">) {
 }
 
 function P({ className, ...rest }: ComponentProps<"p">) {
-  return <p className={cn("my-4 leading-7", className)} {...rest} />;
+  return <p className={cn("my-4 leading-7 break-words", className)} {...rest} />;
 }
 
 function A({ className, ...rest }: ComponentProps<"a">) {
@@ -148,7 +148,7 @@ function Ol({ className, ...rest }: ComponentProps<"ol">) {
 }
 
 function Li({ className, ...rest }: ComponentProps<"li">) {
-  return <li className={cn("leading-7", className)} {...rest} />;
+  return <li className={cn("leading-7 break-words", className)} {...rest} />;
 }
 
 function Hr(_props: ComponentProps<"hr">) {
@@ -161,7 +161,7 @@ function Blockquote({ className, ...rest }: ComponentProps<"blockquote">) {
   return (
     <blockquote
       className={cn(
-        "my-6 border-l-4 border-muted-stone bg-muted px-4 py-2 italic",
+        "my-6 border-l-4 border-muted-stone bg-muted px-4 py-2 italic break-words max-w-full",
         className,
       )}
       {...rest}
@@ -173,7 +173,7 @@ function Pre({ className, children, ...rest }: ComponentProps<"pre">) {
   return (
     <pre
       className={cn(
-        "my-4 overflow-x-auto border border-border bg-muted p-4 text-sm leading-relaxed",
+        "my-4 overflow-x-auto border border-border bg-muted p-4 text-sm leading-relaxed max-w-full",
         className,
       )}
       {...rest}
@@ -209,6 +209,10 @@ function InlineCode({ className, ...rest }: ComponentProps<"code">) {
  * scale, and border treatment. Delphi-flavoured className overrides
  * (Burnt Umber header bg, uppercase caption-style head text, editorial
  * cell padding) match the /components gallery's Table demo.
+ *
+ * Mobile: The table wrapper (from KitTable) handles horizontal scroll.
+ * We wrap in a card container for styling but let KitTable's internal
+ * overflow-x-auto div handle the actual scrolling behavior.
  */
 function Table({ className, ...rest }: ComponentProps<"table">) {
   return (
@@ -269,7 +273,7 @@ function Img({ className, alt, ...rest }: ComponentProps<"img">) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       alt={alt ?? ""}
-      className={cn("my-6 max-w-full border border-border", className)}
+      className={cn("my-6 max-w-full h-auto border border-border", className)}
       {...rest}
     />
   );

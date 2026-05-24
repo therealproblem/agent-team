@@ -43,7 +43,7 @@ export function DocLayout({ children, toc, frontmatter }: DocLayoutProps) {
             <Toc entries={toc} />
           </div>
         </aside>
-        <article className="min-w-0 flex-1 max-w-3xl mx-auto lg:mx-0">
+        <article className="min-w-0 flex-1 max-w-3xl mx-auto lg:mx-0 w-full overflow-x-hidden">
           {title ? (
             <h1 className="font-serif font-light text-[40px] leading-[1.15] tracking-[-0.8px] text-foreground mb-10 mt-0">
               {title}

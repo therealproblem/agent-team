@@ -8,8 +8,9 @@ A personal agent system built on the Pi coding agent harness (`@earendil-works/p
 Layer 0   META                observes & optimizes the system
 Layer 1   ROOT SESSION        single Pi session — adopts personas inline
           │
-          ├── Personas (skills, inline)   pm, engineer, educator, language, trader
+          ├── Personas (skills, inline)   pm · educator · language · trader
           │   no extra model loop per turn; the root IS the persona while it's on
+          │   engineering requests route through pm, which spawns the engineer subagent
           │
           └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
                                       assessment-grader · jlpt-examiner
@@ -28,7 +29,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 | Architectural concept | Pi artifact |
 |---|---|
 | Layer 0 + 1 (Meta + root agent) | The single Pi session. `.pi/SYSTEM.md` is its system prompt — explains the persona model and routes to the right persona. |
-| Personas (pm, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. Registered in `.pi/state/persona-registry.json`. |
+| Personas (pm, educator, language, trader) | `.pi/skills/<name>/SKILL.md` — adopted by the root session by reading the file and following its instructions. Registered in `.pi/state/persona-registry.json`. Four inline personas; `engineer` is NOT a persona. |
 | Reviewers (prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner) + scout + steelman + engineer | `.pi/agents/<name>.md` — spawned as isolated sub-Pi processes via the `subagent` extension. Pre-loaded with `_global.md` profile only — no domain profiles, to preserve blindness (reviewers) or model isolation (engineer, scout). Reviewers use isolation for blindness; `scout` uses it for cheap-model offload + context-noise isolation; `engineer` uses it for Sonnet execution with a clean card-focused context. |
 | Inner skills (prd, frontend, kanji, journal, …) | `.pi/skills/<name>/SKILL.md` — Pi auto-discovers and loads on demand inside the active persona or subagent. Inner skills available under each persona/subagent are listed in the registry. |
 | Layer 3 services (note-taker, show-md, render-html, export, news, scribe, research, summary, reminders, scout) | Same shape as inner skills — `.pi/skills/<name>/SKILL.md`, available under every persona. `scout` is a thin facade — the SKILL.md dispatches to `.pi/agents/scout.md` so the file-hunting work runs on a cheap model (`openai/gpt-5-mini` via Pi's `ELICE_GPT_5_MINI` provider) in an isolated sub-process. |
@@ -40,7 +41,7 @@ The earlier model used a Distributor that spawned each domain as a separate Pi s
 
 A UAT tester or red-team reviewer *must* be blind to the implementer's reasoning. Same loop = same context = bias. Inline cannot enforce this; sub-sessions can.
 
-Domain work *benefits* from continuity — keeping PM and engineer in the same session means an engineer persona can read the PRD draft directly from earlier in the conversation. Don't pay for isolation that hurts collaboration.
+Domain work *benefits* from continuity — the PM persona has access to the full session context when deciding whether to spawn the `engineer` subagent, and can pass rich briefs that reference earlier conversation. Don't pay for isolation that hurts collaboration.
 
 See `~/.claude/plans/what-is-pi-code-steady-gray.md` for the full design rationale.
 
@@ -55,14 +56,13 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 ├── SYSTEM.md                  Root agent — persona-adoption rules
 ├── agents/                    Sub-Pi processes (reviewers + scout)
 │   ├── prd-critic.md          spawned by pm persona
-│   ├── uat-tester.md          spawned by engineer persona
-│   ├── red-team.md            spawned by engineer persona
+│   ├── uat-tester.md          spawned by engineer subagent
+│   ├── red-team.md            spawned by engineer subagent
 │   ├── assessment-grader.md   spawned by educator persona
 │   ├── jlpt-examiner.md       spawned by language persona
 │   └── scout.md               spawned by any persona via the `scout` Layer 3 skill — cheap-model file finder
 ├── skills/                    Personas + inner skills + Layer 3 services
 │   ├── pm/SKILL.md            PERSONA
-│   ├── engineer/SKILL.md      PERSONA
 │   ├── educator/SKILL.md      PERSONA
 │   ├── language/SKILL.md      PERSONA
 │   ├── trader/SKILL.md        PERSONA
@@ -81,9 +81,9 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── prd/SKILL.md           inner (pm)
 │   ├── roadmap/SKILL.md       inner (pm)
 │   ├── stakeholder-summary/SKILL.md   inner (pm)
-│   ├── frontend/SKILL.md      inner (engineer)
-│   ├── backend/SKILL.md       inner (engineer)
-│   ├── uiux/SKILL.md          inner (engineer)
+│   ├── frontend/SKILL.md      inner (engineer subagent)
+│   ├── backend/SKILL.md       inner (engineer subagent)
+│   ├── uiux/SKILL.md          inner (engineer subagent)
 │   ├── devops/SKILL.md        inner (engineer)
 │   ├── curriculum/SKILL.md    inner (educator)
 │   ├── content/SKILL.md       inner (educator)
@@ -154,7 +154,7 @@ cd .pi/server && npm install
 |---|---|
 | `_global.md` | every persona + every reviewer — interaction-style preferences |
 | `product.md` | pm persona |
-| `engineering.md` | engineer persona |
+| `engineering.md` | engineer subagent |
 | `learning.md` | educator persona |
 | `language.md` | language persona |
 | `trading.md` | trader persona |
@@ -274,7 +274,7 @@ These apply to every agent:
 | Layer | Component | Status |
 |---|---|---|
 | 1 | Root session (`.pi/SYSTEM.md`) | Persona-adoption model (Path B) |
-| Personas | pm, engineer, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
+| Personas | pm, educator, language, trader | Skill bodies in `.pi/skills/<name>/SKILL.md` |
 | Reviewers | prd-critic, uat-tester, red-team, assessment-grader, jlpt-examiner | Spawned as sub-sessions via `subagent` |
 | Sub-agents (non-reviewer) | scout | `.pi/agents/scout.md` — file finder, pinned to `openai/gpt-5-mini` (via Pi's `ELICE_GPT_5_MINI` provider), `thinking: minimal`, tools `read, bash`. Dispatched via the `scout` Layer 3 skill. |
 | Inner skills | All 18 (prd, roadmap, frontend, …) | Markdown content complete |
@@ -308,5 +308,5 @@ pi --no-session -p "List your tools, skills, and agents."
 pi --no-session -p "Use subagent with agentScope:'project', agent:'prd-critic', task:'Reply with PI-OK only.'"
 
 # Persona adoption (inline, no subagent)
-pi --no-session -p "Adopt the engineer persona and reply PI-OK."
+pi --no-session -p "Adopt the pm persona and reply PI-OK."
 ```
