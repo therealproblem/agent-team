@@ -25,11 +25,12 @@ Layer 1   ROOT SESSION        one Pi session - adopts personas inline
           │   no extra model loop per turn; the root IS the persona while it's on
           │   engineering requests route through pm, which spawns the engineer subagent
           │
-          ├── Executor (sub-agent)  engineer (Sonnet 4.5)
-          │   isolated child process - code, tests, kanban card updates
+          ├── Executors (sub-agents)  engineer (Sonnet 4.5) · designer (GPT-5.5)
+          │   isolated child processes — code, tests, kanban cards · design bundles
           │
           └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
                                       assessment-grader · jlpt-examiner · steelman
+                                      design-critic
               blind by isolation - adversarial second opinion
 Layer 3   SHARED SERVICES     skills any persona can call inline
                               note-taker · show-md · render-html · export
@@ -47,7 +48,8 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 |---|---|---|
 | Root session | `openai/gpt-5.5` (1M ctx) | Long-running session needs the context window |
 | `engineer`, `uat-tester` | `anthropic/claude-sonnet-4-5` | Tool-heavy code work + multi-step interpretation |
-| `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor PRD audit + grading |
+| `designer` | `openai/gpt-5.5` (thinking: high) | Long-form design bundles — needs context + reasoning to compose `DESIGN.md` + `storyboard.html` + `prompts/` from the open-design skill library |
+| `design-critic`, `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor artifact audit + grading |
 | `red-team` | `openai/gpt-5.5` | Adversarial review on the 1M-ctx model - same vendor as root |
 | `jlpt-examiner`, `render-html` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `render-pdf` | `openai/gpt-5.5` | PDF body conversion + Kami-token fidelity (swapped off Gemini after layout drift) |
@@ -65,8 +67,10 @@ Where to rename:
 |---|---|
 | `.pi/agents/engineer.md` | `model:` frontmatter — currently `ELICE_SONNET_4_5/anthropic/claude-sonnet-4-5` |
 | `.pi/agents/uat-tester.md` | same as engineer |
+| `.pi/agents/designer.md` | `ELICE_GPT_5_5/openai/gpt-5.5` (also has `thinking: high`) |
 | `.pi/agents/prd-critic.md` | `ELICE_GPT_5_4/openai/gpt-5.4` |
 | `.pi/agents/assessment-grader.md` | same as prd-critic |
+| `.pi/agents/design-critic.md` | same as prd-critic |
 | `.pi/agents/red-team.md` | `ELICE_GPT_5_5/openai/gpt-5.5` |
 | `.pi/agents/render-pdf.md` | same as red-team |
 | `.pi/agents/render-html.md` | `ELICE_GEMINI_3_1_PRO/google/gemini-3.1-pro-preview` |
@@ -124,7 +128,7 @@ Everything that persists is markdown in the vault. Three display surfaces sit on
 - **HTML renders** are opt-in. `render-html` produces a Nextra-styled page — useful when diagrams, tabs, or callouts make on-screen reading meaningfully better. Now dispatched via an isolated `render-html` subagent (Gemini 3.1 Pro for Mermaid/SVG quality), with a planner-first split: large outputs become multi-part renders with a sidebar parts nav, streamed per-part URLs as each part verifies. Generated MDX sources live at `renders/` (a real directory at project root for easy editing access). Mermaid charts are numbered (“Chart N”), show a `lucide` spinner + “Rendering chart N…” caption while `mermaid.render()` is in flight (120 px min-height so the article column doesn’t reflow when the SVG arrives), and broken charts surface an in-page **Fix syntax** button that repairs the source via `pi --mode json -p` and dual-writes the page + vault note. Every chart is also click-to-expand into a fullscreen lightbox with vector-crisp pinch/wheel zoom and drag pan (mobile + desktop, mouse + touch). LaTeX math renders via KaTeX (`$x^2$` inline, `$$\int…$$` block, pre-rendered at compile time so no client-side math layout cost). The on-page TOC tracks scroll position with a continuous left rail behind every item and a burnt-umber progress fill from the top down to the active section’s centre; the active row gets a cloud-fog chip and 4px bar in both the desktop sidebar and the mobile sheet. In dark mode, Mermaid edge strokes and arrowheads repaint to a warm beige so the connecting lines stay legible against the near-black page.
 - **PDF exports** are for deliverables. `export` produces a print-ready, Kami-styled PDF (parchment canvas, ink-blue accent, serif throughout) - for resumes, letters, portfolios, formal reports. Dispatched via the `render-pdf` subagent, now pinned to `openai/gpt-5.5` after Gemini repeatedly drifted on layout fidelity. The agent prompt enforces a markdown → structured-HTML body conversion (h2/h3/h4, lists, GFM tables, blockquote, `> [!NOTE]` callouts) and bans the whole-body-callout anti-pattern; defense-in-depth lints at the tool boundary reject invented SVG labels and snap any LLM-drifted parchment hex back to canonical Kami tokens. The parchment canvas itself is painted via a Chrome flag so there's no white frame on the printed page. Exported PDFs live under `exports/` at the project root. When the Telegram bot sees a `/p/<file>.pdf` URL in a reply, it uploads the on-disk file as a real Telegram document instead of just linking.
 
-**Two access tiers.** Published artifacts (`/v/*` HTML, `/p/*` PDFs) stay public — URL possession is the only gate, so a `cloudflared` tunnel + a copied link works for any recipient. Application pages (`/`, `/projects`, `/projects/<slug>`, `/news`, `/c/<id>`) sit behind a `middleware.ts` auth gate when `AGENTS_TEAM_AUTH_TOKEN` is set: browsers get redirected to `/login`, API clients use `Authorization: Bearer <token>` or `?auth=<token>`. With the token unset (default), everything is wide open — fine for localhost-only use. See `.pi/server/AUTH.md` for the full flow.
+**Two access tiers.** Published artifacts (`/v/*` HTML, `/p/*` PDFs) stay public — URL possession is the only gate, so a `cloudflared` tunnel + a copied link works for any recipient. Application pages (`/`, `/projects`, `/projects/<slug>`, `/news`, `/c/<id>`) sit behind the `proxy.ts` auth gate when `AGENTS_TEAM_AUTH_TOKEN` is set: browsers get redirected to `/login`, API clients use `Authorization: Bearer <token>` or `?auth=<token>`. With the token unset (default), everything is wide open — fine for localhost-only use. See `.pi/server/AUTH.md` for the full flow. (The file used to be called `middleware.ts`; Next.js 16 added a deprecation warning for that name, so it was renamed to silence the noise.)
 
 ### Research orchestrator
 
@@ -158,6 +162,17 @@ Cards carry:
 - **Priority + filter.** `p0`..`p3` chip on every column card; `?priority=p0..p3` URL filter in the Filters bar alongside persona.
 - **Unblock flow.** Button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
 - **Soft delete.** Cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
+
+### designer — heavy-tier design bundles
+
+PM has two design escalation tiers:
+
+- **Light** — the `uiux` inner skill runs inline under the PM persona for sketches, mood boards, copy-on-image trial balloons. Output lands in `vault/pm/design/`.
+- **Heavy** — when the design is committed work (full screen flow, brand artifact, slide deck for an external recipient), PM spawns the `designer` subagent. Designer reads `.pi/design-systems/INDEX.md` to pick one or two system candidates, applies the vendored open-design skill library, and produces a `vault/ux/<slug>/` bundle: `DESIGN.md` (spec + decisions), `storyboard.html` (interactive walkthrough), and `prompts/` (LLM prompts for external image / video / 3D generation tools). Returns a one-line outcome + the bundle path. Engineer reads the linked `DESIGN.md` when picking up implementation cards.
+
+Designer runs on `openai/gpt-5.5` with `thinking: high` — the artifact is long-form, multi-section, and references skill-library conventions that need the larger context window. `design-critic` (mirroring `prd-critic`) is the blind reviewer PM spawns after the bundle lands.
+
+The library itself is vendored: **95 skills** in `.pi/skills/` (24 paid-API wrappers + 12 hard skips omitted) and **150 design systems** under `.pi/design-systems/`. **57 of the 95 vendored skills are catalog-only stubs** that point at the upstream repo — see `.pi/STUBS.md` for the catalog + upstream URLs if you want to wire any of them in.
 
 ### scout - file finder on a cheap sub-agent
 
@@ -276,7 +291,7 @@ cloudflared tunnel run agents-team
 
 Then point `AGENTS_TEAM_SERVER_PUBLIC_URL` at the named tunnel hostname so the URLs returned by `render-html` and `export` are share-ready across sessions.
 
-If you don't want the whole world poking at your board / projects / news pages, set `AGENTS_TEAM_AUTH_TOKEN` to a strong value (`openssl rand -hex 32`) and restart the server. The middleware then 302-redirects unauthenticated browser hits to `/login` where a single password field exchanges the token for an httpOnly session cookie; bearer auth via `Authorization: Bearer <token>` or `?auth=<token>` keeps API clients and bookmarks working. Artifact paths (`/v/*` and `/p/*`) skip the gate so shared HTML pages and PDFs stay open to recipients. Full details in `.pi/server/AUTH.md`.
+If you don't want the whole world poking at your board / projects / news pages, set `AGENTS_TEAM_AUTH_TOKEN` to a strong value (`openssl rand -hex 32`) and restart the server. The `proxy.ts` gate then 302-redirects unauthenticated browser hits to `/login` where a single password field exchanges the token for an httpOnly session cookie; bearer auth via `Authorization: Bearer <token>` or `?auth=<token>` keeps API clients and bookmarks working. Artifact paths (`/v/*` and `/p/*`) skip the gate so shared HTML pages and PDFs stay open to recipients. Full details in `.pi/server/AUTH.md`.
 
 ## Environment variables
 
@@ -307,8 +322,10 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 ```
 .pi/
 ├── SYSTEM.md            Root agent - persona-adoption + Telegram rules
-├── agents/              Executor + reviewer subagents (spawned as sub-Pi processes)
-├── skills/              Personas + inner skills + shared services
+├── agents/              Executor + reviewer subagents (engineer, designer, prd-critic, design-critic, …)
+├── skills/              Personas + inner skills + shared services + 95 vendored open-design skills (57 of those are catalog stubs — see STUBS.md)
+├── design-systems/      150 vendored design systems + _schema/ + INDEX.md picker the `designer` subagent reads
+├── STUBS.md             Catalog of vendored open-design skill stubs + upstream URLs
 ├── extensions/          TypeScript tool surfaces (auto-loaded by Pi)
 │   ├── server/             Lifecycle for the Next.js server
 │   ├── telegram-bot/       Telegram bridge (long-poll + telegram_send tool)
@@ -317,7 +334,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 │   ├── board/              board_create_card + board_add_comment tools
 │   ├── env-guard/          Strips .env values from assistant messages + tool args
 │   └── ...                   battery, news-ingest, reminders, srs, etc.
-├── server/              Next.js 16 + Nextra 4 app on :8080 - full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts
+├── server/              Next.js 16 + Nextra 4 app on :8080 — full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts; proxy.ts auth gate (formerly middleware.ts)
 ├── state/               profiles/, reminders.md, telegram/, meta-logs/, research/<run>/research-tree.json
 ├── lib/                 dotenv loader + shared TUI primitives
 └── settings.json        Declares project-local npm packages
