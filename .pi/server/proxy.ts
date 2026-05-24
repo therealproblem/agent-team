@@ -58,7 +58,7 @@ function isBrowserRequest(request: NextRequest): boolean {
   return accept.includes("text/html");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Public artifact routes — always allow
