@@ -1,5 +1,5 @@
 ---
-description: PM collaborative skill. Six-axis 1–5 stress-test scorecard for a sharpened product idea. Use AFTER `founder-discovery` produces a `pm/discovery/<slug>.md` one-pager and BEFORE spawning `opportunity-critic`. Output: a scorecard appended to the discovery doc. Distinct from `rubric` (generic anchor-defining) and from the Step 3 traffic-light scorecard in discovery (which ranks candidates) — this one pressure-tests the chosen idea.
+description: "PM collaborative skill. Six-axis 1–5 stress-test scorecard for a sharpened product idea. Use AFTER `founder-discovery` produces a `pm/discovery/<slug>.md` one-pager and BEFORE spawning `opportunity-critic`. Output: a scorecard appended to the discovery doc. Distinct from `rubric` (generic anchor-defining) and from the Step 3 traffic-light scorecard in discovery (which ranks candidates) — this one pressure-tests the chosen idea."
 disable-model-invocation: true
 ---
 
