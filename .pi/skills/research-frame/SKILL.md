@@ -19,9 +19,14 @@ Sharpens a research request before any source is touched. Most bad research star
   "question": "<one sentence, restated in your own words>",
   "deliverable_shape": "summary | comparison | how-to | timeline | decision | fact-check | landscape-map",
   "depth_budget": "fast | standard | deep",
-  "success_criteria": ["<bullet>", "..."]
+  "success_criteria": ["<bullet>", "..."],
+  "success_rubric": [
+    { "criterion": "<short name>", "weight": 0.0, "definition": "<what 'fully satisfied' looks like>" }
+  ]
 }
 ```
+
+`success_criteria` is the human-readable list. `success_rubric` is the same list expressed as weighted gradeable items for `research-stop-check` to score against. Weights MUST sum to 1.0 (±0.01 rounding). Treat the rubric as the contract — `success_criteria` exists for readability and for `research-corpus-check`, which doesn't need weights.
 
 ### Deliverable shapes
 
@@ -55,6 +60,47 @@ Infer from the request's stakes signal ("just curious" → fast, "we're deciding
 - For a `landscape-map`: "lists 3+ canonical voices" · "vocabulary section with terms-of-art" · "dated within the last 12 months for current state"
 - For a `fact-check`: "verdict in first sentence" · "≥2 independent sources" · "common-origin check performed"
 
+### Success rubric (default per shape)
+
+Build the rubric from this shape default, then tune weights/definitions if the request emphasises an axis. Adding a request-specific criterion is fine; keep total ≤ 5 items, weights sum to 1.0.
+
+| Shape | Default rubric (criterion → weight) |
+|---|---|
+| `summary` | `shape_fit` 0.30 · `coverage` 0.35 · `source_diversity` 0.20 · `dated_recent` 0.15 |
+| `comparison` | `shape_fit` 0.20 · `coverage_per_axis` 0.30 · `neutrality` 0.20 · `source_diversity` 0.20 · `dated_recent` 0.10 |
+| `how-to` | `shape_fit` 0.25 · `executable_steps` 0.30 · `gotchas_present` 0.20 · `prereqs_named` 0.15 · `dated_recent` 0.10 |
+| `timeline` | `shape_fit` 0.25 · `chronology_complete` 0.30 · `dated_events` 0.25 · `source_diversity` 0.20 |
+| `decision` | `shape_fit` 0.15 · `failure_modes` 0.25 · `disconfirm_pass` 0.20 · `triangulation` 0.20 · `source_diversity` 0.10 · `dated_recent` 0.10 |
+| `fact-check` | `verdict_clear` 0.25 · `triangulation` 0.30 · `common_origin_check` 0.20 · `source_diversity` 0.15 · `dated_evidence` 0.10 |
+| `landscape-map` | `vocabulary` 0.20 · `schools_named` 0.20 · `canonical_voices` 0.20 · `coverage` 0.20 · `dated_recent` 0.20 |
+
+Each criterion's `definition` is one sentence the scorer can grade against. Defaults below; tune in-line for the specific question.
+
+| Criterion | "Fully satisfied (1.0)" definition |
+|---|---|
+| `shape_fit` | The deliverable's structure matches the shape contract (sections, TL;DR placement, table presence). |
+| `coverage` | Every item in `success_criteria` is addressed by name or explicitly listed as out of scope. |
+| `coverage_per_axis` | Every named alternative has the same axes covered (no gaps where one side is silent). |
+| `source_diversity` | ≥3 distinct domains AND ≥2 distinct authors/orgs supporting the load-bearing claims. |
+| `dated_recent` | Synthesis has an ISO date footer; ≥1 cited source from last 12 months for non-`settled` topics. |
+| `neutrality` | No advocacy verbs ("clearly", "obviously"); each side gets equal section length within ±30%. |
+| `executable_steps` | Steps are numbered, each step is a single concrete action, no missing intermediates. |
+| `gotchas_present` | At least one named gotcha / common mistake with the symptom and the fix. |
+| `prereqs_named` | Prerequisites (versions, accounts, env) listed before step 1. |
+| `chronology_complete` | Events ordered by date; no undated entries; gaps >2 years called out. |
+| `dated_events` | ≥80% of timeline entries have an ISO year or month-year date. |
+| `failure_modes` | ≥2 named failure modes with the condition that triggers each. |
+| `disconfirm_pass` | `steelman` ran AND its result is reflected in "What's contested" or alters the recommendation. |
+| `triangulation` | Every load-bearing factual claim has ≥2 independent sources (different domains AND different authors). |
+| `verdict_clear` | First sentence states True / False / Mixed / Unverifiable + the confidence. |
+| `common_origin_check` | The "are these all citing the same primary?" check ran and is reported. |
+| `dated_evidence` | Evidence sources are dated; the verdict notes if any source is older than 24 months. |
+| `vocabulary` | ≥5 terms-of-art listed with one-line definitions. |
+| `schools_named` | ≥2 distinct schools of thought / approaches named with representative sources. |
+| `canonical_voices` | ≥3 named people/orgs with a one-line "why authoritative" + a link. |
+
+Half credit (0.5) is allowed: criterion partially met (e.g. 2 of 3 expected items, or only inline mention without a section). Zero (0.0) is "absent or wrong."
+
 ## Steps
 
 1. **Read the raw request.** The user's exact words. If it arrived via a persona, also note the persona — it biases the deliverable shape (PM → decision-leaning, educator → how-to-leaning, language → fact-check / landscape-leaning).
@@ -62,7 +108,8 @@ Infer from the request's stakes signal ("just curious" → fast, "we're deciding
 3. **Pick the deliverable shape** from the table. Default to `summary` only if nothing else fits.
 4. **Set the depth budget** from stakes signals + persona default.
 5. **Write 1–3 success criteria** that name what "done" looks like for this specific request.
-6. **Return the JSON** to the caller. Do not start fetching.
+6. **Build the `success_rubric`** from the shape default. Tune weights (and add at most one request-specific criterion) if the user's wording emphasises an axis. Verify weights sum to 1.0 before returning.
+7. **Return the JSON** to the caller. Do not start fetching.
 
 ## Output style
 

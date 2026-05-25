@@ -1,10 +1,10 @@
 ---
-description: "Layer 3 shared service — final gate before handoff to note-taker / render-html. Runs a 6-point checklist against the synthesized output: (1) deliverable shape satisfied, (2) contested-section present, (3) disconfirming pass run, (4) no single-source load-bearing claims, (5) dated, (6) saturation reached AND no dangling branches. Loops back to the right phase if any check fails. Cheap to run, expensive to skip. Called as Step 6 of `research` orchestrator."
+description: "Layer 3 shared service — final gate before handoff to note-taker / render-html. Grades the synthesis against the weighted `success_rubric` set by research-frame and runs 6 structural sanity checks: (1) deliverable shape satisfied, (2) contested-section present, (3) disconfirming pass run, (4) no single-source load-bearing claims, (5) dated, (6) saturation reached AND no dangling branches. Returns a 0..1 score plus pass/loop/ship-with-gaps decision based on score + trajectory across iterations. Called as Step 6 of `research` orchestrator."
 ---
 
 # Research-stop-check
 
-The "are we actually done?" gate. Runs a fixed checklist, surfaces failures, loops back to the right phase. Without it, the orchestrator declares done whenever the persona feels tired — same failure mode as humans without checklists.
+The "are we actually done?" gate. Grades the synthesis on the rubric, runs structural sanity checks, surfaces gaps, loops back when score is climbing. Without it, the orchestrator declares done whenever the persona feels tired — same failure mode as humans without checklists. Scoring exists so the loop is *measurable*: a run that scrapes by today is no longer indistinguishable from one that nails it.
 
 ## When to call
 
@@ -16,11 +16,13 @@ The "are we actually done?" gate. Runs a fixed checklist, surfaces failures, loo
 
 ```json
 {
-  "frame": { "question": "...", "deliverable_shape": "...", "success_criteria": [...] },
+  "frame": { "question": "...", "deliverable_shape": "...", "success_criteria": [...], "success_rubric": [...] },
   "synthesis_markdown": "<output of synthesize>",
   "tree": <research-tree>,
   "steelman_run": true | false,
-  "triangulate_runs": <count>
+  "triangulate_runs": <count>,
+  "previous_score": <float 0..1 | null>,
+  "iteration": <int, 1-indexed; how many times this run has called stop-check>
 }
 ```
 
@@ -29,14 +31,60 @@ The "are we actually done?" gate. Runs a fixed checklist, surfaces failures, loo
 ```json
 {
   "passed": true | false,
+  "score": <float 0..1>,
+  "score_delta": <float | null>,
+  "per_criterion": [
+    { "name": "...", "weight": 0.0, "grade": 0 | 0.5 | 1, "weighted": 0.0, "evidence": "<one-line>" }
+  ],
   "checks": [
     { "name": "...", "result": "pass | fail | n/a", "evidence": "<one-line>", "remediation": "<which phase to re-enter>" }
   ],
-  "loop_back_to": null | "frame" | "survey" | "source-rank" | "deep-read" | "triangulate" | "steelman" | "synthesize"
+  "loop_back_to": null | "frame" | "survey" | "source-rank" | "deep-read" | "triangulate" | "steelman" | "synthesize",
+  "verdict": "ship | ship_with_gaps | loop"
 }
 ```
 
-## The 6 checks (in order)
+`score` is the weighted sum of `per_criterion[i].grade * per_criterion[i].weight`. `score_delta` is `score - previous_score` (null on first iteration).
+
+## Scoring the rubric (first; structural checks follow)
+
+For each item in `frame.success_rubric`, grade the synthesis:
+
+- **1.0** — criterion fully satisfied per its `definition`.
+- **0.5** — partially satisfied (e.g. 2 of 3 expected items, an inline mention where a section was expected, half the named alternatives covered).
+- **0.0** — absent, wrong, or contradicted by the synthesis.
+
+Write a one-line `evidence` for each grade — pointing to the line/section that earned it (or the gap, for 0).
+
+Compute `score = Σ (grade_i * weight_i)`. Store `per_criterion` with `weighted = grade * weight` per row.
+
+### Verdict from score + trajectory
+
+| Condition | `verdict` | `loop_back_to` |
+|---|---|---|
+| `score ≥ 0.85` AND all structural checks pass | `ship` | `null` |
+| `score < 0.60` AND `iteration ≤ 2` | `loop` | weakest-criterion's remediation phase |
+| `score < 0.60` AND `iteration > 2` | `ship_with_gaps` | `null` |
+| `0.60 ≤ score < 0.85` AND `previous_score` is null AND `iteration ≤ 2` | `loop` | weakest-criterion's remediation phase |
+| `0.60 ≤ score < 0.85` AND `score_delta ≥ 0.05` AND `iteration ≤ 2` | `loop` (still climbing) | weakest-criterion's remediation phase |
+| `0.60 ≤ score < 0.85` AND `score_delta < 0.05` | `ship_with_gaps` (plateau) | `null` |
+| Any iteration `> 3` | force `ship_with_gaps` regardless of score | `null` |
+| Any structural check is a hard fail (see ## hard fails below) | `loop` overrides score | the failing check's remediation |
+
+`passed: true` iff `verdict == "ship"`. Both `ship` and `ship_with_gaps` mean the orchestrator proceeds to capture; `ship_with_gaps` triggers the `## Known gaps` appendix containing the weak criteria, their evidence, and structural-check failures.
+
+### Weakest-criterion remediation map
+
+| Criterion family | `loop_back_to` |
+|---|---|
+| `shape_fit`, `executable_steps`, `gotchas_present`, `prereqs_named`, `chronology_complete`, `verdict_clear`, `vocabulary`, `schools_named`, `canonical_voices`, `dated_recent`, `dated_events`, `neutrality` | `synthesize` |
+| `coverage`, `coverage_per_axis` | `source-rank` (if survey has unranked candidates) else `survey` |
+| `source_diversity` | `source-rank` |
+| `failure_modes` | `synthesize` if material is in tree; else `source-rank` |
+| `disconfirm_pass` | `steelman` |
+| `triangulation`, `common_origin_check` | `triangulate` |
+
+## The 6 structural checks (in order)
 
 ### 1. Deliverable shape satisfied
 
@@ -99,21 +147,39 @@ Two sub-checks:
 Fail (contradiction) → loop back to `synthesize` after re-reading the contradicting source.
 Fail (dangling) → loop back to `deep-read` for the open branch, or have the orchestrator mark it `abandoned` with explicit reason.
 
+## Hard fails (override score)
+
+These structural failures override a high score — the loop must engage:
+
+- Check 4 (single-source load-bearing) failing — never ship even at score ≥ 0.85.
+- Check 6a contradiction (new claims contradict synthesis) — synthesis may be wrong.
+- Check 6b dangling branches — open work still in flight.
+
+For these, set `verdict: "loop"` and `loop_back_to` from the check, regardless of `score`. They become `## Known gaps` entries only if the user explicitly bypasses.
+
 ## Steps
 
-1. **Run all 6 checks** in order. Stop at the first fail and set `loop_back_to`. Or run all and report comprehensively — caller's choice based on budget.
-2. **Set `passed`** — true only if all checks pass (or are `n/a`).
-3. **Return JSON.**
+1. **Grade the rubric.** Walk `frame.success_rubric`, assign each criterion `grade ∈ {0, 0.5, 1}` with `evidence`. Compute `score`.
+2. **Compute `score_delta`** as `score - previous_score` (or `null`).
+3. **Run all 6 structural checks** in order. Stop at the first hard fail, or run all and report comprehensively — caller's choice based on budget.
+4. **Decide `verdict`** from the table above: hard fails first, then score+trajectory rules.
+5. **Set `loop_back_to`** — from a hard fail's remediation if present; otherwise from the weakest criterion's remediation map; otherwise `null`.
+6. **Set `passed`** — true iff `verdict == "ship"`.
+7. **Return JSON.**
 
 ## When to override and ship anyway
 
-The user can explicitly bypass — "just give me what you have" / "ship it" / "good enough." In that case the orchestrator skips the loop-back and proceeds, but `research-stop-check` STILL runs and its findings appear in a `## Known gaps` section appended to the synthesis. The user sees what they're shipping with.
+The user can explicitly bypass — "just give me what you have" / "ship it" / "good enough." In that case the orchestrator forces `verdict: "ship_with_gaps"` regardless of score; the rubric scoring + structural checks STILL run and the failures appear in a `## Known gaps` section appended to the synthesis. The user sees what they're shipping with — including the score.
 
 The bypass is a user signal, not an agent decision. Never auto-bypass to save effort.
 
+`ship_with_gaps` is also reached automatically when iterations exceed 3 or when score plateaus — same appendix, no user bypass required. The orchestrator surfaces the final score either way.
+
 ## Don't
 
-- **Don't loop back more than twice.** If a check keeps failing after 2 loops, surface to the user with the failure detail. Don't grind — the loop exists to catch oversights, not to brute-force quality.
+- **Don't loop more than 3 iterations.** The score-trajectory + iteration cap is the discipline; if score isn't climbing, more loops are noise, not signal. Force `ship_with_gaps` and surface the appendix.
+- **Don't grade leniently to avoid a loop.** A 0.5 means partial; don't round up because you want to ship. The whole point of scoring is that "barely passing" no longer looks identical to "nailed it."
 - **Don't skip checks because "the synthesis looks fine."** The whole point of a gate is it runs even when intuition says done.
-- **Don't add new checks here without updating the deliverable_shape contract** in `research-frame`. The checks must be derivable from frame + tree, not introduced ad-hoc.
+- **Don't add new criteria here without putting them in `research-frame`'s rubric defaults.** Criteria must be set upfront so the synthesis has a chance to satisfy them.
+- **Don't collapse score and structural-check verdicts.** A score-driven plateau ships with gaps; a structural hard fail loops. They are different signals.
 - **Don't return prose.** JSON only. The orchestrator handles user-facing messaging on failure.

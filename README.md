@@ -136,18 +136,30 @@ Everything that persists is markdown in the vault. Three display surfaces sit on
 
 ### Research orchestrator
 
-`research` is a 9-skill pipeline over stealth web fetch + search (`camoufox-pi`), with tree-shaped state per run:
+`research` is a 9-skill pipeline over stealth web fetch + search (`camoufox-pi`), with tree-shaped state per run plus a cross-run logbook:
 
 ```
-research-frame → research-tree.start_run → research-survey (+ corpus_diagnostics, classics round on deep+settled)
+research-frame (emits weighted success_rubric)
+  → research-tree.find_overlap + log_summary (cross-run priors)
+  → research-tree.start_run
+  → research-survey (runs 2–3 competing strategies; winner feeds downstream)
   → source-rank → fetch loop (research-branch · triangulate · steelman)
   → research-corpus-check (fitness gate; 1-loop bounce back to source-rank)
-  → synthesize → research-stop-check → note-taker → render-html / export
+  → synthesize → research-stop-check (grades rubric → 0..1 score; loops while climbing)
+  → note-taker → render-html / export
+  → research-tree.complete_run (appends row to research-log.jsonl)
 ```
 
-State moves through `.pi/state/research/<run>/research-tree.json` rather than a flat history - the last 10 finished runs stay queryable so "what did I research recently?" returns real answers. `steelman` runs as a blind reviewer for disconfirming evidence; `triangulate` enforces a common-origin check (5 tertiaries citing one primary = 1 data point, not 5).
+State moves through `.pi/state/research-tree.json` rather than a flat history - the last 10 finished runs stay queryable so "what did I research recently?" returns real answers. `steelman` runs as a blind reviewer for disconfirming evidence; `triangulate` enforces a common-origin check (5 tertiaries citing one primary = 1 data point, not 5).
 
-**Corpus-readiness gate.** `research-survey` now emits `corpus_diagnostics` (domain/voice/date/stance spread + a warning flag) and runs a **classics round** on deep+settled runs to surface canonical sources before the fetch loop spends budget — gracefully degrades when no canon exists. After fetching, a new `research-corpus-check` skill audits the assembled corpus and can loop back to `source-rank` (cheap) once before `synthesize` burns its budget on a lopsided pool; if the gate is bypassed, the gap surfaces as a `## Known corpus gaps` section in the synthesis. `synthesize`'s landscape-map shape also now requires a "What's unexplored" section (concept × method grid, naming empty cells with reason). Reusable outside research — any structured deliverable with TL;DR + claim-level citations + mandatory "What's contested" and "What's unexplored" sections.
+**Corpus-readiness gate.** `research-survey` emits `corpus_diagnostics` (domain/voice/date/stance spread + a warning flag) and runs a **classics round** on deep+settled runs to surface canonical sources before the fetch loop spends budget — gracefully degrades when no canon exists. After fetching, `research-corpus-check` audits the assembled corpus and can loop back to `source-rank` (cheap) once before `synthesize` burns its budget on a lopsided pool; if the gate is bypassed, the gap surfaces as a `## Known corpus gaps` section in the synthesis. `synthesize`'s landscape-map shape also requires a "What's unexplored" section (concept × method grid, naming empty cells with reason). Reusable outside research — any structured deliverable with TL;DR + claim-level citations + mandatory "What's contested" and "What's unexplored" sections.
+
+**Score-driven stop-check + strategy competition + cross-run logbook.** Three borrowings from [jailbreak-autoresearch](https://github.com/davidondrej/jailbreak-autoresearch) (Karpathy's AutoResearch pattern applied to prompt harnesses) make the pipeline measurable and self-improving:
+
+- **Weighted rubric on every run.** `research-frame` now emits a `success_rubric` alongside `success_criteria` — 3–5 weighted criteria (`shape_fit`, `coverage`, `source_diversity`, `triangulation`, `disconfirm_pass`, etc.) with per-shape defaults and weights summing to 1.0. The rubric is the contract `research-stop-check` grades against.
+- **Score, not pass/fail.** `research-stop-check` grades each criterion 0 / 0.5 / 1, returns a weighted `score ∈ [0, 1]` plus `verdict ∈ {ship, ship_with_gaps, loop}`. The orchestrator tracks the score across iterations: it loops while score is climbing ≥ 0.05/iter, ships at ≥ 0.85, and ships-with-gaps on plateau or after 3 iterations. Structural hard fails (single-source load-bearing claim, dangling branches, new claims contradicting synthesis) override score and force a loop.
+- **Competing survey strategies.** `research-survey` runs 2–3 named strategies in parallel — `vocabulary-expansion`, `canonical-voice`, `counter-position`, `recency-first`, `cross-discipline` — each issuing its own 3–5 queries. Each strategy's snippet pool is scored by coverage breadth (unique_domains + unique_voices + stance_balance + recency_match); the winner's terrain map feeds `source-rank`. Loser diagnostics travel to the logbook so the orchestrator can pre-pick winning strategies on future runs.
+- **Cross-run logbook.** `.pi/state/research-log.jsonl` (append-only, one row per completed run) records `{persona, shape, depth_budget, question, survey_strategies, stop_score, iterations, verdict, artifact}`; `.pi/state/research-log.md` is the regenerated newest-100 markdown table for human reading. At frame time the orchestrator calls `research-tree.log_summary({ persona, shape })` for cross-run priors — once ≥ 3 rows exist for a persona+shape pair, the logbook recommends the strategy set that has won most often on similar questions. With `confidence: high` the orchestrator trusts the recommendation; with `low`/`none` it falls back to the shape's default menu. The logbook is the long-term memory the per-run tree can't provide.
 
 ### Project board
 
@@ -366,7 +378,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 │   ├── env-guard/          Strips .env values from assistant messages + tool args
 │   └── ...                   battery, news-ingest, reminders, srs, etc.
 ├── server/              Next.js 16 + Nextra 4 app on :8080 — full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts; proxy.ts auth gate (formerly middleware.ts)
-├── state/               profiles/, reminders.md, telegram/, meta-logs/, research/<run>/research-tree.json
+├── state/               profiles/, reminders.md, telegram/, meta-logs/, research-tree.json, research-log.jsonl (cross-run logbook), research-log.md (derived view)
 ├── lib/                 dotenv loader + shared TUI primitives
 └── settings.json        Declares project-local npm packages
 renders/                 MDX sources for HTML renders (root real dir; was a symlink under .pi/server/)

@@ -1,17 +1,24 @@
 ---
-description: Layer 3 orchestrator — coordinates the 9-skill research pipeline (frame → survey → rank → fetch → triangulate → steelman → synthesize → stop-check → capture) over the stealth-fetch tools `tff-fetch_url` and `tff-search_web` (via the `@the-forge-flow/camoufox-pi` extension). Also owns the fetch-reliability ladder (host mirrors, web archives, format pivots) used when a fetch returns garbage. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. Also handles "what did I research recently?" / "have I researched X before?" via `research-tree` state.
+description: Layer 3 orchestrator — coordinates the 9-skill research pipeline (frame → survey → rank → fetch → triangulate → steelman → synthesize → stop-check → capture) over the stealth-fetch tools `tff-fetch_url` and `tff-search_web` (via the `@the-forge-flow/camoufox-pi` extension). Picks competing survey strategies from the menu and threads them into `research-survey`. Tracks the rubric-scored stop-check across loop iterations until score plateaus or `ship` is reached. On completion, appends a row to the cross-run logbook (`research-log.jsonl`) so future runs can pre-pick strategies that work on similar questions. Also owns the fetch-reliability ladder (host mirrors, web archives, format pivots) used when a fetch returns garbage. Invoke for "look up X online", "find sources on Y", web-side corpus assembly, library/framework research, market scans. Handles "what did I research recently?" / "have I researched X before?" via `research-tree.find_overlap`, and "what's been working in research lately?" via `research-tree.log_summary`.
 ---
 
 # Research
 
-Layer 3 orchestrator. Online research for any persona, running a 9-skill pipeline. The orchestrator's job: run the phases in order, pass artifacts between them, handle escalations from `research-branch`, and loop back when `research-stop-check` fails. It does NOT do the per-phase work itself — that's the inner skills' job.
+Layer 3 orchestrator. Online research for any persona, running a 9-skill pipeline. The orchestrator's job: run the phases in order, pass artifacts between them, handle escalations from `research-branch`, and loop back when `research-stop-check`'s score is still climbing. It does NOT do the per-phase work itself — that's the inner skills' job. The loop is *measurable*: each iteration's stop-score and the winning survey strategy get persisted, so the pipeline learns over time.
 
 ```
-research-frame → research-tree.start_run → research-survey → source-rank →
-  tff-fetch_url × N  ↔  research-branch (mid-flight discoveries)
-→ research-corpus-check (pre-synthesis gate; may loop back to source-rank or survey)
-→ triangulate (on factual claims) → steelman (on tentative conclusions)
-→ synthesize → research-stop-check → note-taker → render-html / export → research-tree.complete_run
+research-frame (emits success_rubric)
+  → research-tree.find_overlap + research-tree.log_summary (cross-run priors)
+  → research-tree.start_run
+  → research-survey (runs 2–3 competing strategies; winner feeds downstream)
+  → source-rank
+  → tff-fetch_url × N  ↔  research-branch (mid-flight discoveries)
+  → research-corpus-check (pre-synthesis gate; may loop back to source-rank or survey)
+  → triangulate (on factual claims) → steelman (on tentative conclusions)
+  → synthesize
+  → research-stop-check (grades rubric → score 0..1; loops while climbing, ships at score ≥ 0.85 or plateau)
+  → note-taker → render-html / export
+  → research-tree.complete_run (writes one row to research-log.jsonl with persona, shape, winning strategy, final score)
 ```
 
 This skill also owns the **fetch-reliability ladder** (later in this doc) — the cross-cutting toolkit for when a single `tff-fetch_url` returns garbage. Inner skills (`research-survey`, `triangulate`, `steelman`) use the ladder via this skill's documentation.
@@ -78,22 +85,32 @@ If `details.markdown` is present but mostly login-wall / paywall / nav chrome (c
 
 ### 1. Frame the request
 
-Call `research-frame`. Returns `{ question, deliverable_shape, depth_budget, success_criteria }`. This becomes the contract for every downstream phase.
+Call `research-frame`. Returns `{ question, deliverable_shape, depth_budget, success_criteria, success_rubric }`. The rubric (weighted gradeable criteria) is the contract `research-stop-check` will score against. The plain `success_criteria` list is the human-readable version used by `research-corpus-check` and the synthesis.
 
-### 2. Check prior research
+### 2. Check prior research and cross-run priors
 
-Call `research-tree.find_overlap({ user_request })`. If a prior run matches (similarity ≥ 0.6):
+Two queries, both cheap:
+
+**2a. Near-duplicate check.** Call `research-tree.find_overlap({ user_request })`. If a prior run matches (similarity ≥ 0.6):
 
 - Surface the prior artifact (vault path / render URL).
 - Ask the user: open the existing, run fresh, or proceed both ways.
 - If user wants the existing, return that URL — don't proceed to phase 3.
 - If user wants fresh, proceed but tag the new run with `notes: "supersedes <prior_run_id>"`.
 
+**2b. Strategy prior from the logbook.** Call `research-tree.log_summary({ persona, shape: frame.deliverable_shape })`. The result has `recommended_strategy_set` and `confidence`:
+
+- `confidence: high` → trust the recommendation; pass it as `strategy_set` to `research-survey`.
+- `confidence: medium` → use the recommendation as the seed, but ensure shape-mandatory strategies are included (e.g. `counter-position` for `decision`).
+- `confidence: low | none` → fall back to the shape's default strategy menu (see `research-survey`'s "Strategy selection by shape").
+
+In all cases, the orchestrator may override based on the request (if the user asks for "the contrarian view on X", force `counter-position` regardless of priors).
+
 If no overlap, call `research-tree.start_run({ user_request, frame })` and proceed.
 
 ### 3. Survey the terrain
 
-Call `research-survey` with the frame. Returns `{ vocabulary, schools, canonical_voices, timeline_signal, recommended_deep_reads, open_questions_surfaced }`. Snippet-only; no fetches.
+Call `research-survey` with `{ question, deliverable_shape, depth_budget, strategy_set }`. The survey runs each strategy in parallel, scores them by coverage breadth, and returns the winner's terrain map plus a `strategy_competition` record. Retain the `strategy_competition` object — it goes to `complete_run` later for the logbook. Snippet-only; no fetches.
 
 ### 4. Pick sources
 
@@ -129,19 +146,43 @@ Call `synthesize` with `{ frame, tree, sources, triangulate_results, steelman_re
 
 ### 10. Stop-check
 
-Call `research-stop-check` with the synthesis and tree. If `passed: true`, proceed. If `passed: false`:
+Call `research-stop-check` with `{ frame, synthesis_markdown, tree, steelman_run, triangulate_runs, previous_score, iteration }`. The check grades the synthesis against `frame.success_rubric` (per-criterion 0/0.5/1), computes a weighted `score` (0..1), runs the structural sanity checks, and returns a `verdict`:
 
-- Loop back to the phase named in `loop_back_to`.
-- Max 2 loops per check. If still failing, surface to user with the failure detail.
-- User can explicitly bypass ("ship it") — then the failures appear in a `## Known gaps` section of the synthesis.
+| `verdict` | What the orchestrator does |
+|---|---|
+| `ship` | Proceed to capture. Hand `score` to `complete_run`. |
+| `loop` | Re-enter the phase in `loop_back_to`. Increment `iteration`. Carry `score` forward as `previous_score` for the next stop-check call. Hard cap: 3 stop-check calls per run. |
+| `ship_with_gaps` | Proceed to capture, but append a `## Known gaps` section listing the rubric's weak criteria + any structural-check failures. Hand `score` to `complete_run`. |
+
+Tracking the score trajectory is the orchestrator's job — `research-stop-check` itself is stateless. Initialize `previous_score = null` and `iteration = 1`; on each loop, set `previous_score = score` and `iteration += 1` before re-calling stop-check.
+
+If the user explicitly bypasses ("ship it" / "good enough"), force `ship_with_gaps` regardless of `verdict` — but still run stop-check so the `## Known gaps` section is honest.
 
 ### 11. Capture
 
-Call `note-taker.save({ ... })` with the synthesized markdown. By default, follow with `render-html` (see "Default downstream action" below). Get the artifact URL back.
+Call `note-taker.save({ ... })` with the synthesized markdown (plus the `## Known gaps` appendix if applicable). By default, follow with `render-html` (see "Default downstream action" below). Get the artifact URL back.
 
 ### 12. Complete the run
 
-Call `research-tree.complete_run({ run_id, deliverable_artifact: <url> })`. The run is now immutable in the tree.
+Call `research-tree.complete_run({ run_id, deliverable_artifact: <url>, stop_score, survey_competition, persona, iterations })`. The run becomes immutable in the tree AND one row gets appended to `.pi/state/research-log.jsonl`:
+
+```json
+{
+  "ts": "...",
+  "run_id": "...",
+  "persona": "<calling persona key>",
+  "shape": "<deliverable_shape>",
+  "depth_budget": "<budget>",
+  "question": "<frame.question, ≤200 chars>",
+  "survey_strategies": { "winner": "<name>", "winner_score": <float>, "ran": ["<name>", "..."] },
+  "stop_score": <float>,
+  "iterations": <int>,
+  "verdict": "ship | ship_with_gaps",
+  "artifact": "<url>"
+}
+```
+
+The orchestrator does NOT append to the logbook itself — that's `research-tree`'s job and it happens inside `complete_run`. Just hand it the aggregates.
 
 ## Fetch-reliability ladder
 
@@ -291,6 +332,8 @@ When the user asks "what did I research recently?", "have I researched X before?
 
 Return the matching runs — `user_request`, `started`, `deliverable_artifact`, and the root node's TL;DR claim. Offer to open any artifact. Do NOT start a new run for these queries.
 
+When the user asks "what's been working in research?", "which survey strategies have been winning?", "show me research scores", "what's my research hit rate?", read the logbook via `research-tree.log_summary({})` (or scoped: `{ persona: "trader" }`, `{ shape: "decision" }`). The `.pi/state/research-log.md` view is also a fine read-only answer for these — newest 100 rows in a table. Do NOT start a new run for these queries either.
+
 ## Caller patterns
 
 | Caller | Use case |
@@ -317,6 +360,9 @@ Return the matching runs — `user_request`, `started`, `deliverable_artifact`, 
 - **Don't fetch what's already in the user's vault.** Read locally first.
 - **Don't bypass robots.txt or paywalls.** The stealth profile defeats fingerprinting, not legal/ethical access rules.
 - **Don't editorialize.** The synthesize phase has style rules that prevent advocacy creep. Don't bake opinions in earlier phases.
+- **Don't override `log_summary`'s recommendation without a reason.** The logbook is cross-run evidence; if it says strategy X has won 7/10 times on this shape+persona, that's signal, not noise. Valid overrides: user instruction, shape-mandatory strategies, `confidence: low | none`.
+- **Don't loop stop-check past 3 iterations.** Even if score is still climbing, the budget cap is the cap. Force `ship_with_gaps` at iteration 4 and surface the final score to the user.
+- **Don't hand bogus aggregates to `complete_run`.** If the run was abandoned (user bailed mid-pipeline), don't fabricate `stop_score` and `survey_competition` to satisfy the logbook contract — leave them out so the row is skipped. Abandoned runs poison cross-run learning.
 - **Don't claim the tool didn't return content** without first inspecting `details.markdown` (or `details.html`, or `details.results`). The `content` field is a TUI summary, not the payload.
 - **Don't surrender after one fetch.** Walk the fallback ladder. Every hostile host has a cleaner door — spend 30 seconds looking for it.
 - **Don't refetch the same URL with the same parameters.** If a fetch returned garbage, the next attempt must be *different* (different render mode, different selector, different host, different format).
