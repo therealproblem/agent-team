@@ -136,14 +136,16 @@ Everything that persists is markdown in the vault. Three display surfaces sit on
 
 ### Research orchestrator
 
-`research` is a 9-skill pipeline over stealth web fetch + search (`camoufox-pi`), with tree-shaped state per run plus a cross-run logbook:
+`research` is a 10-skill pipeline over stealth web fetch + search (`camoufox-pi`), with tree-shaped state per run plus a cross-run logbook:
 
 ```
 research-frame (emits weighted success_rubric)
   → research-tree.find_overlap + log_summary (cross-run priors)
   → research-tree.start_run
   → research-survey (runs 2–3 competing strategies; winner feeds downstream)
-  → source-rank → fetch loop (research-branch · triangulate · steelman)
+  → source-rank → fetch loop (research-branch · triangulate)
+  → research-interrogate (mechanism check on load-bearing claims)
+  → steelman
   → research-corpus-check (fitness gate; 1-loop bounce back to source-rank)
   → synthesize → research-stop-check (grades rubric → 0..1 score; loops while climbing)
   → note-taker → render-html / export
@@ -160,6 +162,12 @@ State moves through `.pi/state/research-tree.json` rather than a flat history - 
 - **Score, not pass/fail.** `research-stop-check` grades each criterion 0 / 0.5 / 1, returns a weighted `score ∈ [0, 1]` plus `verdict ∈ {ship, ship_with_gaps, loop}`. The orchestrator tracks the score across iterations: it loops while score is climbing ≥ 0.05/iter, ships at ≥ 0.85, and ships-with-gaps on plateau or after 3 iterations. Structural hard fails (single-source load-bearing claim, dangling branches, new claims contradicting synthesis) override score and force a loop.
 - **Competing survey strategies.** `research-survey` runs 2–3 named strategies in parallel — `vocabulary-expansion`, `canonical-voice`, `counter-position`, `recency-first`, `cross-discipline` — each issuing its own 3–5 queries. Each strategy's snippet pool is scored by coverage breadth (unique_domains + unique_voices + stance_balance + recency_match); the winner's terrain map feeds `source-rank`. Loser diagnostics travel to the logbook so the orchestrator can pre-pick winning strategies on future runs.
 - **Cross-run logbook.** `.pi/state/research-log.jsonl` (append-only, one row per completed run) records `{persona, shape, depth_budget, question, survey_strategies, stop_score, iterations, verdict, artifact}`; `.pi/state/research-log.md` is the regenerated newest-100 markdown table for human reading. At frame time the orchestrator calls `research-tree.log_summary({ persona, shape })` for cross-run priors — once ≥ 3 rows exist for a persona+shape pair, the logbook recommends the strategy set that has won most often on similar questions. With `confidence: high` the orchestrator trusts the recommendation; with `low`/`none` it falls back to the shape's default menu. The logbook is the long-term memory the per-run tree can't provide.
+
+**Agent-side learning-technique passes.** Three further additions borrow from learning-science (elaborative interrogation, Feynman gap-test, worked examples) — picked to lift artifact quality without making the run interactive. The interactive techniques (pre-test, self-explanation, SRS auto-seed) deliberately do NOT live in `research`; they belong in a future `teach-me` skill, and SRS card seeding is opt-in only.
+
+- **`research-interrogate` — mechanism check on load-bearing claims.** New sub-skill between `triangulate` and `steelman`. For each load-bearing claim the orchestrator marks, the skill asks "why is this true?" — first checking the source the claim came from, then running ONE capped follow-up search if absent. Claims without a discoverable mechanism are explicitly tagged `unclear` and surface in the synthesis under "Mechanism unclear" rather than being silently omitted. Different failure mode from `triangulate` (which checks IF a claim is true): a claim can be well-cited and still mechanism-opaque, which makes the synthesis sound authoritative while skipping the part the reader needs to understand. Only runs when the rubric includes `mechanism_clarity` (default for `decision` and `fact-check`; opt-in elsewhere via request wording like "how does X work" / "why does Y happen").
+- **`feynman_clarity` rubric criterion in `research-stop-check`.** Adds a new criterion to most shapes (`summary`, `comparison`, `decision`, `landscape-map`): the load-bearing claim must survive a 3–5 sentence plain-language re-write with no corpus jargon and no "essentially…" hand-waves. Stop-check produces the re-write internally and grades the result — `1.0` clean, `0.5` if one borrowed term needed an unpack, `0.0` if jargon leaks back in or the claim has to be weakened to land plainly. The re-write becomes the loop-back anchor: if the score is low, the synthesize step gets a concrete plain-language target to re-draft against.
+- **`worked_example` rubric criterion for `how-to` shape.** A how-to without one concrete instance walked through end-to-end (steps with annotated reasoning, not just actions) is a how-to-fragment. The criterion forces synthesize to include exactly one — drawn from the corpus where possible, or a clearly-flagged constructed example otherwise.
 
 ### Project board
 

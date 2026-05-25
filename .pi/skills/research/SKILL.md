@@ -14,7 +14,9 @@ research-frame (emits success_rubric)
   → source-rank
   → tff-fetch_url × N  ↔  research-branch (mid-flight discoveries)
   → research-corpus-check (pre-synthesis gate; may loop back to source-rank or survey)
-  → triangulate (on factual claims) → steelman (on tentative conclusions)
+  → triangulate (on factual claims)
+  → research-interrogate (on load-bearing claims, when mechanism_clarity is in the rubric)
+  → steelman (on tentative conclusions)
   → synthesize
   → research-stop-check (grades rubric → score 0..1; loops while climbing, ships at score ≥ 0.85 or plateau)
   → note-taker → render-html / export
@@ -27,16 +29,17 @@ This skill also owns the **fetch-reliability ladder** (later in this doc) — th
 
 | # | Skill | Phase | Form |
 |---|---|---|---|
-| 1 | `research-frame` | 1. Frame | Layer 3 skill — sharpens question + deliverable shape + depth budget |
-| 2 | `research-tree` | state | Layer 3 skill — tree-shaped state file with per-claim provenance |
-| 3 | `research-survey` | 2. Survey | Layer 3 skill — shallow parallel searches → terrain map |
+| 1 | `research-frame` | 1. Frame | Layer 3 skill — sharpens question + deliverable shape + depth budget; emits weighted `success_rubric` |
+| 2 | `research-tree` | state | Layer 3 skill — tree-shaped state file with per-claim provenance + cross-run logbook |
+| 3 | `research-survey` | 2. Survey | Layer 3 skill — 2–3 competing strategies; winner's terrain map feeds downstream |
 | 4 | `source-rank` | 3. Plan | Layer 3 skill — score candidates, pick deep reads |
 | 5 | `research-corpus-check` | 3.5 Corpus gate | Layer 3 skill — pre-synthesis fitness check; loops back to source-rank if lopsided |
 | 6 | `triangulate` | 4. Cross-check | Layer 3 skill — fact verification + common-origin check |
-| 7 | `steelman` | 4.5 Disconfirm | Sub-agent (isolated context) — strongest-opposing-case pass |
-| 8 | `research-branch` | cross-cutting | Layer 3 skill — discovery-driven branching loop |
-| 9 | `synthesize` | 5. Synthesize | Layer 3 skill — structured deliverable from tree + sources |
-| 10 | `research-stop-check` | 6. Capture gate | Layer 3 skill — 6-point checklist before handoff |
+| 7 | `research-interrogate` | 4.25 Mechanism check | Layer 3 skill — "why is this true?" pass on load-bearing claims; ran when `mechanism_clarity` is in the rubric |
+| 8 | `steelman` | 4.5 Disconfirm | Sub-agent (isolated context) — strongest-opposing-case pass |
+| 9 | `research-branch` | cross-cutting | Layer 3 skill — discovery-driven branching loop |
+| 10 | `synthesize` | 5. Synthesize | Layer 3 skill — structured deliverable from tree + sources |
+| 11 | `research-stop-check` | 6. Capture gate | Layer 3 skill — rubric-scored gate with `feynman_clarity` plain-rewrite test before handoff |
 
 ## Tool surface — Camoufox extension
 
@@ -135,6 +138,14 @@ If `passed: false`:
 ### 7. Verify factual claims
 
 For any load-bearing factual claim the synthesis will assert, call `triangulate`. Required when `deliverable_shape: "fact-check"`. Optional but recommended for `decision` and `comparison` shapes where a single bad fact would change the verdict.
+
+### 7.5. Interrogate mechanisms
+
+If `frame.success_rubric` includes `mechanism_clarity` (default for `decision` and `fact-check`; opt-in for other shapes when the request asks "how does X work" or "why does Y happen"), call `research-interrogate` with the load-bearing claim list. The skill runs a "why is this true?" pass per claim — checks the existing source first, runs one capped follow-up search if absent, and tags each claim `found_in_existing | found_via_followup | unclear`.
+
+The orchestrator passes the `interrogations` array into `synthesize` along with the tree. If `synthesis_note_required: true` (one or more claims `unclear`), instruct `synthesize` to surface those gaps honestly in "What's contested" (or a dedicated "Mechanism unclear" section for `decision`/`fact-check`) rather than papering over them. Mechanism-found claims get their explanation woven into the body.
+
+Skip this step when `mechanism_clarity` is absent from the rubric — it's a quality-lift, not a baseline check.
 
 ### 8. Disconfirming pass
 

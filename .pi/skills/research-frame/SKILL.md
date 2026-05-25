@@ -62,17 +62,17 @@ Infer from the request's stakes signal ("just curious" → fast, "we're deciding
 
 ### Success rubric (default per shape)
 
-Build the rubric from this shape default, then tune weights/definitions if the request emphasises an axis. Adding a request-specific criterion is fine; keep total ≤ 5 items, weights sum to 1.0.
+Build the rubric from this shape default, then tune weights/definitions if the request emphasises an axis. Adding a request-specific criterion is fine; keep total ≤ 6 items, weights sum to 1.0.
 
 | Shape | Default rubric (criterion → weight) |
 |---|---|
-| `summary` | `shape_fit` 0.30 · `coverage` 0.35 · `source_diversity` 0.20 · `dated_recent` 0.15 |
-| `comparison` | `shape_fit` 0.20 · `coverage_per_axis` 0.30 · `neutrality` 0.20 · `source_diversity` 0.20 · `dated_recent` 0.10 |
-| `how-to` | `shape_fit` 0.25 · `executable_steps` 0.30 · `gotchas_present` 0.20 · `prereqs_named` 0.15 · `dated_recent` 0.10 |
+| `summary` | `shape_fit` 0.20 · `coverage` 0.30 · `source_diversity` 0.20 · `dated_recent` 0.10 · `feynman_clarity` 0.20 |
+| `comparison` | `shape_fit` 0.15 · `coverage_per_axis` 0.25 · `neutrality` 0.20 · `source_diversity` 0.20 · `feynman_clarity` 0.10 · `dated_recent` 0.10 |
+| `how-to` | `shape_fit` 0.20 · `executable_steps` 0.25 · `gotchas_present` 0.15 · `prereqs_named` 0.10 · `worked_example` 0.20 · `dated_recent` 0.10 |
 | `timeline` | `shape_fit` 0.25 · `chronology_complete` 0.30 · `dated_events` 0.25 · `source_diversity` 0.20 |
-| `decision` | `shape_fit` 0.15 · `failure_modes` 0.25 · `disconfirm_pass` 0.20 · `triangulation` 0.20 · `source_diversity` 0.10 · `dated_recent` 0.10 |
-| `fact-check` | `verdict_clear` 0.25 · `triangulation` 0.30 · `common_origin_check` 0.20 · `source_diversity` 0.15 · `dated_evidence` 0.10 |
-| `landscape-map` | `vocabulary` 0.20 · `schools_named` 0.20 · `canonical_voices` 0.20 · `coverage` 0.20 · `dated_recent` 0.20 |
+| `decision` | `shape_fit` 0.10 · `failure_modes` 0.20 · `disconfirm_pass` 0.20 · `triangulation` 0.20 · `mechanism_clarity` 0.15 · `source_diversity` 0.15 |
+| `fact-check` | `verdict_clear` 0.20 · `triangulation` 0.25 · `common_origin_check` 0.20 · `mechanism_clarity` 0.15 · `source_diversity` 0.10 · `dated_evidence` 0.10 |
+| `landscape-map` | `vocabulary` 0.15 · `schools_named` 0.20 · `canonical_voices` 0.15 · `coverage` 0.20 · `feynman_clarity` 0.15 · `dated_recent` 0.15 |
 
 Each criterion's `definition` is one sentence the scorer can grade against. Defaults below; tune in-line for the specific question.
 
@@ -98,6 +98,9 @@ Each criterion's `definition` is one sentence the scorer can grade against. Defa
 | `vocabulary` | ≥5 terms-of-art listed with one-line definitions. |
 | `schools_named` | ≥2 distinct schools of thought / approaches named with representative sources. |
 | `canonical_voices` | ≥3 named people/orgs with a one-line "why authoritative" + a link. |
+| `feynman_clarity` | The synthesis's load-bearing claim can be re-explained in 3–5 plain sentences using none of the corpus's jargon and no "essentially…" hand-waves. Stop-check performs the re-write and grades whether jargon leaked back in. Half credit if the re-write needs one borrowed term to land. |
+| `mechanism_clarity` | Every load-bearing claim has its mechanism named — the *why* it's true — not just the claim asserted. Claims without a discoverable mechanism are explicitly tagged "mechanism unclear" rather than silently omitted. Filled by `research-interrogate`'s pass. |
+| `worked_example` | Exactly one concrete instance is walked through end-to-end. Each step has annotated reasoning ("X because Y, otherwise Z"), not just the action. A how-to without a worked example is a how-to-fragment. |
 
 Half credit (0.5) is allowed: criterion partially met (e.g. 2 of 3 expected items, or only inline mention without a section). Zero (0.0) is "absent or wrong."
 

@@ -77,12 +77,14 @@ Compute `score = Σ (grade_i * weight_i)`. Store `per_criterion` with `weighted 
 
 | Criterion family | `loop_back_to` |
 |---|---|
-| `shape_fit`, `executable_steps`, `gotchas_present`, `prereqs_named`, `chronology_complete`, `verdict_clear`, `vocabulary`, `schools_named`, `canonical_voices`, `dated_recent`, `dated_events`, `neutrality` | `synthesize` |
+| `shape_fit`, `executable_steps`, `gotchas_present`, `prereqs_named`, `chronology_complete`, `verdict_clear`, `vocabulary`, `schools_named`, `canonical_voices`, `dated_recent`, `dated_events`, `neutrality`, `worked_example` | `synthesize` |
 | `coverage`, `coverage_per_axis` | `source-rank` (if survey has unranked candidates) else `survey` |
 | `source_diversity` | `source-rank` |
 | `failure_modes` | `synthesize` if material is in tree; else `source-rank` |
 | `disconfirm_pass` | `steelman` |
 | `triangulation`, `common_origin_check` | `triangulate` |
+| `mechanism_clarity` | `interrogate` (re-run `research-interrogate` on still-unclear claims; if budget exhausted, accept the "mechanism unclear" tag and ship the gap honestly) |
+| `feynman_clarity` | `synthesize` (the synthesis is the thing leaking jargon; re-write it more plainly before re-running the test) |
 
 ## The 6 structural checks (in order)
 
@@ -146,6 +148,25 @@ Two sub-checks:
 
 Fail (contradiction) → loop back to `synthesize` after re-reading the contradicting source.
 Fail (dangling) → loop back to `deep-read` for the open branch, or have the orchestrator mark it `abandoned` with explicit reason.
+
+## Procedure for grading `feynman_clarity`
+
+This criterion is special: instead of inspecting the synthesis for a structural marker, the grader *produces* a plain-language re-write and checks it for jargon leakage. The re-write is the test.
+
+Steps:
+
+1. **Extract the load-bearing claim.** Usually the TL;DR or first-sentence verdict / recommendation. For `landscape-map` use the "What's the territory" summary.
+2. **Re-write it in 3–5 plain sentences** that:
+   - Use vocabulary a smart 12-year-old (or a sharp non-specialist) would know.
+   - Borrow zero terms from the corpus's terms-of-art list. If a term is genuinely irreducible (a proper noun, a domain-defining concept like "gravity"), it's allowed *once* with a one-clause unpack on first use.
+   - Contain no "essentially…", "basically…", "what's happening is…", or other hand-wave phrases. Each of those is a flag that the next sentence skipped a step.
+3. **Grade:**
+   - `1.0` — the re-write reads cleanly, no jargon leakage, no hand-waves, and the load-bearing claim survives intact (the plain version is *the same claim* — not a watered-down version).
+   - `0.5` — the re-write needs one borrowed term to land (and unpacks it), OR contains one hedge that masks a real gap, OR slightly under-specifies the claim.
+   - `0.0` — the re-write either retains corpus jargon, hand-waves at a load-bearing step, or has to weaken the claim to land in plain words.
+4. **Record the re-write in `evidence`** as a one-line "Re-written: <first sentence of the plain version>" so the loop-back to `synthesize` has something concrete to anchor on. The synthesize phase reads this and re-drafts the synthesis using language at the same level.
+
+This procedure is internal to the stop-check pass — no extra tool calls, no extra fetches. It's about ten lines of prose the grader generates and inspects.
 
 ## Hard fails (override score)
 
