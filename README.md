@@ -8,7 +8,7 @@ The aim is a long-running personal operating layer: you talk to it from the CLI 
 
 A single Pi session that **adopts a persona** for the work in front of it instead of routing every request to a separate sub-agent. The PM persona drafts a PRD and hands a kanban card to the `engineer` subagent (Sonnet, isolated child process) to build against it; the educator persona writes a lesson plan; the language persona drills you on JLPT vocab. Same session, same memory of you - different rules and skills active depending on which persona is on.
 
-Reviewers (PRD-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman, design-critic, marketing-critic) and executor sub-agents (`engineer`, `designer`, `marketer`, `scout`, `render-html`, `render-pdf`) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost. `engineer`, `designer`, and `marketer` are executor subagents spawned by PM, not inline personas.
+Reviewers (PRD-critic, opportunity-critic, UAT-tester, red-team, assessment-grader, JLPT-examiner, steelman, design-critic, marketing-critic) and executor sub-agents (`engineer`, `designer`, `marketer`, `scout`, `render-html`, `render-pdf`) run as **isolated sub-sessions** - for blind audit, model isolation, context isolation, or cost. `engineer`, `designer`, and `marketer` are executor subagents spawned by PM, not inline personas.
 
 Everything that matters gets written to a **markdown-first Obsidian vault**. HTML renders and PDF exports are on-demand derivatives served by a local Next.js + Nextra site on port 8080. Application pages (board, projects, news) sit behind a token gate; published artifacts (`/v/*`, `/p/*`) stay public so a shared URL just works.
 
@@ -28,7 +28,7 @@ Layer 1   ROOT SESSION        one Pi session - adopts personas inline
           ├── Executors (sub-agents)  engineer (Sonnet 4.5) · designer (GPT-5.5) · marketer (GPT-5.5)
           │   isolated child processes — code, tests, kanban cards · design bundles · marketing bundles
           │
-          └── Reviewers (sub-agents)  prd-critic · uat-tester · red-team
+          └── Reviewers (sub-agents)  prd-critic · opportunity-critic · uat-tester · red-team
                                       assessment-grader · jlpt-examiner · steelman
                                       design-critic · marketing-critic
               blind by isolation - adversarial second opinion
@@ -50,7 +50,7 @@ Per-agent models are pinned via the subagent extension's frontmatter `model:` fi
 | `engineer`, `uat-tester` | `anthropic/claude-sonnet-4-5` | Tool-heavy code work + multi-step interpretation |
 | `designer` | `openai/gpt-5.5` (thinking: high) | Long-form design bundles — needs context + reasoning to compose `DESIGN.md` + `storyboard.html` + `prompts/` from the open-design skill library |
 | `marketer` | `openai/gpt-5.5` (thinking: high) | Long-form marketing bundles — same shape as designer; composes `MARKETING.md` + `plan.md` + optional `drafts/` + `audit/` from the 141-skill marketing library |
-| `design-critic`, `marketing-critic`, `prd-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor artifact audit + grading |
+| `design-critic`, `marketing-critic`, `prd-critic`, `opportunity-critic`, `assessment-grader` | `openai/gpt-5.4` | Cross-vendor artifact audit + grading |
 | `red-team` | `openai/gpt-5.5` | Adversarial review on the 1M-ctx model - same vendor as root |
 | `jlpt-examiner`, `render-html` | `google/gemini-3.1-pro-preview` | Mermaid/SVG quality + JLPT linguistics |
 | `render-pdf` | `openai/gpt-5.5` | PDF body conversion + Kami-token fidelity (swapped off Gemini after layout drift) |
@@ -71,6 +71,7 @@ Where to rename:
 | `.pi/agents/designer.md` | `ELICE_GPT_5_5/openai/gpt-5.5` (also has `thinking: high`) |
 | `.pi/agents/marketer.md` | same as designer |
 | `.pi/agents/prd-critic.md` | `ELICE_GPT_5_4/openai/gpt-5.4` |
+| `.pi/agents/opportunity-critic.md` | same as prd-critic |
 | `.pi/agents/assessment-grader.md` | same as prd-critic |
 | `.pi/agents/design-critic.md` | same as prd-critic |
 | `.pi/agents/marketing-critic.md` | same as prd-critic |
@@ -165,6 +166,16 @@ Cards carry:
 - **Priority + filter.** `p0`..`p3` chip on every column card; `?priority=p0..p3` URL filter in the Filters bar alongside persona.
 - **Unblock flow.** Button only when `status: blocked`; opens a dialog that requires a comment explaining the unblock, then writes the comment and sets `status: backlog` in one atomic write.
 - **Soft delete.** Cards move to `board/_archive/<slug>.md`, whole projects move to `projects/_archive/<slug>/` with `status: archived` stamped on the moved `project.md`. The loader skips `_archive` dirs so deleted cards/projects fall off the board.
+
+### PM upstream — opportunity discovery + validation
+
+Before PM drafts a PRD, two inline skills + one blind critic pressure-test the idea upstream — for when the user shows up with a rough hunch instead of a sharp problem. The PRD skill assumes the problem and target user are already pinned down; this pipeline is what pins them down.
+
+- **`founder-discovery`** — inline PM skill. Walks the user through a Branch A (business) / Branch B (expertise) / Both intake with one question at a time, suggestions starting at Q3, and a five-axis traffic-light scorecard over 3–5 candidate directions. Output is a `pm/discovery/<slug>.md` one-pager (target user, specific problem, MVP shape, why-you, top-3 risky assumptions, candidates considered).
+- **`opportunity-scorecard`** — inline PM skill. Appends a six-axis 1–5 stress-test to the discovery doc (pain intensity · buyer clarity · urgency · differentiation · speed to validate · founder advantage). No averaging — the *shape* of the scorecard is the signal.
+- **`opportunity-critic`** — blind reviewer subagent (mirrors `prd-critic`'s shape, same model). Receives only the discovery doc path + the original problem statement. Returns core assumption, fatal-flaws table, problem-reality check, competition map ("we have no competition is always wrong"), 2-week behavioral test design, and a **Strong / Weak / Pivot** verdict. Strong → hand to the `prd` skill. Pivot → re-enter discovery at Step 4 with the suggested direction. Weak → more discovery before any PRD.
+
+The three are adapted from [BuildGreatProducts/plaid](https://github.com/BuildGreatProducts/plaid) (MIT) — Idea + Validate capabilities. The question banks, the "suggestions start at Q3" rule, the six-axis stress-test scorecard, the fatal-flaws table, and the Strong/Weak/Pivot verdict are lifted verbatim where the wording is the value.
 
 ### engineer — code execution subagent
 
