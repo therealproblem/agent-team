@@ -2,7 +2,7 @@
 
 ## Overview
 
-The agents-team artifact server supports optional token-based authentication for application pages while keeping published artifacts (`/v/*` HTML renders and `/p/*` PDF exports) publicly accessible.
+The agents-team artifact server supports optional token-based authentication for application pages and protected artifact index pages while keeping individual published artifacts (`/v/<slug>` HTML renders and `/p/<slug>.pdf` PDF exports) publicly accessible.
 
 ## Configuration
 
@@ -56,12 +56,12 @@ Either method works. The header is more secure (doesn't appear in logs), but the
 
 These routes are always accessible without authentication:
 
-- `/v/*` — HTML renders from `render-html` skill
-- `/p/*` — PDF exports from `export` skill
+- `/v/*` — HTML renders from `render-html` skill, except `/v/list`
+- `/p/*` — PDF exports from `export` skill, except `/p/list`
 - `/_next/*` — Next.js framework assets (JS, CSS)
 - `/favicon.ico` — static assets
 
-Why? Published artifacts use URL possession as access control — the URLs are long-lived, shareable, and contain unique identifiers. Application pages (board, projects, news) should not be publicly accessible when the server is exposed beyond localhost.
+Why? Published artifacts use URL possession as access control — the URLs are long-lived, shareable, and contain unique identifiers. The `/v/list` and `/p/list` index pages enumerate artifacts, so they are protected like application pages.
 
 ## Security Notes
 

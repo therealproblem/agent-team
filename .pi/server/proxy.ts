@@ -26,6 +26,7 @@ import type { NextRequest } from "next/server";
  *  - API requests: Return 401 JSON response
  */
 
+const PROTECTED_ARTIFACT_INDEX_PATHS = ["/v/list", "/p/list"];
 const PUBLIC_PREFIXES = ["/v/", "/p/"];
 const FRAMEWORK_PREFIXES = ["/_next/"];
 
@@ -58,11 +59,20 @@ function isBrowserRequest(request: NextRequest): boolean {
   return accept.includes("text/html");
 }
 
+function isProtectedArtifactIndexPath(pathname: string): boolean {
+  return PROTECTED_ARTIFACT_INDEX_PATHS.some(
+    (protectedPath) => pathname === protectedPath || pathname === `${protectedPath}/`,
+  );
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Public artifact routes — always allow
-  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+  // 1. Public artifact routes — always allow, except protected index pages.
+  if (
+    PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) &&
+    !isProtectedArtifactIndexPath(pathname)
+  ) {
     return NextResponse.next();
   }
 
@@ -135,8 +145,8 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - /v/* (HTML renders)
-     * - /p/* (PDF exports)
+     * - /v/* (HTML renders), except /v/list
+     * - /p/* (PDF exports), except /p/list
      * - /_next/static (static files)
      * - /_next/image (image optimization)
      * - /favicon.ico, /robots.txt, etc.
@@ -145,6 +155,8 @@ export const config = {
      * is just a performance hint to Next.js to skip middleware for paths we
      * know are public.
      */
+    "/v/list/:path*",
+    "/p/list/:path*",
     "/((?!v/|p/|_next/static|_next/image|favicon.ico).*)",
   ],
 };

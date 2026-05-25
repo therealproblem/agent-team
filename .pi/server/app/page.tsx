@@ -13,7 +13,15 @@ export default function HomePage() {
         <code className="bg-black/[0.06] px-1.5 py-0.5 text-[0.9em] font-mono">
           /p/&lt;YYYY-MM-DD&gt;-&lt;slug&gt;.pdf
         </code>
-        . URLs are issued by the agent; no listing or search.
+        . Protected indexes are available at{" "}
+        <code className="bg-black/[0.06] px-1.5 py-0.5 text-[0.9em] font-mono">
+          /v/list
+        </code>{" "}
+        and{" "}
+        <code className="bg-black/[0.06] px-1.5 py-0.5 text-[0.9em] font-mono">
+          /p/list
+        </code>
+        .
       </p>
     </main>
   );
