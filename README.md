@@ -201,6 +201,8 @@ The three are adapted from [BuildGreatProducts/plaid](https://github.com/BuildGr
 
 PM spawns `engineer` to execute kanban cards — one card per spawn, isolated child process on Sonnet 4.5. Inner skills it auto-discovers under `.pi/skills/`: `frontend`, `backend`, `db-mysql`, `db-postgres`, `uiux`, `devops`, `debugger`, `refactor`, `review-artifact`, `corpus-learning`, `planning`, `research`, `commit-and-push`. After build it spawns `uat-tester` (user-facing features) and `red-team` (anything touching auth, user input, or external network I/O); their findings land on the card body, not in chat.
 
+The engineer also has the `codegraph_*` MCP tools (`search`, `context`, `callers`, `callees`, `impact`, `node`, `explore`, `status`, `files`, `trace`) wired in via [`.pi/mcp.json`](.pi/mcp.json). They query a local SQLite knowledge graph of every symbol, edge, and file under `.pi/server/`, `.pi/extensions/`, `.pi/lib/`, and `scripts/`, built by [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph) — a single tool call answers "who calls X / what does X impact / show me the context around Y" in sub-millisecond DB reads instead of a grep+read loop. 100% local (tree-sitter parsing, no network). The engineer's playbook (`.pi/agents/engineer.md`) tells it to prefer codegraph for symbol/call questions and fall back to grep only to confirm specifics.
+
 `db-mysql` and `db-postgres` are vendored from [planetscale/database-skills](https://github.com/planetscale/database-skills) (MIT) — 2 SKILL.md + 40 references covering schema, indexing, EXPLAIN, isolation, deadlocks, online DDL, replication, MVCC/VACUUM, WAL, PgBouncer. The PlanetScale hosting-recommendation blockquote is stripped from each SKILL.md and reference links are rewritten to local paths so the skills work offline. The `ps-*` Postgres reference files (pscale CLI, PgBouncer config) are kept as operational depth — useful even off-PlanetScale, ignorable when not relevant. Auto-loaded when card text mentions MySQL or Postgres.
 
 ### designer — heavy-tier design bundles
@@ -296,14 +298,15 @@ The bootstrap script is idempotent and handles:
 2. Pi runtime install (`@earendil-works/pi-coding-agent`)
 3. Pi project-local packages (replayed from `.pi/settings.json` - notably `@the-forge-flow/camoufox-pi` for the `research` skill)
 4. Local patches against vendored npm packages (`scripts/patches/`)
-5. `.env` scaffold from `.env.example` (preserves existing `.env`)
-6. `exports/` directory + `.pi/server/public/p` → `exports/` symlink for PDF serving
-7. Nextra server `npm install` in `.pi/server/`
-8. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server - unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
-9. Nextra production build (`next build`) - `.env` is sourced first so build-time vars get baked in
-10. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
-11. Python research deps (`beautifulsoup4` + `requests`) installed to `--user` via `python3 -m pip` so the `research` skill's batch URL-fetch heredoc doesn't die with `ModuleNotFoundError`. Retries with `--break-system-packages` on PEP 668 systems.
-12. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
+5. `codegraph` CLI install (`@colbymchenry/codegraph`) + initial index of this repo's TS/JS/Python under `.codegraph/codegraph.db` (gitignored, per-developer). Re-runs are incremental via `codegraph sync`. The Pi-side wiring lives in `.pi/mcp.json` (checked in).
+6. `.env` scaffold from `.env.example` (preserves existing `.env`)
+7. `exports/` directory + `.pi/server/public/p` → `exports/` symlink for PDF serving
+8. Nextra server `npm install` in `.pi/server/`
+9. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server - unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
+10. Nextra production build (`next build`) - `.env` is sourced first so build-time vars get baked in
+11. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
+12. Python research deps (`beautifulsoup4` + `requests`) installed to `--user` via `python3 -m pip` so the `research` skill's batch URL-fetch heredoc doesn't die with `ModuleNotFoundError`. Retries with `--break-system-packages` on PEP 668 systems.
+13. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
 
 Then start the agent:
 
@@ -388,7 +391,9 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 ├── server/              Next.js 16 + Nextra 4 app on :8080 — full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts; proxy.ts auth gate (formerly middleware.ts)
 ├── state/               profiles/, reminders.md, telegram/, meta-logs/, research-tree.json, research-log.jsonl (cross-run logbook), research-log.md (derived view)
 ├── lib/                 dotenv loader + shared TUI primitives
+├── mcp.json             MCP server registration — wires codegraph_* tools into Pi
 └── settings.json        Declares project-local npm packages
+.codegraph/              Local code knowledge graph DB (gitignored; built by scripts/phases/install-codegraph.sh)
 renders/                 MDX sources for HTML renders (root real dir; was a symlink under .pi/server/)
 scripts/
 ├── setup.sh             Idempotent bootstrap (orchestrates phases/)

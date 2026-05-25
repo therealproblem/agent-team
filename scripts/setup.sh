@@ -16,6 +16,7 @@
 #   install-tmux         Install and configure tmux
 #   install-node-tools   Install Pi and leaf
 #   install-pi-packages  Install Pi project-local packages and patches
+#   install-codegraph    Install codegraph CLI + index this repo for Pi MCP
 #   setup-env            Setup .env, exports/, and renders/ directories
 #   install-chrome       Install Chrome for PDF export
 #   install-python-deps  Install Python research dependencies
@@ -54,6 +55,7 @@ PHASES=(
 	"install-tmux:Install and configure tmux"
 	"install-node-tools:Install Pi and leaf"
 	"install-pi-packages:Install Pi project-local packages and patches"
+	"install-codegraph:Install codegraph CLI + index this repo for Pi MCP"
 	"setup-env:Setup .env, exports/, and renders/ directories"
 	"install-chrome:Install Chrome for PDF export"
 	"install-python-deps:Install Python research dependencies"

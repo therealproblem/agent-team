@@ -58,6 +58,9 @@ exports/
 # Pi-installed npm packages (declared in .pi/settings.json; restored via `pi install`)
 .pi/npm/
 
+# CodeGraph per-developer index (rebuilt locally via `codegraph index .` / auto-sync)
+.codegraph/
+
 # Editor / OS
 .DS_Store
 .idea/
