@@ -15,8 +15,8 @@
  *
  *   Connect always: validates the token via getMe → registers the bot's
  *   slash commands and Menu button with Telegram (setMyCommands +
- *   setChatMenuButton, idempotent) → starts the long-poll transport →
- *   surfaces status. If TELEGRAM_ALLOWED_CHATS is empty after the bot is
+ *   setChatMenuButton, idempotent) → starts the webhook receiver and registers
+ *   the public webhook → surfaces status. If TELEGRAM_ALLOWED_CHATS is empty after the bot is
  *   live, surfaces a bootstrap hint telling the user to DM the bot /start
  *   to get their chat_id.
  *
@@ -29,7 +29,7 @@
  *   - If a token IS set, the extension brings itself up automatically.
  *
  * Pi event subscriptions:
- *   - before_agent_start: claim the loop if the prompt carries our sigil.
+ *   - before_agent_start: claim the Telegram-originated turn if the prompt carries our sigil.
  *   - agent_end: route the final assistant message back to Telegram.
  */
 
@@ -41,13 +41,20 @@ import {
 import { Type } from "@earendil-works/pi-ai";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadDotenv } from "../../lib/dotenv";
+import { loadDotenv, reloadDotenv } from "../../lib/dotenv";
 import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 import { api } from "./api";
+import {
+	buildTelegramWebhookUrl,
+	checkTelegramWebhookPublicUrlDns,
+	explainTelegramSetWebhookFailure,
+	getTelegramPublicUrlConfig,
+	getTelegramWebhookSecret,
+} from "./config";
 import { parseAllowedChats, type DispatcherContext } from "./dispatcher";
-import * as loop from "./loop";
 import { onAgentEnd, onBeforeAgentStart, setCtx, shutdown as shutdownDriver } from "./driver";
 import * as state from "./state";
+import * as webhook from "./webhook";
 
 loadDotenv();
 
@@ -191,7 +198,7 @@ function writeEnvVar(key: string, value: string): boolean {
 /**
  * Push a message to a Telegram chat via the bot. Works from any pi process
  * that has TELEGRAM_BOT_TOKEN in env — including subagent children, which
- * stay dormant for polling but share the same bot identity for outbound
+ * stay dormant for webhook receiving but share the same bot identity for outbound
  * sends. Telegram's sendMessage has no single-consumer constraint, so
  * parallel sends across processes are fine.
  *
@@ -274,7 +281,7 @@ export default function (pi: ExtensionAPI): void {
 	// in mid-flight, and the in-flight bringUp wakes up after tear-down and
 	// starts a transport against an invalid `pi`.
 	let alive = true;
-	// True only on the primary instance (the one that acquired the poll lock).
+	// True only on the primary instance (the one that acquired the receiver lock).
 	// Subagents and non-primary processes leave this false so they don't send
 	// connect/shutdown notices that the primary already covers.
 	let acquiredLock = false;
@@ -346,6 +353,7 @@ export default function (pi: ExtensionAPI): void {
 	}
 
 	async function bringUp(ctx: ExtensionContext): Promise<{ ok: boolean; message?: string }> {
+		reloadDotenv();
 		const token = process.env.TELEGRAM_BOT_TOKEN;
 		if (!token) {
 			return { ok: false, message: "TELEGRAM_BOT_TOKEN not set — run /telegram-setup first" };
@@ -375,25 +383,32 @@ export default function (pi: ExtensionAPI): void {
 		if (!alive) return { ok: false, message: "torn down mid-bring-up" };
 
 		try {
-			// Clear any stale webhook registered by an earlier build that supported webhook mode.
-			// Failure is non-fatal — the loop's reactive 409 recovery will retry — but surface
-			// it so a real outage (network, auth) doesn't hide behind a silent swallow.
-			try {
-				await api.deleteWebhook();
-			} catch (err) {
-				const msg = err instanceof Error ? err.message : String(err);
-				surface(pi, `telegram-bot: deleteWebhook at startup failed — ${msg} (will retry on first 409)`);
+			const publicUrlConfig = getTelegramPublicUrlConfig();
+			const dns = await checkTelegramWebhookPublicUrlDns(publicUrlConfig);
+			if (!dns.ok) {
+				const overrideHint = publicUrlConfig.fileValueDiffersFromActiveEnv
+					? " The active environment value differs from .env; unset the shell-exported value or restart the shell if .env has the intended URL."
+					: "";
+				throw new Error(
+					`${publicUrlConfig.key} is invalid for Telegram webhook delivery: configured host does not resolve in local DNS (${dns.code}); skipping Telegram setWebhook.${overrideHint}`,
+				);
 			}
+			const secret = getTelegramWebhookSecret();
+			const webhookUrl = buildTelegramWebhookUrl(publicUrlConfig.baseUrl, secret);
 			if (!alive) return { ok: false, message: "torn down mid-bring-up" };
-			if (!loop.isRunning()) {
-				void loop.start(pi, dctx, (h) => setTg(ctx, h === "running" ? "ready" : "errored"));
-			}
+			await webhook.startWebhookReceiver(pi, dctx, (h) => setTg(ctx, h === "running" ? "ready" : "errored"));
+			if (!alive) return { ok: false, message: "torn down mid-bring-up" };
+			await api.setWebhook(webhookUrl, {
+				secretToken: secret,
+				allowedUpdates: ["message", "callback_query"],
+				dropPendingUpdates: false,
+			});
 			setTg(ctx, "ready");
-			return { ok: true, message: `long-poll started (@${botUsername})` };
+			return { ok: true, message: `webhook registered (@${botUsername})` };
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
+			const msg = explainTelegramSetWebhookFailure(err instanceof Error ? err.message : String(err));
 			setTg(ctx, "errored");
-			return { ok: false, message: `long-poll start failed — ${msg}` };
+			return { ok: false, message: `webhook start failed — ${msg}` };
 		}
 	}
 
@@ -481,12 +496,12 @@ export default function (pi: ExtensionAPI): void {
 			// Manual connect — claim primary BEFORE any setTg call so the
 			// "(pi connected)" transition broadcast fires naturally via
 			// notifyTransition when bringUp flips the footer to ready. Skip
-			// if the session_start path already claimed it. tryAcquirePollLock
+			// if the session_start path already claimed it. tryAcquireReceiverLock
 			// no-ops if another live PID owns it; in that case that other
 			// process handles notifications and our setTg calls stay silent.
 			if (!acquiredLock) {
 				const forcePrimary = process.env.TELEGRAM_BOT_PRIMARY === "1";
-				if (forcePrimary || state.tryAcquirePollLock()) {
+				if (forcePrimary || state.tryAcquireReceiverLock()) {
 					acquiredLock = true;
 				}
 			}
@@ -579,7 +594,7 @@ export default function (pi: ExtensionAPI): void {
 		}
 
 		// Push the new allowlist into the live dispatcher context so the change
-		// takes effect without a /telegram-connect retry. The loop holds the
+		// takes effect without a /telegram-connect retry. The receiver holds the
 		// same dctx object by reference; mutating in place is enough.
 		const next = parseAllowedChats(merged);
 		if (dctx) {
@@ -617,16 +632,16 @@ export default function (pi: ExtensionAPI): void {
 	// ---------- lifecycle ----------
 
 	// Pi re-evaluates extension JS modules on every session swap (/reload,
-	// /new, /resume, /fork). That means module-level state (dctx, the loop's
+	// /new, /resume, /fork). That means module-level state (dctx, the receiver's
 	// `running` flag, the driver's `latestCtx`, etc.) resets on every
 	// transition. To keep the bot alive across these, we:
 	//
 	//   - On session_start (any reason): connect afresh if a token is set AND
 	//     this is the primary Pi process (guarded by TELEGRAM_BOT_PRIMARY).
-	//   - On session_shutdown (any reason): cleanly stop *this* module's loop
+	//   - On session_shutdown (any reason): cleanly stop *this* module's receiver
 	//     BEFORE the runtime is invalidated, so the dying module's dispatcher
 	//     doesn't fire against a stale pi. The next module's session_start
-	//     starts a fresh loop with the new pi.
+	//     starts a fresh receiver with the new pi.
 	pi.on("session_start", (event, ctx) => {
 		setCtx(ctx);
 
@@ -637,42 +652,28 @@ export default function (pi: ExtensionAPI): void {
 			return;
 		}
 
-		// Guard: only one Pi process should run the Telegram polling loop at a time.
-		// This prevents duplicate getUpdates consumers when:
+		// Guard: only one Pi process should run the Telegram webhook receiver at a time.
+		// This prevents duplicate local receivers when:
 		//   - Multiple Pi sessions run concurrently (tmux worktrees, manual spawns)
 		//   - `pi --no-session` is invoked (server PM replies, cron, etc.)
-		//   - Subagent spawns inherit the token but shouldn't poll
+		//   - Subagent spawns inherit the token but shouldn't receive
 		//
 		// We use a filesystem lock with PID tracking. The first process to start
-		// acquires the lock; others skip polling. Stale locks (dead PID) are
+		// acquires the lock; others skip webhook receiving. Stale locks (dead PID) are
 		// automatically cleaned and re-acquired.
 		//
 		// Manual override: set TELEGRAM_BOT_PRIMARY=1 to force-acquire (useful
 		// when debugging lock issues or if PID-check gives false negatives).
 		const forcePrimary = process.env.TELEGRAM_BOT_PRIMARY === "1";
-		const acquired = forcePrimary || state.tryAcquirePollLock();
+		const acquired = forcePrimary || state.tryAcquireReceiverLock();
 		if (!acquired) {
-			// Another live process holds the lock; stay dormant for polling but
+			// Another live process holds the lock; stay dormant for webhook receiving but
 			// keep API-send capability for tools like board_add_comment.
 			setTg(ctx, "off");
 			return;
 		}
 
-		// Belt-and-braces: check for duplicate Pi processes at startup. The file
-		// lock prevents simultaneous polling within a race window, but if multiple
-		// Pi processes are alive concurrently (e.g., user ran `pi` twice in
-		// different panes), they'll alternate acquiring the lock as they
-		// start/restart, causing persistent 409 conflicts. Surface a warning so
-		// the user knows to kill the duplicates.
-		const dupCheck = state.checkForDuplicatePiProcesses();
-		if (dupCheck.hasDuplicates) {
-			surface(
-				pi,
-				`telegram-bot: WARNING — ${dupCheck.pids.length} other Pi process${dupCheck.pids.length === 1 ? "" : "es"} detected (PID${dupCheck.pids.length === 1 ? "" : "s"}: ${dupCheck.pids.join(", ")}). Kill duplicate${dupCheck.pids.length === 1 ? "" : "s"} to prevent 409 conflicts: kill ${dupCheck.pids.join(" ")}`,
-			);
-		}
-
-		// At this point: token is set AND we acquired the polling lock.
+		// At this point: token is set AND we acquired the receiver lock.
 		acquiredLock = true;
 		// Only flash the "pending" spinner if we weren't already in a
 		// connected state coming into this session_start. On /reload, /new,
@@ -753,7 +754,7 @@ export default function (pi: ExtensionAPI): void {
 
 	// Fires on *this* module's runner before pi tears it down (for any reason:
 	// quit, reload, new, resume, fork). The dispatcher captures `pi` in its
-	// closure, so leaving the loop running after invalidation makes
+	// closure, so leaving the receiver running after invalidation makes
 	// `pi.sendUserMessage` throw on the next incoming update. Stop cleanly here.
 	//
 	// On `quit` only (the actual process exit — session swaps keep pi alive),
@@ -767,19 +768,19 @@ export default function (pi: ExtensionAPI): void {
 		const wasPrimary = acquiredLock;
 		acquiredLock = false;
 		stopPending();
-		loop.stop();
+		webhook.stopWebhookReceiver();
 
-		// Release the poll lock if this instance acquired it, so the next
+		// Release the receiver lock if this instance acquired it, so the next
 		// module instance (on /reload, /new, /resume) can immediately re-acquire
-		// without waiting for the 10-minute stale-lock timeout. Without this,
+		// without waiting. Without this,
 		// session swaps within the same process leave the lock file pointing at
-		// the current PID, and tryAcquirePollLock correctly treats "same PID,
+		// the current PID, and tryAcquireReceiverLock correctly treats "same PID,
 		// fresh timestamp" as "held by another live module" → fails to acquire.
 		if (wasPrimary) {
-			state.releasePollLock();
+			state.releaseReceiverLock();
 		}
 
-		// Only the primary process (the one that owned the poll lock) sends the
+		// Only the primary process (the one that owned the receiver lock) sends the
 		// shutdown notice. Subagents and other non-primary processes inherit the
 		// token but never brought up the bot — they have nothing to announce.
 		if (event.reason === "quit" && wasPrimary && process.env.TELEGRAM_BOT_TOKEN) {
@@ -804,7 +805,7 @@ export default function (pi: ExtensionAPI): void {
 		shutdownDriver();
 	});
 
-	// Hook agent loop events so we can route Telegram-originated turns back.
+	// Hook agent events so we can route Telegram-originated turns back.
 	pi.on("before_agent_start", (event) => {
 		onBeforeAgentStart(event.prompt);
 	});
@@ -816,15 +817,15 @@ export default function (pi: ExtensionAPI): void {
 	// Process-level cleanup as belt-and-braces for abrupt exits (Ctrl-C, kill
 	// -9). Registered once per node process via a globalThis sentinel —
 	// otherwise every module reload would stack another listener. The latest
-	// module instance is the one whose loop is actually live (previous
+	// module instance is the one whose receiver is actually live (previous
 	// instances stopped themselves in session_shutdown).
 	const CLEANUP_SENTINEL = Symbol.for("agents-team-telegram-bot-process-cleanup");
 	if (!(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL]) {
 		(globalThis as { [k: symbol]: unknown })[CLEANUP_SENTINEL] = true;
 		const cleanup = (): void => {
 			stopPending();
-			loop.stop();
-			state.releasePollLock();
+			webhook.stopWebhookReceiver();
+			state.releaseReceiverLock();
 		};
 		process.on("exit", cleanup);
 		process.on("SIGINT", cleanup);

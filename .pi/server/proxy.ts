@@ -29,6 +29,10 @@ import type { NextRequest } from "next/server";
 const PROTECTED_ARTIFACT_INDEX_PATHS = ["/v/list", "/p/list"];
 const PUBLIC_PREFIXES = ["/v/", "/p/"];
 const FRAMEWORK_PREFIXES = ["/_next/"];
+// Webhook endpoints that authenticate the caller themselves (path secret +
+// provider-signed header) and so must bypass the bearer-token gate — Telegram
+// can't attach an Authorization header.
+const WEBHOOK_PREFIXES = ["/api/telegram/webhook/"];
 
 // Auth-related paths that should always be accessible
 const AUTH_PATHS = new Set(["/login", "/api/auth/login", "/api/auth/logout"]);
@@ -78,6 +82,11 @@ export function proxy(request: NextRequest) {
 
   // 2. Framework assets (JS/CSS bundles for `/v` and `/p` pages) — always allow
   if (FRAMEWORK_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
+
+  // 2b. Webhook endpoints — authenticated by the route itself.
+  if (WEBHOOK_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
 
@@ -157,6 +166,6 @@ export const config = {
      */
     "/v/list/:path*",
     "/p/list/:path*",
-    "/((?!v/|p/|_next/static|_next/image|favicon.ico).*)",
+    "/((?!v/|p/|_next/static|_next/image|favicon.ico|api/telegram/webhook/).*)",
   ],
 };

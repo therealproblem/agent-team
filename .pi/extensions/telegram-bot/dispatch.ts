@@ -1,7 +1,7 @@
 /**
  * dispatch — single entry point the transport calls.
  *
- * Long-poll (loop.ts) produces a `TelegramUpdate` and calls
+ * The webhook receiver produces a `TelegramUpdate` and calls
  * `dispatch(update, pi, ctx)`. The split between decide() (pure) and the
  * per-kind handlers (impure) makes this very thin.
  */
