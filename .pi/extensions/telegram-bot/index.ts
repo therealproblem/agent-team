@@ -68,13 +68,10 @@ type TgState = "pending" | "ready" | "errored" | "off";
 let pendingTimer: ReturnType<typeof setInterval> | null = null;
 let pendingFrame = 0;
 
-// Tracks the connect/disconnect notification we last delivered to allowlisted
-// chats. Used by setTg to edge-trigger "(pi connected)" / "(pi disconnected)"
-// when the footer state actually toggles. Stored on globalThis (process-level)
-// so it survives Pi's module re-evaluation on /reload, /new, /resume, /fork —
-// the Node process keeps running across those, and we want the new module to
-// see the previous module's "connected" so it doesn't re-announce. Cleared
-// implicitly when the process exits (after /quit).
+// Tracks the last observed Telegram connection state for footer/reload behavior.
+// Stored on globalThis (process-level) so it survives Pi's module re-evaluation
+// on /reload, /new, /resume, /fork. This is internal-only and is not broadcast
+// to Telegram chats.
 const LAST_NOTIFIED_SENTINEL = Symbol.for(
 	"agents-team-telegram-bot-last-notified",
 );
@@ -93,9 +90,9 @@ function setLastNotifiedState(value: "connected" | "disconnected"): void {
 }
 
 // Wired up by the extension function on each module evaluation. Holds the
-// closure that has access to dctx/acquiredLock and broadcasts via the Telegram
-// API. setTg is module-level (called from the pending-frame timer too) so it
-// can't see those closures directly — this indirection bridges them.
+// closure that has access to acquiredLock. setTg is module-level (called from
+// the pending-frame timer too) so it can't see that closure directly — this
+// indirection bridges it.
 let notifyTransition: ((target: "connected" | "disconnected") => void) | undefined;
 
 function stopPending(): void {
@@ -137,24 +134,18 @@ function setTg(ctx: ExtensionContext | undefined, value: TgState): void {
 		// best-effort
 	}
 
-	// Edge-trigger Telegram notifications when the footer state actually
-	// toggles between connected (●) and disconnected (✗/off). "pending" is an
+	// Track connected/disconnected transitions internally. "pending" is an
 	// in-flight state, not a real transition, so it's ignored. State lives on
-	// globalThis (see LAST_NOTIFIED_SENTINEL above) so /reload doesn't
-	// re-announce — the new module sees the prior "connected" and the
-	// target===previous early-return kicks in. notifyTransition gates on
-	// acquiredLock + writes the sentinel + broadcasts, so only the primary
-	// process drives this side-effect.
+	// globalThis (see LAST_NOTIFIED_SENTINEL above) so /reload can keep a steady
+	// footer without surfacing transport lifecycle noise to Telegram chats.
 	if (value === "pending") return;
 	const target: "connected" | "disconnected" =
 		value === "ready" ? "connected" : "disconnected";
 	const previous = getLastNotifiedState();
 	if (target === previous) return;
-	// Don't fire "(pi disconnected)" before we've ever fired "(pi connected)"
-	// in this process — a transient initial getMe/bringUp failure would
-	// otherwise send the user a phantom disconnect they didn't expect a
-	// counterpart for. State stays at `undefined` so a later successful
-	// ready→ready transition still announces correctly.
+	// Don't mark a disconnected state before we've ever observed a connected
+	// state in this process; a transient initial getMe/bringUp failure shouldn't
+	// pin lifecycle state.
 	if (target === "disconnected" && previous === undefined) return;
 	notifyTransition?.(target);
 }
@@ -286,27 +277,12 @@ export default function (pi: ExtensionAPI): void {
 	// connect/shutdown notices that the primary already covers.
 	let acquiredLock = false;
 
-	function broadcastConnectionStatus(text: string): void {
-		if (!process.env.TELEGRAM_BOT_TOKEN) return;
-		const chats =
-			dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
-		for (const chatId of chats) {
-			api.sendMessage(chatId, text).catch(() => undefined);
-		}
-	}
-
-	// Wire the module-level transition hook to this module instance's
-	// closure. Only the primary process broadcasts; subagents and other
-	// secondary processes stay silent so we don't duplicate notifications.
-	// State is written only when we actually broadcast — a non-primary
-	// observing the transition won't pin the sentinel, so the primary still
-	// sees the prior value and can emit when its setTg fires.
+	// Wire the module-level transition hook to this module instance's closure.
+	// Keep lifecycle state internally for footer/reload behavior, but do not send
+	// connection lifecycle announcements to Telegram chats.
 	notifyTransition = (target) => {
 		if (!acquiredLock) return;
 		setLastNotifiedState(target);
-		broadcastConnectionStatus(
-			target === "connected" ? "(pi connected)" : "(pi disconnected)",
-		);
 	};
 
 	async function configureBot(): Promise<{
@@ -494,11 +470,9 @@ export default function (pi: ExtensionAPI): void {
 			}
 
 			// Manual connect — claim primary BEFORE any setTg call so the
-			// "(pi connected)" transition broadcast fires naturally via
-			// notifyTransition when bringUp flips the footer to ready. Skip
-			// if the session_start path already claimed it. tryAcquireReceiverLock
-			// no-ops if another live PID owns it; in that case that other
-			// process handles notifications and our setTg calls stay silent.
+			// receiver lifecycle stays single-owner. Skip if the session_start
+			// path already claimed it. tryAcquireReceiverLock no-ops if another
+			// live PID owns it.
 			if (!acquiredLock) {
 				const forcePrimary = process.env.TELEGRAM_BOT_PRIMARY === "1";
 				if (forcePrimary || state.tryAcquireReceiverLock()) {
@@ -508,8 +482,7 @@ export default function (pi: ExtensionAPI): void {
 
 			// Always (re-)configure the bot side: register slash commands + Menu
 			// button. Idempotent. Silent on success — the | TG ● footer cell
-			// is the success indicator (and the broadcast goes out via the
-			// ready transition below).
+			// is the success indicator.
 			setTg(ctx, "pending");
 			const cfg = await configureBot();
 			if (!cfg.ok) {
@@ -724,14 +697,9 @@ export default function (pi: ExtensionAPI): void {
 					}
 					await surfaceConnected(ctx, cfg.username ?? "?");
 
-					// "(pi connected)" is no longer broadcast from here — the
-					// setTg("ready") inside bringUp above edge-triggers it via
-					// notifyTransition (which writes the globalThis sentinel
-					// and sends the message). The globalThis tracker is what
-					// keeps /reload/new/resume/fork from re-announcing: the
-					// previous module-instance already pinned "connected", so
-					// the new module's setTg("ready") becomes a no-op
-					// (target===previous).
+					// setTg("ready") inside bringUp keeps internal lifecycle state
+					// current for footer/reload behavior without sending Telegram
+					// chat announcements.
 					return;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
@@ -780,25 +748,7 @@ export default function (pi: ExtensionAPI): void {
 			state.releaseReceiverLock();
 		}
 
-		// Only the primary process (the one that owned the receiver lock) sends the
-		// shutdown notice. Subagents and other non-primary processes inherit the
-		// token but never brought up the bot — they have nothing to announce.
-		if (event.reason === "quit" && wasPrimary && process.env.TELEGRAM_BOT_TOKEN) {
-			const chats =
-				dctx?.allowedChats ?? parseAllowedChats(process.env.TELEGRAM_ALLOWED_CHATS);
-			if (chats.size > 0) {
-				const SHUTDOWN_NOTICE_TIMEOUT_MS = 4_000;
-				const sends = Array.from(chats).map((chatId) =>
-					api.sendMessage(chatId, "(pi shut down)").catch(() => undefined),
-				);
-				await Promise.race([
-					Promise.all(sends),
-					new Promise<void>((resolve) => {
-						const timer = setTimeout(resolve, SHUTDOWN_NOTICE_TIMEOUT_MS);
-						timer.unref?.();
-					}),
-				]);
-			}
+		if (event.reason === "quit" && wasPrimary) {
 			setLastNotifiedState("disconnected");
 		}
 

@@ -68,6 +68,9 @@ const startupSource = `${readFileSync(new URL("./index.ts", import.meta.url), "u
 assert(!startupSource.includes("webhook URL diagnostics"), "normal startup does not print webhook URL diagnostics");
 assert(!startupSource.includes("webhook DNS preflight"), "normal startup does not print DNS preflight status");
 assert(!startupSource.includes("webhook receiver listening"), "normal startup does not print local receiver listening status");
+assert(!startupSource.includes("api.sendMessage(chatId, \"(pi connected)\")"), "normal startup does not send a connected chat status");
+assert(!startupSource.includes("api.sendMessage(chatId, \"(pi disconnected)\")"), "normal startup does not send a disconnected chat status");
+assert(!startupSource.includes("api.sendMessage(chatId, \"(pi shut down)\")"), "normal shutdown does not send a chat status");
 
 await withTempCwd(async () => {
 	delete process.env.TELEGRAM_WEBHOOK_SECRET;
