@@ -5,10 +5,11 @@
  *
  *   Next.js's production server (`next start`) only serves files that were
  *   in the public/ directory at build time. The export tool writes PDFs to
- *   <repo>/exports/ at runtime, long after `npm run build` has run. The
- *   `public/p` symlink resolves on disk, but Next caches the public-files
- *   manifest at build time and serves a prerendered 404 for anything that
- *   wasn't there yet. Symptom: every freshly-exported PDF returns 404.
+ *   the vault's artifacts/exports/ directory at runtime, long after
+ *   `npm run build` has run. The `public/p` symlink resolves on disk, but
+ *   Next caches the public-files manifest at build time and serves a
+ *   prerendered 404 for anything that wasn't there yet. Symptom: every
+ *   freshly-exported PDF returns 404.
  *
  * This route reads the file from disk on each request, bypassing the
  * static-file manifest entirely. URLs include a unique Unix-epoch suffix
@@ -23,10 +24,16 @@ import { NextResponse } from "next/server";
 
 // Mirror the env-var convention from .pi/extensions/obsidian-vault/index.ts.
 // process.cwd() for `next start` is .pi/server/, so the default walks up
-// two levels to the repo root then into exports/.
+// two levels to the repo root, into the vault, then into artifacts/exports/.
+// AGENTS_TEAM_EXPORT_PATH still wins outright; otherwise exports track the
+// configured vault location via AGENTS_TEAM_VAULT_PATH (or <repo>/vault).
+const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
+  ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
+  : resolve(process.cwd(), "..", "..", "vault");
+
 const EXPORT_ROOT = process.env.AGENTS_TEAM_EXPORT_PATH
   ? resolve(process.env.AGENTS_TEAM_EXPORT_PATH)
-  : resolve(process.cwd(), "..", "..", "exports");
+  : join(VAULT_ROOT, "artifacts", "exports");
 
 // Never let Next prerender 404s for unknown slugs — every request must
 // re-check the export root, since the file set changes at runtime.

@@ -23,9 +23,17 @@ export const metadata = { title: "News · agents-team" };
 const STATE_ROOT = process.env.AGENTS_TEAM_STATE_PATH
   ? resolve(process.env.AGENTS_TEAM_STATE_PATH)
   : resolve(process.cwd(), "..", "state");
+const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
+  ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
+  : resolve(process.cwd(), "..", "..", "vault");
+// Bookmarks are user-curated memory and live with the vault; news.json /
+// news-sources.json stay in STATE_ROOT (runtime cache + source config).
+const MEMORY_ROOT = process.env.AGENTS_TEAM_MEMORY_PATH
+  ? resolve(process.env.AGENTS_TEAM_MEMORY_PATH)
+  : join(VAULT_ROOT, ".memory");
 const STORE_PATH = join(STATE_ROOT, "news.json");
 const SOURCES_PATH = join(STATE_ROOT, "news-sources.json");
-const BOOKMARKS_PATH = join(STATE_ROOT, "news-bookmarks.json");
+const BOOKMARKS_PATH = join(MEMORY_ROOT, "news-bookmarks.json");
 
 interface BookmarkRecord {
   vault_path: string;

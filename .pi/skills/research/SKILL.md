@@ -175,7 +175,7 @@ Call `note-taker.save({ ... })` with the synthesized markdown (plus the `## Know
 
 ### 12. Complete the run
 
-Call `research-tree.complete_run({ run_id, deliverable_artifact: <url>, stop_score, survey_competition, persona, iterations })`. The run becomes immutable in the tree AND one row gets appended to `.pi/state/research-log.jsonl`:
+Call `research-tree.complete_run({ run_id, deliverable_artifact: <url>, stop_score, survey_competition, persona, iterations })`. The run becomes immutable in the tree AND one row gets appended to `<vault>/.memory/research-log.jsonl`:
 
 ```json
 {
@@ -343,7 +343,7 @@ When the user asks "what did I research recently?", "have I researched X before?
 
 Return the matching runs — `user_request`, `started`, `deliverable_artifact`, and the root node's TL;DR claim. Offer to open any artifact. Do NOT start a new run for these queries.
 
-When the user asks "what's been working in research?", "which survey strategies have been winning?", "show me research scores", "what's my research hit rate?", read the logbook via `research-tree.log_summary({})` (or scoped: `{ persona: "trader" }`, `{ shape: "decision" }`). The `.pi/state/research-log.md` view is also a fine read-only answer for these — newest 100 rows in a table. Do NOT start a new run for these queries either.
+When the user asks "what's been working in research?", "which survey strategies have been winning?", "show me research scores", "what's my research hit rate?", read the logbook via `research-tree.log_summary({})` (or scoped: `{ persona: "trader" }`, `{ shape: "decision" }`). The `<vault>/.memory/research-log.md` view is also a fine read-only answer for these — newest 100 rows in a table. Do NOT start a new run for these queries either.
 
 ## Caller patterns
 

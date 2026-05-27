@@ -272,13 +272,24 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 }
 
 /**
- * Read each named profile file from <projectRoot>/.pi/state/profiles/<name>.md
- * and concatenate. Missing files are skipped silently. Returns "" when nothing
- * loads.
+ * Read each named profile file from `<vault>/.memory/profiles/<name>.md` and
+ * concatenate. Path resolution mirrors the convention used elsewhere in the
+ * project: AGENTS_TEAM_MEMORY_PATH (full memory root) wins; otherwise the
+ * default is `<vault>/.memory`, where vault is AGENTS_TEAM_VAULT_PATH or
+ * `<projectRoot>/vault`. `projectAgentsDir` is `<projectRoot>/.pi/agents/`,
+ * so walking up two levels recovers the project root.
+ * Missing files are skipped silently. Returns "" when nothing loads.
  */
 function loadProfilesContent(profileNames: string[], projectAgentsDir: string | null): string {
 	if (!projectAgentsDir || profileNames.length === 0) return "";
-	const profilesDir = path.join(path.dirname(projectAgentsDir), "state", "profiles");
+	const projectRoot = path.dirname(path.dirname(projectAgentsDir));
+	const vaultRoot = process.env.AGENTS_TEAM_VAULT_PATH
+		? path.resolve(process.env.AGENTS_TEAM_VAULT_PATH)
+		: path.join(projectRoot, "vault");
+	const memoryRoot = process.env.AGENTS_TEAM_MEMORY_PATH
+		? path.resolve(process.env.AGENTS_TEAM_MEMORY_PATH)
+		: path.join(vaultRoot, ".memory");
+	const profilesDir = path.join(memoryRoot, "profiles");
 	const sections: string[] = [];
 	for (const name of profileNames) {
 		const file = path.join(profilesDir, `${name}.md`);

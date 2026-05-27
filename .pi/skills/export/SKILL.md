@@ -18,7 +18,7 @@ This isolation is the point: a resume render that would burn thousands of tokens
 | **On-screen exploration** | `render-html` (dispatches to subagent) | Nextra page (parchment editorial styling) | `http://localhost:8080/v/<YYYY-MM-DD>-<slug>` |
 | **Print / deliverable** | `export` (this skill — dispatches to subagent) | PDF (Kami aesthetic) | `http://localhost:8080/p/<YYYY-MM-DD>-<slug>-<epoch>.pdf` |
 
-PDFs are one-way derivatives — edit the markdown, re-export, and a NEW file lands at a NEW URL (epoch-suffixed slug defeats CDN caching). After the new PDF is on disk, prior PDFs for the same title across ALL dates are deleted automatically; only the latest version per title stays in `<repo>/exports/`.
+PDFs are one-way derivatives — edit the markdown, re-export, and a NEW file lands at a NEW URL (epoch-suffixed slug defeats CDN caching). After the new PDF is on disk, prior PDFs for the same title across ALL dates are deleted automatically; only the latest version per title stays in `<vault>/artifacts/exports/`.
 
 ## When to call
 

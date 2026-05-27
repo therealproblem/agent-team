@@ -656,8 +656,14 @@ async function maybeSendExportedPdf(
 	if (!m) return;
 	const filename = m[1];
 	const { resolve, join } = await import("node:path");
+	// Mirror the default-resolution from .pi/extensions/obsidian-vault/index.ts:
+	// exports land under <vault>/artifacts/exports/ unless AGENTS_TEAM_EXPORT_PATH
+	// pins them elsewhere.
+	const vaultRoot = resolve(
+		process.env.AGENTS_TEAM_VAULT_PATH ?? join(process.cwd(), "vault"),
+	);
 	const exportRoot = resolve(
-		process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
+		process.env.AGENTS_TEAM_EXPORT_PATH ?? join(vaultRoot, "artifacts", "exports"),
 	);
 	const filePath = join(exportRoot, filename);
 	try {

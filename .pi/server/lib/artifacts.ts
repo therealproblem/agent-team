@@ -3,9 +3,17 @@ import path from "node:path";
 import matter from "gray-matter";
 import { V_DIR } from "@/lib/mdx";
 
+// process.cwd() for `next start` is .pi/server/, so the default walks up
+// two levels to the repo root, into the vault, then into artifacts/exports/.
+// AGENTS_TEAM_EXPORT_PATH still wins outright; otherwise exports track the
+// configured vault location via AGENTS_TEAM_VAULT_PATH (or <repo>/vault).
+const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
+  ? path.resolve(process.env.AGENTS_TEAM_VAULT_PATH)
+  : path.resolve(process.cwd(), "..", "..", "vault");
+
 export const EXPORT_ROOT = process.env.AGENTS_TEAM_EXPORT_PATH
   ? path.resolve(process.env.AGENTS_TEAM_EXPORT_PATH)
-  : path.resolve(process.cwd(), "..", "..", "exports");
+  : path.join(VAULT_ROOT, "artifacts", "exports");
 
 export interface ArtifactListItem {
   slug: string;

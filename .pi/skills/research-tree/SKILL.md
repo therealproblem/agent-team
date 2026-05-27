@@ -1,18 +1,20 @@
 ---
-description: Layer 3 shared service — read/write contract for `.pi/state/research-tree.json` (the per-run tree state) PLUS the cross-run logbook at `.pi/state/research-log.jsonl` (append-only, one row per completed run) and its human-readable view `.pi/state/research-log.md`. Each research run is a tree of nodes (root question + prereq/parent/sibling branches), each node carrying its own claims, sources, status. On `complete_run`, an aggregate row gets appended to the logbook so future runs can learn which survey strategies and stop-check scores worked on similar questions. Used by the `research` orchestrator, `research-branch` (which spawns nodes), `synthesize` (which walks the tree), `research-stop-check` (which pushes scores), and the "what did I research recently?" / "what's worked before?" query paths.
+description: Layer 3 shared service — read/write contract for `.pi/state/research-tree.json` (the per-run tree state) PLUS the cross-run logbook at `<vault>/.memory/research-log.jsonl` (append-only, one row per completed run) and its human-readable view `<vault>/.memory/research-log.md`. Each research run is a tree of nodes (root question + prereq/parent/sibling branches), each node carrying its own claims, sources, status. On `complete_run`, an aggregate row gets appended to the logbook so future runs can learn which survey strategies and stop-check scores worked on similar questions. Used by the `research` orchestrator, `research-branch` (which spawns nodes), `synthesize` (which walks the tree), `research-stop-check` (which pushes scores), and the "what did I research recently?" / "what's worked before?" query paths.
 ---
 
 # Research-tree
 
-The state file shape and access patterns for `.pi/state/research-tree.json` (per-run tree) AND `.pi/state/research-log.jsonl` + `.pi/state/research-log.md` (cross-run logbook). Replaces the older flat `.pi/state/research-history.json` (which can be archived but should not be deleted — back-compat for any persona still reading it).
+The state file shape and access patterns for `.pi/state/research-tree.json` (per-run tree) AND `<vault>/.memory/research-log.jsonl` + `<vault>/.memory/research-log.md` (cross-run logbook). Replaces the older flat `.pi/state/research-history.json` (which can be archived but should not be deleted — back-compat for any persona still reading it). The per-run tree is operational state (resets per run) so it stays in `.pi/state/`; the logbook is long-term memory and lives in the vault so it travels with the user's notes.
 
 ## File locations
 
 ```
-.pi/state/research-tree.json     # per-run trees: runs[] + nodes[]
-.pi/state/research-log.jsonl     # append-only logbook, one JSON object per line per completed run
-.pi/state/research-log.md        # human-readable view, regenerated from the JSONL on each append
+.pi/state/research-tree.json           # per-run trees: runs[] + nodes[] (operational state)
+<vault>/.memory/research-log.jsonl     # append-only logbook, one JSON object per line per completed run
+<vault>/.memory/research-log.md        # human-readable view, regenerated from the JSONL on each append
 ```
+
+Override the vault root with `AGENTS_TEAM_VAULT_PATH` or the memory root with `AGENTS_TEAM_MEMORY_PATH`.
 
 All three are owned by this skill. Other skills (`research`, `research-branch`, `synthesize`, `research-stop-check`) read/write through the operations below. Direct file access from outside this skill is forbidden.
 
@@ -148,7 +150,7 @@ Keeps the most recent `limit` completed runs; archives older runs (and their nod
 
 ### `log_append({ entry })`
 
-Appends one row to `.pi/state/research-log.jsonl` and regenerates `.pi/state/research-log.md`. Used internally by `complete_run`; callable directly by the orchestrator only if needed (e.g. logging a run that bypassed normal completion).
+Appends one row to `<vault>/.memory/research-log.jsonl` and regenerates `<vault>/.memory/research-log.md`. Used internally by `complete_run`; callable directly by the orchestrator only if needed (e.g. logging a run that bypassed normal completion).
 
 Each row's shape:
 

@@ -225,7 +225,7 @@ Never return a PDF URL to the parent until the tool returned a non-error result.
 
 ## Don't
 
-- Don't write PDF to the vault. The tool targets `<repo>/exports/` automatically.
+- Don't write PDF to the vault root. The tool targets `<vault>/artifacts/exports/` automatically (it lands inside the vault but in the artifact subtree, not next to source notes).
 - Don't proactively list URLs. Each URL ships in direct response.
 - Don't synthesize content not in the source. If you find yourself inventing sections, stop and tell the parent the source needs editing first.
 - Don't auto-export. The parent explicitly delegated; there is no automatic "save and export" hook.

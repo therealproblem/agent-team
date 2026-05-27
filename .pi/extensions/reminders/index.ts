@@ -13,8 +13,10 @@
  *    going through `read` / `edit` (which would surface a noisy diff
  *    in the TUI for what should be a tiny one-line operation).
  *
- * The file lives at `.pi/state/reminders.md`. The extension owns the
- * format; the agent should not `read` or `edit` it directly.
+ * The file lives at `<vault>/.memory/reminders.md` by default (override the
+ * root with AGENTS_TEAM_MEMORY_PATH, or the vault location with
+ * AGENTS_TEAM_VAULT_PATH). The extension owns the format; the agent should
+ * not `read` or `edit` it directly.
  */
 
 import { existsSync } from "node:fs";
@@ -29,7 +31,13 @@ import {
 import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 
 const REPO_ROOT = resolve(process.cwd());
-const REMINDERS_PATH = join(REPO_ROOT, ".pi", "state", "reminders.md");
+const VAULT_ROOT = resolve(
+	process.env.AGENTS_TEAM_VAULT_PATH ?? join(REPO_ROOT, "vault"),
+);
+const MEMORY_ROOT = resolve(
+	process.env.AGENTS_TEAM_MEMORY_PATH ?? join(VAULT_ROOT, ".memory"),
+);
+const REMINDERS_PATH = join(MEMORY_ROOT, "reminders.md");
 
 const INITIAL_TEMPLATE = `# Reminders
 

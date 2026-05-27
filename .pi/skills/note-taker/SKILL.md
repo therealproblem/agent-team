@@ -62,7 +62,7 @@ Every persona that calls `note-taker` follows up with `show-md({ md_path })` so 
 
 ### Opt-in — also render to HTML
 
-If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona additionally calls the `render-html` skill. **Render reads the saved markdown and writes an HTML file outside the vault** (in `renders/`) so the vault stays graph-clean. `show-md` and `render-html` are independent — when both are warranted, call both.
+If the artifact would benefit from an interactive reading experience (rich diagrams, collapsibles, tabs, sliders, decks — the Thariq HTML playbook), the calling persona additionally calls the `render-html` skill. **Render reads the saved markdown and writes a derivative `.mdx` into the vault's `artifacts/renders/` folder** — separate from the hand-authored markdown tree so the Obsidian graph view stays focused, but still co-located so artifacts travel with their source. `show-md` and `render-html` are independent — when both are warranted, call both.
 
 ```
 3. render-html({md_path: "..."})         →  http://localhost:8080/v/<slug>         (HTML render — opt-in)

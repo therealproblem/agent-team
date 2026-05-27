@@ -21,7 +21,18 @@ import { mdxComponents } from "@/components/docs/mdx-components";
 import { extractToc, type TocEntry } from "@/lib/toc";
 
 export const CONTENT_DIR = path.resolve(process.cwd(), "content");
-export const V_DIR = path.resolve(process.cwd(), "..", "..", "renders");
+
+// process.cwd() for `next start` is .pi/server/, so the default walks up
+// two levels to the repo root, into the vault, then into artifacts/renders/.
+// AGENTS_TEAM_RENDERS_PATH still wins outright; otherwise renders track the
+// configured vault location via AGENTS_TEAM_VAULT_PATH (or <repo>/vault).
+const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
+  ? path.resolve(process.env.AGENTS_TEAM_VAULT_PATH)
+  : path.resolve(process.cwd(), "..", "..", "vault");
+
+export const V_DIR = process.env.AGENTS_TEAM_RENDERS_PATH
+  ? path.resolve(process.env.AGENTS_TEAM_RENDERS_PATH)
+  : path.join(VAULT_ROOT, "artifacts", "renders");
 
 export interface CompiledMdx {
   content: React.ReactNode;

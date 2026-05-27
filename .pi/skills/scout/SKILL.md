@@ -32,7 +32,7 @@ Good task strings:
 
 - `"Find any vault note tagged #threat-model or mentioning STRIDE"`
 - `"Locate the extension that registers write_html_render"`
-- `"List markdown files under .pi/state/profiles"`
+- `"List markdown files under vault/.memory/profiles"`
 - `"Where is the engineer subagent defined and which tools does it allow?"`
 
 Bad — don't ask scout to **judge** or **summarize**:

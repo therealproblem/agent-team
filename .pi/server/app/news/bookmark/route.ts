@@ -10,9 +10,10 @@
  *                   file. The user opted into this destructive symmetry when
  *                   the toggle UX was picked over the safer one-way variant.
  *
- * Index lives at `.pi/state/news-bookmarks.json`, keyed by URL (stable across
- * the daily store purge — `id` is also stable, but URL survives if news.json
- * is ever rebuilt from scratch). Index shape:
+ * Index lives at `<vault>/.memory/news-bookmarks.json` (override the root
+ * with AGENTS_TEAM_MEMORY_PATH), keyed by URL (stable across the daily store
+ * purge — `id` is also stable, but URL survives if news.json is ever rebuilt
+ * from scratch). Index shape:
  *   { [url]: { vault_path, title, source, topic, bookmarked_at } }
  *
  * The page handler at `app/news/page.tsx` reads this index to render the
@@ -31,9 +32,16 @@ const STATE_ROOT = process.env.AGENTS_TEAM_STATE_PATH
 const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
   ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
   : resolve(process.cwd(), "..", "..", "vault");
+// User-curated memory (bookmarks, persona profiles, reminders, research log)
+// lives inside the vault by default so it travels with the user's notes.
+// news.json and news-sources.json stay in STATE_ROOT — those are runtime
+// cache and source-config, not memory.
+const MEMORY_ROOT = process.env.AGENTS_TEAM_MEMORY_PATH
+  ? resolve(process.env.AGENTS_TEAM_MEMORY_PATH)
+  : join(VAULT_ROOT, ".memory");
 
 const STORE_PATH = join(STATE_ROOT, "news.json");
-const BOOKMARKS_PATH = join(STATE_ROOT, "news-bookmarks.json");
+const BOOKMARKS_PATH = join(MEMORY_ROOT, "news-bookmarks.json");
 
 interface NewsItem {
   id: number;

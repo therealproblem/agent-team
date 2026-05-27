@@ -9,7 +9,7 @@
  *                          backlinks, and tag search work. Called by the
  *                          `note-taker` skill (Layer 3).
  *   - `write_html_render` — markdown body, written as `.mdx` into the
- *                            root `renders/` directory.
+ *                            vault's `artifacts/renders/` directory.
  *                            Nextra serves it at `/v/<YYYY-MM-DD>-<slug>`.
  *                            Re-running the same title on the same day
  *                            overwrites the file; the URL stays stable.
@@ -26,7 +26,7 @@
  *                            skill when the source markdown is too large
  *                            for a single HTML page (~2000+ lines).
  *   - `write_export_pdf` — PDF, written into the canonical export root
- *                          at `<repo>/exports/`. The Next.js server reads
+ *                          at `<vault>/artifacts/exports/`. The Next.js server reads
  *                          from this directory at request time via a route
  *                          handler at `app/p/[slug]/route.ts` and serves
  *                          the PDF at
@@ -52,8 +52,8 @@
  * Configure paths via env vars:
  *   AGENTS_TEAM_VAULT_PATH        — default: <cwd>/vault
  *   AGENTS_TEAM_SERVER_PATH       — default: <cwd>/.pi/server
- *   AGENTS_TEAM_EXPORT_PATH       — default: <cwd>/exports
- *   AGENTS_TEAM_RENDERS_PATH      — default: <cwd>/renders
+ *   AGENTS_TEAM_EXPORT_PATH       — default: <vault>/artifacts/exports
+ *   AGENTS_TEAM_RENDERS_PATH      — default: <vault>/artifacts/renders
  *   AGENTS_TEAM_SERVER_PUBLIC_URL — default: http://localhost:8080. If the
  *                                   user has set this (typically to a tunnel
  *                                   hostname), returned URLs use it
@@ -101,11 +101,15 @@ const VAULT_ROOT = resolve(
 const SERVER_ROOT = resolve(
 	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),
 );
+// Artifact roots default to <vault>/artifacts/{exports,renders}/ so PDFs and
+// rendered MDX live alongside the source notes the vault is built around.
+// Explicit AGENTS_TEAM_EXPORT_PATH / AGENTS_TEAM_RENDERS_PATH still win for
+// users who want to point them elsewhere.
 const EXPORT_ROOT = resolve(
-	process.env.AGENTS_TEAM_EXPORT_PATH ?? join(process.cwd(), "exports"),
+	process.env.AGENTS_TEAM_EXPORT_PATH ?? join(VAULT_ROOT, "artifacts", "exports"),
 );
 const RENDERS_ROOT = resolve(
-	process.env.AGENTS_TEAM_RENDERS_PATH ?? join(process.cwd(), "renders"),
+	process.env.AGENTS_TEAM_RENDERS_PATH ?? join(VAULT_ROOT, "artifacts", "renders"),
 );
 
 // Resolve fresh per call so a `.env` edit after pi launches is picked up
@@ -1167,7 +1171,7 @@ const writeHtmlRender = defineTool({
 	name: "write_html_render",
 	label: "Write HTML Render",
 	description:
-		"Write a markdown body as a SINGLE `.mdx` page into the root `renders/` directory. The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. **This tool is the single-page leg of the `render-html` skill family — it does not split.** The orchestrator skill must call `plan_html_render` first; if that returns `mode: single` (or you have a specific reason to force a single page on a long body) call this tool. If the body exceeds ~1200 lines and `force_single` is not set, this tool refuses and tells you to plan first, since a single page would render unreadably. Markdown body only — no `<!doctype>`, `<html>`, `<head>`, `<style>`, `<script>`. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a markdown body as a SINGLE `.mdx` page into the vault's `artifacts/renders/` directory (override with `AGENTS_TEAM_RENDERS_PATH`). The page is named `<YYYY-MM-DD>-<slug-of-title>.mdx` and served at `http://localhost:8080/v/{slug}` (or whatever `AGENTS_TEAM_SERVER_PUBLIC_URL` points to). Re-running on the same title on the same day overwrites the file; the URL stays stable. **This tool is the single-page leg of the `render-html` skill family — it does not split.** The orchestrator skill must call `plan_html_render` first; if that returns `mode: single` (or you have a specific reason to force a single page on a long body) call this tool. If the body exceeds ~1200 lines and `force_single` is not set, this tool refuses and tells you to plan first, since a single page would render unreadably. Markdown body only — no `<!doctype>`, `<html>`, `<head>`, `<style>`, `<script>`. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -1298,7 +1302,7 @@ const writeHtmlRender = defineTool({
  * too large to render on a single HTML page (rule of thumb: ~2000+ lines,
  * or any curriculum / research doc whose single-page render visibly bloats
  * the browser). The caller supplies an array of parts; each part becomes
- * its own `.mdx` file at `renders/<base>-part-<N>-<part-slug>.mdx` and
+ * its own `.mdx` file at `<vault>/artifacts/renders/<base>-part-<N>-<part-slug>.mdx` and
  * its frontmatter carries the full `parts` list plus the current
  * `part_slug`, which the DocLayout reads to render a "Parts" nav block
  * above the on-page TOC. Re-running on the same overall title on the same
@@ -1310,7 +1314,7 @@ const writeHtmlRenderMultipart = defineTool({
 	name: "write_html_render_multipart",
 	label: "Write HTML Render (multi-part)",
 	description:
-		"Write a long markdown source as a SET of `.mdx` part pages into the root `renders/` directory. Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. **This is the multi-part leg of the `render-html` skill family.** The orchestrator skill calls `plan_html_render` first; when it returns `mode: multipart`, pass `parts: plan.parts` directly into this tool (the planner produces the exact part shape this tool expects — same titles, same ordering, same markdown bodies). Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. URLs from the plan match the URLs this tool serves — same slug derivation. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Write a long markdown source as a SET of `.mdx` part pages into the vault's `artifacts/renders/` directory (override with `AGENTS_TEAM_RENDERS_PATH`). Each part is served at `http://localhost:8080/v/<base>-part-<N>-<part-slug>` and the DocLayout sidebar shows a 'Parts' nav block linking every sibling. **This is the multi-part leg of the `render-html` skill family.** The orchestrator skill calls `plan_html_render` first; when it returns `mode: multipart`, pass `parts: plan.parts` directly into this tool (the planner produces the exact part shape this tool expects — same titles, same ordering, same markdown bodies). Re-running on the same overall title on the same day overwrites the file set; existing single-page or multipart files under the same base slug are cleaned up first. URLs from the plan match the URLs this tool serves — same slug derivation. Return the URL set plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:
@@ -1365,7 +1369,7 @@ const writeExportPdf = defineTool({
 	name: "write_export_pdf",
 	label: "Write PDF Export",
 	description:
-		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<repo>/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>-<epoch>.pdf` (Unix-epoch seconds appended) and served at `http://localhost:8080/p/{slug}.pdf` by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time. The host portion is overridden by `AGENTS_TEAM_SERVER_PUBLIC_URL` if set. Each regeneration produces a NEW filename — the epoch suffix defeats CDN (Cloudflare) caching because the URL changes per export. After the new PDF is on disk, prior PDFs for the SAME title across ALL dates are deleted automatically so the export root holds only the latest version per title; date prefix in the regex is wild, title slug is exact, optional epoch suffix is matched too (so legacy unsuffixed PDFs are pruned in the same pass). Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
+		"Render a complete Kami-styled HTML document to PDF (via headless Chrome) and write it into the canonical export root at `<vault>/artifacts/exports/` (override with `AGENTS_TEAM_EXPORT_PATH`). The PDF is named `<YYYY-MM-DD>-<slug-of-title>-<epoch>.pdf` (Unix-epoch seconds appended) and served at `http://localhost:8080/p/{slug}.pdf` by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time. The host portion is overridden by `AGENTS_TEAM_SERVER_PUBLIC_URL` if set. Each regeneration produces a NEW filename — the epoch suffix defeats CDN (Cloudflare) caching because the URL changes per export. After the new PDF is on disk, prior PDFs for the SAME title across ALL dates are deleted automatically so the export root holds only the latest version per title; date prefix in the regex is wild, title slug is exact, optional epoch suffix is matched too (so legacy unsuffixed PDFs are pruned in the same pass). Used by the `export` skill to produce print-ready deliverables (resume, letter, portfolio, report, slides, etc.). Caller passes Kami-styled HTML; this tool writes the HTML transiently, hands it to Chrome to render, then deletes the HTML once the PDF is confirmed on disk. If Chrome fails, the HTML is retained for manual recovery and the tool returns isError. Return the URL plainly; do NOT add suggestions about cloudflared or setting `AGENTS_TEAM_SERVER_PUBLIC_URL`.",
 	parameters: Type.Object({
 		title: Type.String({
 			description:

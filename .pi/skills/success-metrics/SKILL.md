@@ -54,4 +54,4 @@ End with one **guardrail metric**: a counter-metric that catches the change harm
 
 ## Save
 
-Long-form metrics docs go to the vault as markdown via `note-taker` (e.g. `pm/metrics/<date>-<topic>.md`). The metrics block itself can be inline in the PRD; the doc adds the rationale for each choice. If the doc would benefit from a sparkline / status-grid / time-series visualisation, follow up with `render-html` to publish an HTML version in `renders/`.
+Long-form metrics docs go to the vault as markdown via `note-taker` (e.g. `pm/metrics/<date>-<topic>.md`). The metrics block itself can be inline in the PRD; the doc adds the rationale for each choice. If the doc would benefit from a sparkline / status-grid / time-series visualisation, follow up with `render-html` to publish an HTML version under `<vault>/artifacts/renders/`.

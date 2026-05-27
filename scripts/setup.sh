@@ -17,7 +17,7 @@
 #   install-node-tools   Install Pi and leaf
 #   install-pi-packages  Install Pi project-local packages and patches
 #   install-codegraph    Install codegraph CLI + index this repo for Pi MCP
-#   setup-env            Setup .env, exports/, and renders/ directories
+#   setup-env            Setup .env and vault artifact directories
 #   install-chrome       Install Chrome for PDF export
 #   install-python-deps  Install Python research dependencies
 #   build-server         Build and install Nextra server
@@ -56,7 +56,7 @@ PHASES=(
 	"install-node-tools:Install Pi and leaf"
 	"install-pi-packages:Install Pi project-local packages and patches"
 	"install-codegraph:Install codegraph CLI + index this repo for Pi MCP"
-	"setup-env:Setup .env, exports/, and renders/ directories"
+	"setup-env:Setup .env and vault artifact directories"
 	"install-chrome:Install Chrome for PDF export"
 	"install-python-deps:Install Python research dependencies"
 	"build-server:Build and install Nextra server"

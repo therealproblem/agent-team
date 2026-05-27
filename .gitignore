@@ -13,23 +13,20 @@ vault/
 # rule keeps it out of git. See commit d11d82c for the case that prompted it.
 /projects/
 
-# Generated MDX renders — runtime content read by Nextra.
-renders/
-
-# Canonical export root for write_export_pdf. The Next.js server serves
-# these at /p/<slug>.pdf via a route handler at .pi/server/app/p/[slug]/
-# that reads from disk at request time (the prior public/p symlink design
-# broke under `next start` because Next caches its public-files manifest
-# at build time). Override the root with AGENTS_TEAM_EXPORT_PATH.
-exports/
+# Render/export artifacts now live under `<vault>/artifacts/{renders,exports}/`
+# which is already covered by the vault/ rule above. Belt-and-braces ignore
+# for legacy top-level dirs in case anything still writes there during
+# transition or in old branches.
+/renders/
+/exports/
 
 # Next.js + Nextra app — install deps, build cache, and runtime artifacts.
 .pi/server/node_modules/
 .pi/server/.next/
 .pi/server/next-env.d.ts
 *.tsbuildinfo
-# Legacy MDX location (now migrated to root renders/). Kept ignored in case
-# of stray writes during migration or manual edits.
+# Legacy MDX location (since migrated to vault/artifacts/renders/). Kept
+# ignored in case of stray writes during migration or manual edits.
 .pi/server/content/v/
 # Runtime-generated presentation artifacts (URL date-slug paths) and any
 # images/assets the server writes under public/p for them.

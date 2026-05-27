@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared service — persistent todos. Capture via the `reminder_add` tool when the user says "remind me X". Users typically resolve via the `/clear <N>` slash command (handled entirely by the extension, NO agent turn); the `reminder_resolve` tool is a fallback for natural-language resolution like "mark X done". List via `reminder_list`. The `reminders` extension owns the file (`.pi/state/reminders.md`) and surfaces open items at every session start as a numbered list. Do NOT use `read` or `edit` on the file — call the tools.
+description: Layer 3 shared service — persistent todos. Capture via the `reminder_add` tool when the user says "remind me X". Users typically resolve via the `/clear <N>` slash command (handled entirely by the extension, NO agent turn); the `reminder_resolve` tool is a fallback for natural-language resolution like "mark X done". List via `reminder_list`. The `reminders` extension owns the file (`<vault>/.memory/reminders.md`) and surfaces open items at every session start as a numbered list. Do NOT use `read` or `edit` on the file — call the tools.
 ---
 
 # Reminders
@@ -11,7 +11,7 @@ Persistent open-items list. Captured by `reminder_add` when the user says "remin
 This is a distinct memory substrate from profiles and the vault:
 
 - **Profiles** = slow-growth user model, approval-gated, read at persona adoption
-- **Vault** = persisted artifacts (markdown notes in the Obsidian vault — captures, PRDs, ADRs, lessons, retros). HTML renders live separately in `renders/`, outside the vault.
+- **Vault** = persisted artifacts (markdown notes in the Obsidian vault — captures, PRDs, ADRs, lessons, retros). HTML renders live under `<vault>/artifacts/renders/` (derivative subtree, not the source-note tree).
 - **Reminders** (this) = user-visible open items, fast write, lifecycle ends only on explicit user say-so
 
 ## When to invoke
@@ -61,7 +61,7 @@ After any tool call, **say nothing or one short word.** The tool result is alrea
 
 ## Don't
 
-- **Don't `read` or `edit` `.pi/state/reminders.md` directly.** The extension owns the file format. Always call the tools.
+- **Don't `read` or `edit` `<vault>/.memory/reminders.md` directly.** The extension owns the file format. Always call the tools.
 - **Don't auto-resolve.** Inferring "the user must have done this by now" is wrong. Only the user can resolve.
 - **Don't paraphrase.** Keep the user's exact wording as the reminder text.
 - **Don't dedupe.** Two similar items is the user's choice.

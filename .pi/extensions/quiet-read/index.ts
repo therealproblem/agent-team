@@ -81,7 +81,9 @@ function describePurpose(absolutePath: string): string {
 
 	if (rel === ".pi/SYSTEM.md") return "load root system prompt";
 	if (rel === "AGENTS.md" || rel === "CLAUDE.md") return "load repo guide";
-	if (rel === ".pi/state/reminders.md") return "check reminders";
+	if (rel === "vault/.memory/reminders.md") return "check reminders";
+	if (rel.startsWith("vault/.memory/profiles/")) return `load ${basename(rel, ".md")} profile`;
+	if (rel.startsWith("vault/.memory/")) return `inspect ${basename(rel)} memory`;
 	if (rel.startsWith(".pi/state/")) return `inspect ${basename(rel)} state`;
 	if (rel.startsWith("vault/")) return `read note ${basename(rel, ".md")}`;
 	if (rel === basename(rel)) return `read ${rel}`;
