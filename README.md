@@ -347,6 +347,22 @@ Then point `AGENTS_TEAM_SERVER_PUBLIC_URL` at the named tunnel hostname so the U
 
 If you don't want the whole world poking at your board / projects / news pages, set `AGENTS_TEAM_AUTH_TOKEN` to a strong value (`openssl rand -hex 32`) and restart the server. The `proxy.ts` gate then 302-redirects unauthenticated browser hits to `/login` where a single password field exchanges the token for an httpOnly session cookie; bearer auth via `Authorization: Bearer <token>` or `?auth=<token>` keeps API clients and bookmarks working. Artifact paths (`/v/*` and `/p/*`) skip the gate so shared HTML pages and PDFs stay open to recipients. Full details in `.pi/server/AUTH.md`.
 
+## Where things live
+
+The project splits four storage layers by lifecycle. Defaults assume a single repo checkout with the vault inside it; every layer is point-to-elsewhere via env var.
+
+| Layer | Default path | Override | What's there |
+|---|---|---|---|
+| **Source notes** | `<repo>/vault/` | `AGENTS_TEAM_VAULT_PATH` | Hand-authored markdown — PRDs, ADRs, journal entries, lessons, research deliverables. The Obsidian graph view, backlinks, and tag search depend on staying markdown-first. Owned by the `note-taker` skill. |
+| **Artifacts** | `<vault>/artifacts/{renders,exports}/` | `AGENTS_TEAM_RENDERS_PATH`, `AGENTS_TEAM_EXPORT_PATH` | One-way derivatives of source notes: `.mdx` for `/v/*` HTML renders, `.pdf` for `/p/*` exports. Regenerate by editing the source and re-running the skill. |
+| **Memory** | `<vault>/.memory/` | `AGENTS_TEAM_MEMORY_PATH` | User-curated long-lived state: `profiles/` (per-domain user model), `reminders.md` (open todos), `news-bookmarks.json` (saved items), `research-log.{jsonl,md}` (cross-run logbook). Leading dot keeps it out of Obsidian's file list. |
+| **Runtime state** | `<repo>/.pi/state/` | `AGENTS_TEAM_STATE_PATH` (server routes) | Operational data not meant for the vault: `news.json` (daily-rolling RSS cache), `news-sources.json` (feed registry), `srs.json` (SRS deck progress), `telegram/` (per-chat state), `persona-registry.json` (canonical persona list), `research-tree.json` (per-run tree), `server.log`. Resets/rolls over without user impact. |
+| **Server** | `<repo>/.pi/server/` | `AGENTS_TEAM_SERVER_PATH` | Next.js 16 + Nextra 4 app on `:8080`. Compiled output in `.next/` is build-time; source serves `/v/*` and `/p/*` from the vault at request time. |
+
+The artifact and memory env vars accept absolute paths and win over the vault-relative defaults — useful if you want PDFs to land outside an iCloud-synced vault, or to share a memory tree across machines.
+
+`scripts/phases/setup-env.sh` creates the artifact + memory roots and migrates any legacy files (older repo-root `renders/`, `exports/`, or `.pi/state/{profiles,reminders.md,news-bookmarks.json,research-log.*}`) on first run. The migration is idempotent and conflict-safe — if both old and new locations have content, the legacy copy is left in place with a warning rather than overwriting current state.
+
 ## Environment variables
 
 All vars are optional. Project-local secrets and overrides live in `.env` (gitignored) - copy from `.env.example` and uncomment what you want to set. The in-repo extensions auto-load `.env` at startup, and `scripts/setup.sh` sources it before the Nextra build. Shell-exported values still win, so ad-hoc overrides work:
@@ -357,7 +373,11 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AGENTS_TEAM_VAULT_PATH` | `<repo>/vault/` | Path to the Obsidian vault. Point this at your real vault elsewhere on disk to have all notes land there. Used by the `obsidian-vault` and `trade-journal` extensions. |
+| `AGENTS_TEAM_VAULT_PATH` | `<repo>/vault/` | Path to the Obsidian vault. Point this at your real vault elsewhere on disk to have all notes (and, by default, artifacts + memory) land there. Used by the `obsidian-vault` and `trade-journal` extensions. |
+| `AGENTS_TEAM_RENDERS_PATH` | `<vault>/artifacts/renders/` | Where `.mdx` files for `/v/*` HTML renders are written. Override if you want renders outside the vault tree. |
+| `AGENTS_TEAM_EXPORT_PATH` | `<vault>/artifacts/exports/` | Where PDF exports for `/p/*` land. Override if PDFs shouldn't sync with your vault (e.g. iCloud-backed Obsidian, where every export would propagate to all devices). |
+| `AGENTS_TEAM_MEMORY_PATH` | `<vault>/.memory/` | Root for user-curated memory (profiles, reminders, news bookmarks, research logbook). Override to share a memory tree across machines independently of the vault. |
+| `AGENTS_TEAM_STATE_PATH` | `<repo>/.pi/state/` | Runtime state read by the Next.js news routes (news.json + news-sources.json). The extensions themselves always resolve `.pi/state/` from the repo root, so this var only affects the server. |
 | `AGENTS_TEAM_SERVER_PATH` | `<repo>/.pi/server/` | Location of the Next.js + Nextra app that serves renders and PDFs. |
 | `AGENTS_TEAM_SERVER_PORT` | `8080` | Port the local server binds to. |
 | `AGENTS_TEAM_SERVER_MODE` | `production` | Set to `dev` (or `development`) to spawn `next dev --webpack` with hot reload instead of serving the pre-built `.next/`. Skips the build-dir check; first request compiles on demand. |
