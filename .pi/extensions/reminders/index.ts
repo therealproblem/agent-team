@@ -22,18 +22,20 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import { Type } from "@earendil-works/pi-ai";
 import {
 	defineTool,
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { loadDotenv } from "../../lib/dotenv";
 import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
 
+loadDotenv();
+
 const REPO_ROOT = resolve(process.cwd());
-const VAULT_ROOT = resolve(
-	process.env.AGENTS_TEAM_VAULT_PATH ?? join(REPO_ROOT, "vault"),
-);
+const VAULT_ROOT = resolveVaultRoot({ cwd: REPO_ROOT });
 const MEMORY_ROOT = resolve(
 	process.env.AGENTS_TEAM_MEMORY_PATH ?? join(VAULT_ROOT, ".memory"),
 );

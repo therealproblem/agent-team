@@ -22,6 +22,7 @@
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { join, resolve } from "node:path";
+import { resolveVaultRoot } from "../../../../lib/vault-path";
 import { NextResponse } from "next/server";
 import matter from "gray-matter";
 
@@ -29,9 +30,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const V_DIR = resolve(process.cwd(), "content", "v");
-const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
-  ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
-  : resolve(process.cwd(), "..", "..", "vault");
+const VAULT_ROOT = resolveVaultRoot({ cwd: resolve(process.cwd(), "..", "..") });
 
 const PI_TIMEOUT_MS = 60_000;
 

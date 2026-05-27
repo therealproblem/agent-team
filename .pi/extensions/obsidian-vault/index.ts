@@ -70,6 +70,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import { promisify } from "node:util";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -95,9 +96,7 @@ loadDotenv();
 
 const execFileP = promisify(execFile);
 
-const VAULT_ROOT = resolve(
-	process.env.AGENTS_TEAM_VAULT_PATH ?? join(process.cwd(), "vault"),
-);
+const VAULT_ROOT = resolveVaultRoot();
 const SERVER_ROOT = resolve(
 	process.env.AGENTS_TEAM_SERVER_PATH ?? join(process.cwd(), ".pi", "server"),
 );

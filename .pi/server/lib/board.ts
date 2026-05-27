@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import matter from "gray-matter";
 import { z } from "zod";
 import {
@@ -22,9 +23,8 @@ import {
 export * from "./board-types";
 
 function getVaultRoot(): string {
-  if (process.env.AGENTS_TEAM_VAULT_PATH) return process.env.AGENTS_TEAM_VAULT_PATH;
   // Next.js server runs from .pi/server/. Repo root is two levels up.
-  return path.resolve(process.cwd(), "..", "..", "vault");
+  return resolveVaultRoot({ cwd: path.resolve(process.cwd(), "..", "..") });
 }
 
 export function getProjectsDir(): string {

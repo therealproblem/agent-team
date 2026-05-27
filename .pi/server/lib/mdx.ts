@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import { Fragment, type ReactNode } from "react";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — no types ship for the runtime-only react/jsx-runtime entry
@@ -26,9 +27,7 @@ export const CONTENT_DIR = path.resolve(process.cwd(), "content");
 // two levels to the repo root, into the vault, then into artifacts/renders/.
 // AGENTS_TEAM_RENDERS_PATH still wins outright; otherwise renders track the
 // configured vault location via AGENTS_TEAM_VAULT_PATH (or <repo>/vault).
-const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
-  ? path.resolve(process.env.AGENTS_TEAM_VAULT_PATH)
-  : path.resolve(process.cwd(), "..", "..", "vault");
+const VAULT_ROOT = resolveVaultRoot({ cwd: path.resolve(process.cwd(), "..", "..") });
 
 export const V_DIR = process.env.AGENTS_TEAM_RENDERS_PATH
   ? path.resolve(process.env.AGENTS_TEAM_RENDERS_PATH)

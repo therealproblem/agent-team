@@ -142,7 +142,7 @@ Engineer returns `DONE: <one-line gist>` + the card path. You surface the findin
 The `task` field must include:
 
 1. **Project slug** (e.g. `agents-team`).
-2. **Card path** — pass the **repo-rooted path** (`vault/projects/agents-team/board/wire-telegram-fallback.md`) or the absolute `filePath` returned by `board_create_card`. Never strip the `vault/` prefix — a bare `projects/...` path would tell the engineer to read/write at the repo root and create a stray `/projects/` directory. Create the card first via `board_create_card` if it doesn't exist.
+2. **Card path** — pass the **active-vault-rooted path** (`vault/projects/agents-team/board/wire-telegram-fallback.md`) or the absolute `filePath` returned by `board_create_card`. `vault/...` means under the active vault (`AGENTS_TEAM_VAULT_PATH` when configured and available; repo-local `vault/` only as fallback), not cwd/repo-local. Never strip the `vault/` prefix — a bare `projects/...` path would tell the engineer to read/write outside the vault. Create the card first via `board_create_card` if it doesn't exist.
 3. **Card body** — title + brief + acceptance criteria + priority. Inline it OR refer to the card path and let the engineer read it. Inline is faster for short cards.
 4. **Pointers** to relevant PRDs / ADRs / `design.md` / `content.md` in the vault as paths only. **Do not paste their content** — the engineer reads them itself via `read` to keep your context window clean.
 5. **Constraints from this conversation** that aren't on the card (deadlines, dep restrictions, stylistic asks).

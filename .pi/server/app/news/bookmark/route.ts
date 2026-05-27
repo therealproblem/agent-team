@@ -22,6 +22,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { resolveVaultRoot } from "../../../../lib/vault-path";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +30,7 @@ export const dynamic = "force-dynamic";
 const STATE_ROOT = process.env.AGENTS_TEAM_STATE_PATH
   ? resolve(process.env.AGENTS_TEAM_STATE_PATH)
   : resolve(process.cwd(), "..", "state");
-const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
-  ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
-  : resolve(process.cwd(), "..", "..", "vault");
+const VAULT_ROOT = resolveVaultRoot({ cwd: resolve(process.cwd(), "..", "..") });
 // User-curated memory (bookmarks, persona profiles, reminders, research log)
 // lives inside the vault by default so it travels with the user's notes.
 // news.json and news-sources.json stay in STATE_ROOT — those are runtime

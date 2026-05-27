@@ -16,16 +16,18 @@
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { isAbsolute, resolve } from "node:path";
+import { loadDotenv } from "../../lib/dotenv";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import { Type } from "@earendil-works/pi-ai";
 import {
 	defineTool,
 	type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 
+loadDotenv();
+
 const REPO_ROOT = resolve(process.cwd());
-const VAULT_ROOT = resolve(
-	process.env.AGENTS_TEAM_VAULT_PATH ?? `${REPO_ROOT}/vault`,
-);
+const VAULT_ROOT = resolveVaultRoot({ cwd: REPO_ROOT });
 
 function shellQuote(s: string): string {
 	return `'${s.replace(/'/g, "'\\''")}'`;

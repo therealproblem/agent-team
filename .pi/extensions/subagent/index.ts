@@ -16,6 +16,8 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { loadDotenv } from "../../lib/dotenv";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -27,6 +29,8 @@ import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
+
+loadDotenv();
 
 // Project-scope agent names already confirmed by the user in this Pi process.
 // One Pi process == one session, so this trust set lives for the lifetime of
@@ -283,9 +287,7 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 function loadProfilesContent(profileNames: string[], projectAgentsDir: string | null): string {
 	if (!projectAgentsDir || profileNames.length === 0) return "";
 	const projectRoot = path.dirname(path.dirname(projectAgentsDir));
-	const vaultRoot = process.env.AGENTS_TEAM_VAULT_PATH
-		? path.resolve(process.env.AGENTS_TEAM_VAULT_PATH)
-		: path.join(projectRoot, "vault");
+	const vaultRoot = resolveVaultRoot({ cwd: projectRoot });
 	const memoryRoot = process.env.AGENTS_TEAM_MEMORY_PATH
 		? path.resolve(process.env.AGENTS_TEAM_MEMORY_PATH)
 		: path.join(vaultRoot, ".memory");
@@ -398,7 +400,10 @@ async function runSingleAgent(
 	// Pre-load configured profiles so the agent doesn't burn a turn reading
 	// them via the read tool. Profile content is prepended to systemPrompt as
 	// loaded context.
-	let assembledPrompt = agent.systemPrompt;
+	const projectRoot = projectAgentsDir ? path.dirname(path.dirname(projectAgentsDir)) : defaultCwd;
+	const vaultRoot = resolveVaultRoot({ cwd: projectRoot });
+	const vaultContract = `# Active vault path contract\n\nAGENTS_TEAM_VAULT_PATH is authoritative when configured and available. Treat every \`vault/...\` path as relative to the active vault root, not to cwd or the repo. If a tool cannot resolve \`vault/...\` against the active vault, use the absolute path under the active vault instead. Fall back to repo-local \`vault/\` only when the configured env vault is unavailable. Do not print, echo, log, or reveal literal .env values.\n\nActive vault root is available to this process via AGENTS_TEAM_ACTIVE_VAULT_ROOT; use the env var name only in user-facing text.\n`;
+	let assembledPrompt = `${vaultContract}\n---\n\n${agent.systemPrompt}`;
 	if (agent.profiles && agent.profiles.length > 0) {
 		const profileContent = loadProfilesContent(agent.profiles, projectAgentsDir);
 		if (profileContent) {
@@ -427,6 +432,7 @@ async function runSingleAgent(
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
+				env: { ...process.env, AGENTS_TEAM_ACTIVE_VAULT_ROOT: vaultRoot },
 			});
 			t_spawned = Date.now();
 			let buffer = "";

@@ -20,6 +20,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { resolveVaultRoot } from "../../../../lib/vault-path";
 import { NextResponse } from "next/server";
 
 // Mirror the env-var convention from .pi/extensions/obsidian-vault/index.ts.
@@ -27,9 +28,7 @@ import { NextResponse } from "next/server";
 // two levels to the repo root, into the vault, then into artifacts/exports/.
 // AGENTS_TEAM_EXPORT_PATH still wins outright; otherwise exports track the
 // configured vault location via AGENTS_TEAM_VAULT_PATH (or <repo>/vault).
-const VAULT_ROOT = process.env.AGENTS_TEAM_VAULT_PATH
-  ? resolve(process.env.AGENTS_TEAM_VAULT_PATH)
-  : resolve(process.cwd(), "..", "..", "vault");
+const VAULT_ROOT = resolveVaultRoot({ cwd: resolve(process.cwd(), "..", "..") });
 
 const EXPORT_ROOT = process.env.AGENTS_TEAM_EXPORT_PATH
   ? resolve(process.env.AGENTS_TEAM_EXPORT_PATH)

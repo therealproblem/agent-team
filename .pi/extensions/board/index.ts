@@ -21,11 +21,15 @@ import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { loadDotenv } from "../../lib/dotenv";
+import { resolveVaultRoot } from "../../lib/vault-path";
 import { Type } from "@earendil-works/pi-ai";
 import {
 	defineTool,
 	type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
+
+loadDotenv();
 
 const REPO_ROOT = resolve(process.cwd());
 
@@ -53,7 +57,7 @@ const MAX_COMMENT_LENGTH = 4_000;
 const VALID_COMMENT_ROLES = ["pm", "engineer"] as const;
 
 function vaultRoot(): string {
-	return process.env.AGENTS_TEAM_VAULT_PATH || join(REPO_ROOT, "vault");
+	return resolveVaultRoot({ cwd: REPO_ROOT });
 }
 
 function projectsDir(): string {
@@ -125,7 +129,7 @@ const boardCreateCard = defineTool({
 	name: "board_create_card",
 	label: "Create Card",
 	description:
-		"Create a new kanban card under a project. Returns the card's globally-unique short URL — surface that URL in your reply so the user can click into the card. Use this whenever you (PM or engineer) drop a card on the board; do NOT hand-write the markdown file. The tool stamps a UUID `id:`, slugifies the title for the filename, writes the frontmatter + body, and returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}`. Use `filePath` (absolute) — NOT `vaultPath` (vault-relative) — when later editing the card via the `edit` tool, otherwise the edit lands at `<repo>/projects/...` instead of `<repo>/vault/projects/...`. There must never be a `projects/` directory at the repo root.",
+		"Create a new kanban card under a project. Returns the card's globally-unique short URL — surface that URL in your reply so the user can click into the card. Use this whenever you (PM or engineer) drop a card on the board; do NOT hand-write the markdown file. The tool stamps a UUID `id:`, slugifies the title for the filename, writes the frontmatter + body, and returns `{id, projectSlug, cardSlug, url, vaultPath, filePath}`. Use `filePath` (absolute) — NOT `vaultPath` (vault-relative) — when later editing the card via the `edit` tool, otherwise the edit may land outside the active vault. Vault resolution is env-first: AGENTS_TEAM_VAULT_PATH wins when available; repo-local `vault/` is fallback only.",
 	parameters: Type.Object({
 		project_slug: Type.String({
 			description:
@@ -305,11 +309,10 @@ const boardCreateCard = defineTool({
 		const vaultPath = `projects/${projectSlug}/board/${cardSlug}.md`;
 		// filePath is the absolute on-disk path the card was written to.
 		// Agents MUST use this (not vaultPath) when subsequently editing the
-		// card via the `edit` tool — passing the vault-relative `vaultPath`
-		// to `edit` would resolve it against the agent's cwd (the repo root),
-		// dropping the write in `<repo>/projects/...` instead of
-		// `<repo>/vault/projects/...`. There must never be a `projects/`
-		// directory at the repo root.
+		// card via the `edit` tool. `vaultPath` is vault-relative; passing it
+		// directly to a filesystem tool resolves against the agent's cwd instead
+		// of the active vault. The active vault is env-first via
+		// AGENTS_TEAM_VAULT_PATH, with repo-local `vault/` as fallback only.
 
 		return {
 			content: [

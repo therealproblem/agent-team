@@ -19,11 +19,9 @@ The `board_create_card` tool is the canonical card-creation path for any agent (
 
 ### Editing a card after creation — use `filePath`, never `vaultPath`
 
-`vaultPath` is **vault-relative** (`projects/<slug>/board/<card>.md`). `filePath` is the **absolute on-disk path** (`/Users/.../agents-team/vault/projects/<slug>/board/<card>.md`).
+`vaultPath` is **vault-relative** (`projects/<slug>/board/<card>.md`). `filePath` is the **absolute on-disk path** under the active vault. The active vault is env-first: `AGENTS_TEAM_VAULT_PATH` wins when configured and available; repo-local `vault/` is fallback only.
 
-When you later edit a card via the `edit` tool, pass `filePath`. **Do not pass `vaultPath`** — the `edit` tool resolves relative paths against your cwd (the repo root), which would drop the write at `<repo>/projects/...` instead of `<repo>/vault/projects/...`. **There must never be a `projects/` directory at the repo root**; if you see one, it's broken.
-
-The same rule applies when constructing an edit path by hand: prefix `vault/` (or use the absolute path) — never write to a bare `projects/...` path.
+When you later edit a card via the `edit` tool, pass `filePath`. **Do not pass `vaultPath`** — the `edit` tool resolves relative paths against your cwd, which can drop the write outside the active vault. If you construct a path by hand, use `vault/projects/...` only when your tool resolves `vault/...` against the active vault; otherwise use the absolute path under `AGENTS_TEAM_ACTIVE_VAULT_ROOT`. Never write to a bare `projects/...` path.
 
 Call shape:
 
