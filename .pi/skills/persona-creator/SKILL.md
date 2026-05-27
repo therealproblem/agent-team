@@ -27,7 +27,7 @@ The specialization rule (from AGENTS.md): **sub-session when contamination would
 Ask the user the minimum needed to disambiguate. Don't bombard. The two questions that matter:
 
 1. **Type** — persona, inner skill, reviewer, or tool? If they said "persona" but described something narrow ("a kanji-review thing under language"), gently propose inner skill instead.
-2. **Owner / scope** — if inner skill or reviewer: which persona owns it (or is it Layer 3, callable by all)? If persona: which profile file should be attached (one of the existing five, or a new domain profile under `.pi/state/profiles/`)? If tool: which existing or new extension hosts it?
+2. **Owner / scope** — if inner skill or reviewer: which persona owns it (or is it Layer 3, callable by all)? If persona: which profile file should be attached (one of the existing five, or a new domain profile under `vault/.memory/profiles/`)? If tool: which existing or new extension hosts it?
 
 If the user has already named all this in their request, skip the questions and confirm in one line before scaffolding.
 
@@ -57,7 +57,7 @@ Always show the user the diff for these patches before committing — they are e
 
 ### Step 4 — Profile wiring (personas only)
 
-If the new component is a persona, it almost certainly needs a domain profile under `.pi/state/profiles/<name>.md`. Either:
+If the new component is a persona, it almost certainly needs a domain profile under `vault/.memory/profiles/<name>.md`. Either:
 
 - Point it at an existing profile (e.g. a "research" persona reuses `learning.md`), OR
 - Create a new empty profile file with a short heading and let it populate over time via `PROFILE_UPDATE` proposals.
@@ -131,8 +131,8 @@ You are not <adjacent role>. <One-line boundary.>
 
 Before producing output under this persona, **read these profiles via the `read` tool** (skip files that don't exist):
 
-1. `.pi/state/profiles/_global.md` — interaction-style preferences
-2. `.pi/state/profiles/<domain>.md` — <domain>-specific patterns
+1. `vault/.memory/profiles/_global.md` — interaction-style preferences
+2. `vault/.memory/profiles/<domain>.md` — <domain>-specific patterns
 
 Profile content overrides defaults below where they conflict.
 

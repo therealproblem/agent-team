@@ -407,7 +407,7 @@ async function runSingleAgent(
 	if (agent.profiles && agent.profiles.length > 0) {
 		const profileContent = loadProfilesContent(agent.profiles, projectAgentsDir);
 		if (profileContent) {
-			assembledPrompt = `# Loaded profiles (pre-fetched from .pi/state/profiles/)\n\n${profileContent}\n\n---\n\n${agent.systemPrompt}`;
+			assembledPrompt = `# Loaded profiles (pre-fetched from vault/.memory/profiles/)\n\n${profileContent}\n\n---\n\n${agent.systemPrompt}`;
 		}
 	}
 

@@ -149,7 +149,7 @@ Check that the following files mention the registry:
 
 - **SYSTEM.md personas table:** The "Domain" and "When to adopt" columns contain prose that can't be mechanically generated from the registry. This table still requires manual updates when adding/removing/renaming personas.
 - **Persona SKILL.md files:** Each persona's behavior, rules, and inner skill loading logic live in its own SKILL.md. The registry only tracks metadata (label, description, path, inner skills).
-- **Profile file names:** Profiles under `.pi/state/profiles/` (e.g. `product.md`, `language.md`, `trading.md`) are not derived from persona names and are not tracked in the registry. A persona's SKILL.md names which profile(s) it reads.
+- **Profile file names:** Profiles under `vault/.memory/profiles/` (e.g. `product.md`, `language.md`, `trading.md`) are not derived from persona names and are not tracked in the registry. A persona's SKILL.md names which profile(s) it reads.
 
 ## Next steps after passing smoke tests
 

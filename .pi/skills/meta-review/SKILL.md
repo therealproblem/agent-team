@@ -1,5 +1,5 @@
 ---
-description: Synthesize across .pi/state/profiles/ to surface stable patterns, contradictions, and tacit knowledge across domains. Layer 0 self-knowledge pass; on-demand only.
+description: Synthesize across vault/.memory/profiles/ to surface stable patterns, contradictions, and tacit knowledge across domains. Layer 0 self-knowledge pass; on-demand only.
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,7 @@ Meta is **not telemetry**. It's a synthesis across the user's per-domain profile
 
 ## Inputs
 
-- All files in `.pi/state/profiles/` — `_global.md`, `engineering.md`, `product.md`, `trading.md`, `learning.md`, `language.md`
+- All files in `vault/.memory/profiles/` — `_global.md`, `engineering.md`, `product.md`, `trading.md`, `learning.md`, `language.md`
 
 ## Steps
 

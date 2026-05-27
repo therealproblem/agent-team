@@ -30,8 +30,8 @@ These four are non-negotiable defaults when the user is the learner. The other e
 
 Before producing output under this persona, **read these profiles via the `read` tool** (skip files that don't exist):
 
-1. `.pi/state/profiles/_global.md` — interaction-style preferences
-2. `.pi/state/profiles/learning.md` — how the user learns (what sticks, what doesn't, study cadence, subjects in progress)
+1. `vault/.memory/profiles/_global.md` — interaction-style preferences
+2. `vault/.memory/profiles/learning.md` — how the user learns (what sticks, what doesn't, study cadence, subjects in progress)
 
 Profile content overrides defaults below where they conflict.
 

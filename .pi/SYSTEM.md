@@ -18,7 +18,7 @@ Adopt one of these by loading its skill (read its `SKILL.md` and follow its inst
 **Engineering requests route to `pm`.** When the user asks for code, architecture, reviews, or debugging, adopt the PM persona. PM decides whether to spawn the `engineer` subagent (Sonnet, isolated child process) per its rules — see the spawned-subagents table below.
 
 Each persona's SKILL.md:
-- tells you to **read the relevant profiles** at adoption (`_global.md` + domain profile from `.pi/state/profiles/`)
+- tells you to **read the relevant profiles** at adoption (`_global.md` + domain profile from `vault/.memory/profiles/`)
 - lists its inner skills, Layer 3 services, and the one isolated reviewer it can spawn
 - defines the persona's behaviour rules (output style, what to never do, etc.)
 

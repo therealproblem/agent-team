@@ -29,7 +29,7 @@ Below the threshold, **stay silent and keep observing**. Surfacing weak patterns
 
 ## Output (internal)
 
-Pattern hypotheses live in `.pi/state/profiles/trading.md` (the user's trading profile), not in the vault. Updates go through the `PROFILE_UPDATE` proposal flow defined in the Trader agent's SYSTEM.md — Trader proposes, user approves, then Trader writes.
+Pattern hypotheses live in `vault/.memory/profiles/trading.md` (the user's trading profile), not in the vault. Updates go through the `PROFILE_UPDATE` proposal flow defined in the Trader agent's SYSTEM.md — Trader proposes, user approves, then Trader writes.
 
 Hypothesis entry format:
 

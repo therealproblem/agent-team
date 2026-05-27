@@ -25,7 +25,7 @@ The user's answer becomes the catalog entry. Until they answer, the setup is unn
 
 ## Catalog entry shape
 
-Each setup in `.pi/state/profiles/trading.md` under `## Setup recognition`:
+Each setup in `vault/.memory/profiles/trading.md` under `## Setup recognition`:
 
 ```
 ### <user-given name>
