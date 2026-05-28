@@ -35,7 +35,6 @@ export function BoardView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const personaParam = searchParams.get("persona");
-  const subParam = searchParams.get("sub");
   const priorityParam = searchParams.get("priority");
   const cardParam = searchParams.get("card");
 
@@ -74,11 +73,10 @@ export function BoardView({
   const filtered = useMemo(() => {
     return cards.filter((c) => {
       if (activePersona && c.persona !== activePersona) return false;
-      if (subParam && c.sub_persona !== subParam) return false;
       if (activePriority && c.priority !== activePriority) return false;
       return true;
     });
-  }, [cards, activePersona, subParam, activePriority]);
+  }, [cards, activePersona, activePriority]);
 
   const byStatus = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, [] as BoardCard[]])) as Record<

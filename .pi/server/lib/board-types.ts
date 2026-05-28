@@ -19,17 +19,13 @@ export const STATUS_LABELS: Record<Status, string> = {
   done: "Done",
 };
 
-export const PERSONAS = ["pm", "engineer"] as const;
+export const PERSONAS = ["pm", "engineer", "designer"] as const;
 export type Persona = typeof PERSONAS[number];
 
 export const PERSONA_LABELS: Record<Persona, string> = {
   pm: "PM",
   engineer: "Engineer",
-};
-
-export const SUB_PERSONAS: Record<Persona, readonly string[]> = {
-  pm: ["prd", "roadmap", "stakeholder-summary", "user-research", "uiux", "copywriter"],
-  engineer: ["frontend", "backend", "uiux", "devops", "debugger", "refactor"],
+  designer: "Designer",
 };
 
 export const PROJECT_STATUSES = ["active", "paused", "done", "archived"] as const;

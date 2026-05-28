@@ -11,6 +11,11 @@ export const PERSONA_THEME: Record<Persona, { dot: string; chip: string; ring: s
     chip: "bg-[var(--color-cloud-fog)] text-[var(--color-burnt-umber)] border border-[color-mix(in_oklab,var(--color-burnt-umber)_30%,transparent)]",
     ring: "ring-[color-mix(in_oklab,var(--color-burnt-umber)_40%,transparent)]",
   },
+  designer: {
+    dot: "bg-[var(--color-deep-cognac)]",
+    chip: "bg-[var(--color-cloud-fog)] text-[var(--color-deep-cognac)] border border-[color-mix(in_oklab,var(--color-deep-cognac)_30%,transparent)]",
+    ring: "ring-[color-mix(in_oklab,var(--color-deep-cognac)_40%,transparent)]",
+  },
 };
 
 export const UNASSIGNED_THEME = {

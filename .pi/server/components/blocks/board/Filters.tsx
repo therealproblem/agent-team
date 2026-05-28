@@ -1,13 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import {
   PERSONAS,
   PERSONA_LABELS,
   PRIORITIES,
   PRIORITY_LABELS,
-  SUB_PERSONAS,
   type Persona,
   type Priority,
 } from "@/lib/board-types";
@@ -22,7 +21,6 @@ export function Filters() {
   const searchParams = useSearchParams();
 
   const personaParam = searchParams.get("persona");
-  const subParam = searchParams.get("sub");
   const priorityParam = searchParams.get("priority");
   const activePersona = (PERSONAS as readonly string[]).includes(personaParam ?? "")
     ? (personaParam as Persona)
@@ -48,9 +46,9 @@ export function Filters() {
     (value: string) => {
       // toggle-group "single" sends "" when deselecting
       if (value === activePersona) {
-        setParams({ persona: null, sub: null });
+        setParams({ persona: null });
       } else {
-        setParams({ persona: value || null, sub: null });
+        setParams({ persona: value || null });
       }
     },
     [activePersona, setParams],
@@ -67,16 +65,11 @@ export function Filters() {
     [activePriority, setParams],
   );
 
-  const subPersonas = useMemo(
-    () => (activePersona ? SUB_PERSONAS[activePersona] : []),
-    [activePersona],
-  );
-
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          Persona
+          Agent
         </span>
         <ToggleGroup
           type="single"
@@ -105,12 +98,12 @@ export function Filters() {
             );
           })}
         </ToggleGroup>
-        {(activePersona || subParam || activePriority) && (
+        {(activePersona || activePriority) && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs"
-            onClick={() => setParams({ persona: null, sub: null, priority: null })}
+            onClick={() => setParams({ persona: null, priority: null })}
           >
             Clear
           </Button>
@@ -147,31 +140,6 @@ export function Filters() {
           })}
         </ToggleGroup>
       </div>
-
-      {activePersona && subPersonas.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 pl-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Sub-persona
-          </span>
-          <ToggleGroup
-            type="single"
-            spacing={1}
-            value={subParam ?? ""}
-            onValueChange={(v) => setParams({ sub: v || null })}
-            className="flex-wrap"
-          >
-            {subPersonas.map((s) => (
-              <ToggleGroupItem
-                key={s}
-                value={s}
-                className="h-6 rounded-full border border-border/60 px-2 text-[11px] font-normal"
-              >
-                {s}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
-      ) : null}
     </div>
   );
 }

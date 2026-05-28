@@ -74,7 +74,7 @@ export function ProjectIndex({ projects }: { projects: Project[] }) {
           <code className="bg-[var(--color-cloud-fog)] px-1.5 py-0.5 font-mono text-[12px]">
             board/*.md
           </code>
-          . Personas edit the markdown; this view is read-only.
+          . Agents edit the markdown; this view is read-only.
         </p>
       </div>
 
