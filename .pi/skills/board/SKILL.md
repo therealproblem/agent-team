@@ -120,7 +120,7 @@ Missing/invalid `status` → `backlog` (with a small warning badge on the card).
 Each top-level persona has a fixed set of inner skills. Use them as the `sub_persona:` value when relevant. The canonical list is maintained in `.pi/state/persona-registry.json` under each persona's `innerSkills` array:
 
 - **pm**: `prd`, `roadmap`, `stakeholder-summary`, `user-research`, `uiux`, `copywriter`
-- **engineer**: `frontend`, `backend`, `uiux`, `devops`, `debugger`, `refactor`, `corpus-learning`, `research`
+- **engineer**: `frontend`, `backend`, `devops`, `debugger`, `refactor`, `corpus-learning`, `research`
 
 ## Status lifecycle
 

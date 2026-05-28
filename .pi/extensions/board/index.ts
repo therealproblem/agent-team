@@ -47,7 +47,7 @@ const VALID_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
 
 const SUB_PERSONAS: Record<(typeof VALID_PERSONAS)[number], readonly string[]> = {
 	pm: ["prd", "roadmap", "stakeholder-summary", "user-research", "uiux", "copywriter"],
-	engineer: ["frontend", "backend", "uiux", "devops", "debugger", "refactor"],
+	engineer: ["frontend", "backend", "devops", "debugger", "refactor"],
 };
 
 const MAX_TITLE_LENGTH = 120;
@@ -154,7 +154,7 @@ const boardCreateCard = defineTool({
 		sub_persona: Type.Optional(
 			Type.String({
 				description:
-					"Inner skill. PM: prd | roadmap | stakeholder-summary | user-research | uiux | copywriter. Engineer: frontend | backend | uiux | devops | debugger | refactor.",
+					"Inner skill. PM: prd | roadmap | stakeholder-summary | user-research | uiux | copywriter. Engineer: frontend | backend | devops | debugger | refactor.",
 			}),
 		),
 		status: Type.Optional(

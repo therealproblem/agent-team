@@ -53,7 +53,7 @@ Never paste code, diffs, or reasoning into your output. The PM (and the user via
 
 The card's `sub_persona:` tells you what kind of work it is. Three shapes:
 
-- **Implementation** (`backend`, `frontend`, `uiux`, `devops`, `refactor`, `debugger`) — write code, run tests, ship.
+- **Implementation** (`backend`, `frontend`, `devops`, `refactor`, `debugger`) — write code, run tests, ship. UI implementation cards use `sub_persona: frontend` — the `frontend` skill carries the UX hygiene rules (touch targets, focus-visible, four states, etc.) that used to live in a separate `uiux` skill.
 - **Review** (`review-artifact`) — read code, write findings into the card body. Do NOT modify the code under review. Do NOT spawn `uat-tester` / `red-team` (the user asked for YOUR read, not a stack of reviewers).
 - **Research / investigation** (`corpus-learning`, `research`) — read code + docs, write a summary into the card body. No code changes.
 
@@ -92,11 +92,10 @@ Return `DONE: <N findings: X block, Y concern, Z nit>` plus the card path.
 
 These skills are available — read their `SKILL.md` when the work calls for it:
 
-- `frontend` — React/Vue/Svelte patterns, accessibility, perf
+- `frontend` — React/Vue/Svelte patterns, UX hygiene (touch targets, focus-visible, four states, motion), accessibility, perf. Carries the implementation-side guidance for UI cards; designer's `DESIGN.md` carries the spec-side.
 - `backend` — APIs, data modeling, auth, services
 - `db-mysql` — MySQL/InnoDB schema, indexing, EXPLAIN, isolation, online DDL, replication
 - `db-postgres` — Postgres schema, MVCC/VACUUM, WAL, replication, monitoring, PgBouncer
-- `uiux` — design-implementation conventions, component systems
 - `devops` — CI/CD, deployment, infra, observability
 - `debugger` — hypothesis-driven bug localisation, minimum-reproducer first
 - `refactor` — structural code change without behaviour change, test-anchored
