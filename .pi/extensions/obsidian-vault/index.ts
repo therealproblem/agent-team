@@ -550,7 +550,7 @@ async function verifyRender(slug: string): Promise<
 				return {
 					ok: false,
 					reason:
-						"local Next.js dev server not reachable at http://localhost:8080 — start it with `npm run dev` in .pi/server before re-running the render",
+						"local Next.js dev server not reachable at http://localhost:8080 — start it with `pnpm dev` in .pi/server before re-running the render",
 				};
 			}
 			return { ok: false, reason: msg };

@@ -102,7 +102,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── show-md/               Registers `show_md` — opens a vault markdown file in a tmux side pane via `leaf` (`tmux split-window -h 'leaf <abs path>'`). The new pane takes focus; `q` closes leaf (and the pane), `Ctrl-b o` cycles back to Pi without closing, `Ctrl-b x` kills the pane outright. Silent no-op when `$TMUX` is unset.
 │   ├── subagent/              Official Pi example — spawns reviewer sub-sessions
 │   ├── obsidian-vault/        Registers `write_note` (markdown → vault), `write_html_render` (md → `<vault>/artifacts/renders/<date>-<slug>.mdx`), `write_export_pdf` (Kami HTML → PDF → `<vault>/artifacts/exports/<date>-<slug>-<epoch>.pdf`, served by the Next.js route handler at `app/p/[slug]/route.ts` which reads from disk at request time; each regeneration appends a fresh Unix-epoch suffix so the URL is never reused).
-│   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `npm run build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
+│   ├── server/                Subscribes to `session_start`; spawns `next start` (production, from pre-built `.next/`) on :8080 from `.pi/server/`, kills on Pi exit. Bails with a clear message if `.next/` is missing — run `bash scripts/setup.sh` (or `pnpm build` in `.pi/server/`) to produce it. Surfaces ready/failed status as a TUI message.
 │   ├── news-ingest/           Registers `fetch_topic`, `query_today`, `get_item`, `refresh_all_topics`. Fetches RSS/Atom feeds (plain Node `fetch`, no Camoufox) and persists into a daily-rolling JSON store at `.pi/state/news.json` (auto-purged on day rollover). Source registry: `.pi/state/news-sources.json` (topic → [feed URLs]). Topics absent from the registry return `fallback_hint: "no_rss_source"` so the `news` skill delegates to `research`. Cron-driven by `scripts/news-cron.sh`. Surfaces a `news: last scrape …` line on `session_start` (or `No news` when empty). Slash commands: `/news-refresh` (manual full sweep, in-extension), `/show-news` (returns the `/news` page URL — Next.js route at `app/news/page.tsx` reads `news.json` on each request, Highlights / All toggle). Used by `news` skill.
 │   ├── srs/                   Registers `list_due`, `record`, `add_item`.
 │   ├── trade-journal/         Registers `list_trades`, `read_trade`.
@@ -116,7 +116,7 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 - **Server location.** Default: project-root `.pi/server/`. Override with `AGENTS_TEAM_SERVER_PATH`. Houses the Next.js + Nextra app that serves renders and PDFs.
 - **Server port.** Default: `8080`. Override with `AGENTS_TEAM_SERVER_PORT`.
 - **Server mode.** Default: `production` (spawns `next start` against the pre-built `.next/`). Set `AGENTS_TEAM_SERVER_MODE=dev` (or `development`) to spawn `next dev --webpack` with hot reload — the build-dir check is skipped and the first request compiles on demand.
-- **Server title.** Default: `agents-team`. Override with `AGENTS_TEAM_SERVER_TITLE` — appears as the wordmark in the top-left navbar and as the suffix on every page's `<title>`. **Read at build time**, not runtime: `layout.tsx` is statically pre-rendered, so the value is baked into `.pi/server/.next/`. Change the var, then re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for the new title to take effect. `scripts/setup.sh` auto-sources `.env` for the build.
+- **Server title.** Default: `agents-team`. Override with `AGENTS_TEAM_SERVER_TITLE` — appears as the wordmark in the top-left navbar and as the suffix on every page's `<title>`. **Read at build time**, not runtime: `layout.tsx` is statically pre-rendered, so the value is baked into `.pi/server/.next/`. Change the var, then re-run `bash scripts/setup.sh` (or `cd .pi/server && pnpm build`) for the new title to take effect. `scripts/setup.sh` auto-sources `.env` for the build.
 - **Public URL.** Default: `http://localhost:8080`. Override with `AGENTS_TEAM_SERVER_PUBLIC_URL` — set this to your **named** cloudflared tunnel hostname so HTML render / PDF URLs returned by tools are share-ready across sessions. (Quick tunnels rotate URLs on every restart; named tunnels are persistent.) Read at runtime, so a Pi restart is enough — no rebuild needed.
 - **Chrome binary.** PDF export uses headless Chrome. Auto-detected on macOS (`/Applications/Google Chrome.app`), Linux, and Windows. Override with `AGENTS_TEAM_CHROME_PATH` if Chrome is installed elsewhere.
 - **Disable auto-tmux.** Set `AGENTS_TEAM_NO_TMUX_REEXEC=1` to skip the `tmux-host` extension's re-exec into tmux. Required in cron / CI / embedded contexts where there's no TTY for tmux to attach to. Belt-and-braces only — the extension already detects `--no-session`/`-p`/`--prompt` and skips. `scripts/news-cron.sh` exports this var by default.
@@ -143,7 +143,7 @@ cloudflared tunnel run agents-team
 First-time server setup:
 
 ```bash
-cd .pi/server && npm install
+cd .pi/server && pnpm install
 ```
 
 ## Layer 0 — Meta (per-domain user model)
@@ -198,7 +198,7 @@ Project-local secrets and overrides live in `.env` (gitignored). Copy from the t
 cp .env.example .env
 ```
 
-In-repo extensions (`obsidian-vault`, `server`, `trade-journal`) auto-load `.env` from the repo root at startup via `.pi/lib/dotenv.ts`. Shell-exported values still win, so ad-hoc overrides work. `scripts/setup.sh` also sources `.env` before `npm run build` so build-time vars (the wordmark) get baked into the Nextra production output.
+In-repo extensions (`obsidian-vault`, `server`, `trade-journal`) auto-load `.env` from the repo root at startup via `.pi/lib/dotenv.ts`. Shell-exported values still win, so ad-hoc overrides work. `scripts/setup.sh` also sources `.env` before `pnpm build` so build-time vars (the wordmark) get baked into the Nextra production output.
 
 Vars worth setting:
 

@@ -162,7 +162,7 @@ The 70 imported product systems are pulled from the upstream npm package. To
 re-sync to the latest hashes:
 
 ```bash
-curl -sL $(npm view getdesign dist.tarball) -o /tmp/getdesign.tgz
+curl -sL $(pnpm view getdesign dist.tarball) -o /tmp/getdesign.tgz
 tar -xzf /tmp/getdesign.tgz -C /tmp
 node --experimental-strip-types scripts/sync-design-systems.ts
 ```

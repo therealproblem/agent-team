@@ -21,8 +21,8 @@ The agents-team artifact server supports optional token-based authentication for
 3. Restart the server:
    ```bash
    cd .pi/server
-   npm run build  # if needed
-   npm start
+   pnpm build  # if needed
+   pnpm start
    ```
 
 ### Disable Authentication
@@ -101,7 +101,7 @@ This should not happen. If it does, check:
 ### Auth not enforced when token is set
 
 1. Verify `.env` was loaded (check `process.env.AGENTS_TEAM_AUTH_TOKEN` in middleware)
-2. Rebuild the server (`npm run build`)
+2. Rebuild the server (`pnpm build`)
 3. Check the build output for "ƒ Proxy (Middleware)" line
 
 ### Next.js 16 "middleware \u2192 proxy" deprecation warning

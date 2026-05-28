@@ -82,6 +82,21 @@ When `AGENTS_TEAM_SERVER_PUBLIC_URL` is set, **every URL that leaves the agent �
 
 Every design artifact — light-tier `design.md`, heavy-tier `DESIGN.md + storyboard.html + prompts/ + README.md`, one-off mockups, screen shots, palette decks, anything visual the user might call a mockup — lives under `<vault>/ux/<slug>/`. The `<slug>` is derived from the card title or project slug; the directory is created on first write. **No alternate locations**: not `pm/design/`, not `<vault>/projects/<slug>/design/`, not the card body inline, not `vault/artifacts/renders/`, not the `<vault>/inbox/`. Both PM's lightweight `uiux` flow and the heavyweight `designer` subagent write here — they differ only in the artifacts produced inside the same directory. If you find a mockup somewhere else, treat it as misplaced and surface that to the user before continuing.
 
+## Tooling
+
+### Package manager: pnpm, never npm
+
+This project uses `pnpm` for every package-management operation — global installs, project installs, scripts, adds, removes, upgrades. Never emit `npm install`, `npm ci`, `npm run X`, `npm i -g`, or `npm add` in shell commands, generated scripts, docs, or replies. Equivalents:
+
+- `npm install` → `pnpm install`
+- `npm ci` → `pnpm install --frozen-lockfile`
+- `npm install <pkg>` → `pnpm add <pkg>`
+- `npm install -g <pkg>` → `pnpm add -g <pkg>`
+- `npm run <script>` → `pnpm <script>` (or `pnpm run <script>`)
+- `npm uninstall <pkg>` → `pnpm remove <pkg>`
+
+The literal token "npm" still appears in the codebase for things that are not commands — the `.pi/npm/` directory (Pi's project-local packages tree), the npm package registry as a source (`pi install -l npm:<pkg>`), and references to "npm packages" as a kind of artifact. Those stay as-is.
+
 ## Working rules
 
 1. **Match user intent → persona.** Read the request, decide which domain owns it, adopt that persona. If it's clearly cross-domain, pick the dominant one; the user can correct.

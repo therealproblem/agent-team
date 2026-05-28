@@ -10,12 +10,12 @@
  *      serving. The bound process is authoritative; we don't try to take
  *      over. This makes /new /resume /fork no-ops once the server is up.
  *   2. Verify the production build (.next/) exists. If missing, surface a
- *      clear message pointing at `bash scripts/setup.sh` or `npm run build`
+ *      clear message pointing at `bash scripts/setup.sh` or `pnpm build`
  *      and bail — we never auto-build on session_start (that would silently
  *      add 10+ seconds before the TUI is usable).
  *   3. Otherwise spawn `node node_modules/next/dist/bin/next start` from
- *      the server root. We invoke Next directly (not `npm run start`)
- *      because the npm wrapper doesn't propagate SIGTERM to the Next child —
+ *      the server root. We invoke Next directly (not `pnpm start`)
+ *      because the pnpm wrapper doesn't propagate SIGTERM to the Next child —
  *      that would leak orphan processes across Pi restarts.
  *   4. Poll the port until it answers (up to 15s) or timeout. Pre-warm `/`
  *      with a fetch — production start is fast but the warm-up still
@@ -38,7 +38,7 @@
  * `[server]` label is dropped (same pattern as the reminders extension).
  *
  * If you're iterating on the .pi/server/ Next app itself, `next start` won't
- * pick up changes — rebuild manually with `cd .pi/server && npm run build`
+ * pick up changes — rebuild manually with `cd .pi/server && pnpm build`
  * and restart Pi, or set `AGENTS_TEAM_SERVER_MODE=dev` to spawn `next dev`
  * with hot reload instead (skips the build-dir check; first request will
  * compile on demand).
@@ -209,9 +209,9 @@ export default function (pi: ExtensionAPI): void {
 	}
 
 	async function rebuildServer(): Promise<string> {
-		// Run `npm run build` in the server directory
+		// Run `pnpm build` in the server directory
 		return new Promise<string>((resolve, reject) => {
-			const buildProc = spawn("npm", ["run", "build"], {
+			const buildProc = spawn("pnpm", ["build"], {
 				cwd: SERVER_ROOT,
 				stdio: ["ignore", "pipe", "pipe"],
 				env: process.env,
@@ -289,7 +289,7 @@ export default function (pi: ExtensionAPI): void {
 			if (!existsSync(NEXT_BIN)) {
 				surface(
 					pi,
-					`server: next binary missing — run \`cd ${SERVER_ROOT} && npm install\` first`,
+					`server: next binary missing — run \`cd ${SERVER_ROOT} && pnpm install\` first`,
 				);
 				setSrv(ctx, "down");
 				return;
@@ -297,7 +297,7 @@ export default function (pi: ExtensionAPI): void {
 			if (!IS_DEV && !existsSync(NEXT_BUILD_DIR)) {
 				surface(
 					pi,
-					`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && npm run build\`) first`,
+					`server: production build missing — run \`bash scripts/setup.sh\` (or \`cd ${SERVER_ROOT} && pnpm build\`) first`,
 				);
 				setSrv(ctx, "down");
 				return;
@@ -323,8 +323,8 @@ export default function (pi: ExtensionAPI): void {
 			if (!alive) return;
 			const log = createWriteStream(LOG_PATH, { flags: "a" });
 
-			// Spawn Next directly. `npm run start`/`npm run dev` would interpose an
-			// npm process that swallows SIGTERM, leaving orphan Next.js children
+			// Spawn Next directly. `pnpm start`/`pnpm dev` would interpose a
+			// pnpm process that swallows SIGTERM, leaving orphan Next.js children
 			// behind.
 			//   prod: `next start` serves pre-built .next/ artifacts — fast cold
 			//         start, no compile-on-request.

@@ -59,8 +59,8 @@ IndexNow notifies search engines (mainly Bing) of new or updated URLs to speed u
 ### 4. CI/CD Integration
 
 ```bash
-npm run build
-npm run indexnow:all
+pnpm build
+pnpm indexnow:all
 ```
 
 ### 5. Single Source of Truth (URL List)

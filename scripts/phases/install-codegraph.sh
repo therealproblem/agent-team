@@ -34,11 +34,11 @@ if have codegraph; then
 	ok "codegraph already installed ($(codegraph --version 2>&1 | head -1))"
 else
 	info "installing @colbymchenry/codegraph globally…"
-	npm install -g @colbymchenry/codegraph
+	pnpm add -g @colbymchenry/codegraph
 	if have codegraph; then
 		ok "codegraph installed ($(codegraph --version 2>&1 | head -1))"
 	else
-		fail "codegraph install completed but \`codegraph\` is not on PATH — check 'npm bin -g' is in your PATH"
+		fail "codegraph install completed but \`codegraph\` is not on PATH — check 'pnpm bin -g' is in your PATH"
 	fi
 fi
 

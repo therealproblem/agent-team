@@ -303,7 +303,7 @@ The bootstrap script is idempotent and handles:
 5. `codegraph` CLI install (`@colbymchenry/codegraph`) + initial index of this repo's TS/JS/Python under `.codegraph/codegraph.db` (gitignored, per-developer). Re-runs are incremental via `codegraph sync`. The Pi-side wiring lives in `.pi/mcp.json` (checked in).
 6. `.env` scaffold from `.env.example` (preserves existing `.env`)
 7. Vault artifact roots (`<vault>/artifacts/{renders,exports}/`) created; PDFs are served by the runtime route at `app/p/[slug]/route.ts` reading straight from disk (no symlink needed)
-8. Nextra server `npm install` in `.pi/server/`
+8. Nextra server `pnpm install` in `.pi/server/`
 9. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server - unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
 10. Nextra production build (`next build`) - `.env` is sourced first so build-time vars get baked in
 11. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
@@ -385,7 +385,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 | `AGENTS_TEAM_SERVER_PATH` | `<repo>/.pi/server/` | Location of the Next.js + Nextra app that serves renders and PDFs. |
 | `AGENTS_TEAM_SERVER_PORT` | `8080` | Port the local server binds to. |
 | `AGENTS_TEAM_SERVER_MODE` | `production` | Set to `dev` (or `development`) to spawn `next dev --webpack` with hot reload instead of serving the pre-built `.next/`. Skips the build-dir check; first request compiles on demand. |
-| `AGENTS_TEAM_SERVER_TITLE` | `agents-team` | Wordmark in the navbar + suffix on every page's `<title>`. **Read at build time** - re-run `bash scripts/setup.sh` (or `cd .pi/server && npm run build`) for changes to take effect. |
+| `AGENTS_TEAM_SERVER_TITLE` | `agents-team` | Wordmark in the navbar + suffix on every page's `<title>`. **Read at build time** - re-run `bash scripts/setup.sh` (or `cd .pi/server && pnpm build`) for changes to take effect. |
 | `AGENTS_TEAM_SERVER_PUBLIC_URL` | `http://localhost:8080` | Base URL the `render-html` / `export` tools return. Set to your named cloudflared tunnel so URLs are share-ready across sessions. Quick-tunnel URLs rotate on every restart - use a named tunnel. Read at runtime, so a Pi restart is enough. |
 | `TELEGRAM_WEBHOOK_URL` | falls back to `AGENTS_TEAM_SERVER_PUBLIC_URL` | Public HTTPS base URL Telegram should call for webhook delivery. Set to your Cloudflare Tunnel URL when it differs from the artifact/public server URL; the bot appends `/api/telegram/webhook/<secret>` automatically. Use a real public HTTPS host with no placeholder, literal quotes, or duplicated scheme. Normal startup stays quiet on success; run `node scripts/diagnostics/telegram-webhook-url.mjs` for explicit redacted URL/DNS diagnostics without exposing the URL. |
 | `AGENTS_TEAM_CHROME_PATH` | auto-detected | Override the Chrome binary used for PDF export. Auto-detection covers `/Applications/Google Chrome.app` on macOS plus the standard Linux and Windows locations. Set this only if Chrome lives somewhere unusual. |

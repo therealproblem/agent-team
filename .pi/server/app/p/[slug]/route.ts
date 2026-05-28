@@ -6,7 +6,7 @@
  *   Next.js's production server (`next start`) only serves files that were
  *   in the public/ directory at build time. The export tool writes PDFs to
  *   the vault's artifacts/exports/ directory at runtime, long after
- *   `npm run build` has run. The `public/p` symlink resolves on disk, but
+ *   `pnpm build` has run. The `public/p` symlink resolves on disk, but
  *   Next caches the public-files manifest at build time and serves a
  *   prerendered 404 for anything that wasn't there yet. Symptom: every
  *   freshly-exported PDF returns 404.

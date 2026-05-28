@@ -5,7 +5,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 # ---------------------------------------------------------------------------
-# Node + npm (prerequisite for Pi)
+# Node + pnpm (prerequisites for Pi)
 # ---------------------------------------------------------------------------
 
 if ! have node; then
@@ -15,7 +15,17 @@ NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]")
 if (( NODE_MAJOR < 20 )); then
 	fail "Node.js ≥ 20 required. You have $(node -v). Upgrade and re-run."
 fi
-ok "Node $(node -v), npm $(npm -v)"
+
+if ! have pnpm; then
+	if have corepack; then
+		info "pnpm not found — enabling via corepack…"
+		corepack enable pnpm >/dev/null 2>&1 || warn "corepack enable pnpm failed"
+	fi
+	if ! have pnpm; then
+		fail "pnpm is required. Install via 'corepack enable pnpm' (Node ≥ 16.10) or follow https://pnpm.io/installation, then re-run."
+	fi
+fi
+ok "Node $(node -v), pnpm $(pnpm -v)"
 
 # ---------------------------------------------------------------------------
 # Pi (the agent runtime)
@@ -26,7 +36,7 @@ if have pi; then
 	ok "pi already installed ($(pi --version 2>&1 || echo unknown))"
 else
 	info "installing @earendil-works/pi-coding-agent globally…"
-	npm install -g @earendil-works/pi-coding-agent
+	pnpm add -g @earendil-works/pi-coding-agent
 	ok "pi installed ($(pi --version 2>&1))"
 fi
 
@@ -34,19 +44,19 @@ fi
 # leaf (TUI markdown viewer used by the show-md skill)
 #
 # `leaf` is invoked by .pi/extensions/show-md/ in a tmux side pane to display
-# vault markdown next to the Pi pane. Upstream ships an npm wrapper around
-# its Rust binary — same install pattern as Pi above. The published binary is
-# fetched on `npm install`, no Cargo toolchain required.
+# vault markdown next to the Pi pane. Upstream ships an npm-registry wrapper
+# around its Rust binary — same install pattern as Pi above. The published
+# binary is fetched on install, no Cargo toolchain required.
 # ---------------------------------------------------------------------------
 
 if have leaf; then
 	ok "leaf already installed ($(leaf --version 2>&1 | head -1 || echo unknown))"
 else
 	info "installing @rivolink/leaf globally…"
-	npm install -g @rivolink/leaf
+	pnpm add -g @rivolink/leaf
 	if have leaf; then
 		ok "leaf installed ($(leaf --version 2>&1 | head -1 || echo unknown))"
 	else
-		warn "leaf install completed but \`leaf\` is not on PATH — check 'npm bin -g' is in your PATH"
+		warn "leaf install completed but \`leaf\` is not on PATH — check 'pnpm bin -g' is in your PATH"
 	fi
 fi
