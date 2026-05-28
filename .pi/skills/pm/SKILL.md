@@ -79,6 +79,36 @@ subagent({ agentScope: "project", agent: "engineer", task: "<self-contained brie
 
 The engineer runs on `claude-sonnet-4-5` in an isolated child process. It executes exactly one card per spawn and returns a one-line outcome — `DONE:`, `BLOCKED:`, or `NEEDS_DECISION:` — plus the card path with its new status.
 
+Each implementation engineer works on a dedicated `card/<card-slug>` branch (the engineer creates / checks it out on entry; you don't need to manage branches yourself). On a brand-new project with no `.git/`, the **first** implementation engineer also runs `git init` + writes `.gitignore` + makes an initial commit before branching. This is guarded — subsequent spawns skip it.
+
+### Parallel engineer spawning (different cards)
+
+When you have **two or more independent cards** ready to start at the same time, fan them out in one call instead of awaiting them serially:
+
+```
+subagent({
+  agentScope: "project",
+  tasks: [
+    { agent: "engineer", task: "<self-contained brief for card A>" },
+    { agent: "engineer", task: "<self-contained brief for card B>" },
+    { agent: "engineer", task: "<self-contained brief for card C>" }
+  ]
+})
+```
+
+The subagent extension runs them concurrently — max 8 tasks per call, 4 actually-running at any moment, the rest queue. Each engineer creates its own `card/<slug>` branch from `main`, so working trees don't collide and pushes go to separate branches. Each returns its own `DONE:` / `BLOCKED:` / `NEEDS_DECISION:` line; surface them to the user as a short list (one bullet per card with its outcome + link).
+
+**Rules for fanning out:**
+
+- **Same project.** Don't mix engineers from different repos in one parallel call — the branch-naming scheme assumes a single working tree.
+- **Independent acceptance criteria.** If card B depends on card A landing first, queue B until A's branch is merged. Parallel spawn is for cards that can ship in any order; serial work uses sequential spawns or `subagent({ chain: [...] })`.
+- **No two cards on the same branch.** One `card/<slug>` branch per card slug. If two cards somehow share a slug (collision), rename one card before spawning.
+- **Cap at ~4 in flight** for the user's local machine even though the extension allows 8 — git operations, test runs, and editor competition still cost CPU + I/O. If you have more than 4 cards ready, queue the rest and spawn the next wave when the first wave returns.
+
+### Designating a merger after parallel work
+
+Multiple feature engineers leave you with multiple `card/<slug>` branches on the remote, each with its source card at `status: in_review`. Integrate them via a **merger card** — see the *Merger flow* section below. The merger is also an `engineer` subagent spawn, but with `sub_persona: merger` on the card; it's the only role that writes to `main`.
+
 ### When to spawn the engineer
 
 - A card under `<vault>/projects/<slug>/board/` has `persona: engineer, status: backlog` and the user said "start it" or you've decided it's next.
@@ -161,6 +191,72 @@ The `task` field must include:
 - `BLOCKED:` → surface the block to the user. Card is already in `blocked` state.
 
 You do not re-execute the engineer's work. If output is unsatisfactory, edit the card with revised acceptance criteria and spawn again.
+
+## Merger flow — integrating feature branches into `main`
+
+Implementation engineers push to `card/<slug>` branches and stop. They never write to `main`. Integration is a separate role with a separate card — the **merger** — and it's also an engineer spawn, just with a different `sub_persona`.
+
+Use this flow whenever one or more `card/<slug>` branches are ready to land on `main`. Typical triggers: a feature card just returned `DONE:` with `status: in_review`; multiple parallel-spawned cards have all returned and you want them integrated together; the user said "ship X" or "merge what's ready."
+
+### When to create a merger card
+
+- **At least one** `card/<slug>` branch exists on `origin` and its source card is at `status: in_review` or `done` (work claimed complete by the implementer).
+- The user has signalled "merge it" / "ship it" / "land these" — **or** you've decided the next sensible step is integration and want to surface it.
+- You may bundle multiple branches into one merger card when they share scope (e.g. "ship the auth pass — three cards"); the merger handles them in order. Don't bundle unrelated branches just to save a card — the rollback story gets messy.
+
+### Creating the merger card
+
+```
+board_create_card({
+  projectSlug: "<slug>",
+  persona: "engineer",
+  subPersona: "merger",
+  status: "in_progress",
+  priority: "p1",
+  title: "Merge <scope>: <one-line summary>",
+  body: `
+## Branches to merge
+- \`card/<slug-1>\` → [<source card title>](vault/projects/<slug>/board/<slug-1>.md)
+- \`card/<slug-2>\` → [<source card title>](vault/projects/<slug>/board/<slug-2>.md)
+
+## Acceptance
+- All listed feature cards' acceptance criteria still hold on \`main\` after merge
+- Test suite green on \`main\` after the merge
+- Branches deleted (local + remote) once merged
+  `
+})
+```
+
+The `## Branches to merge` section is **load-bearing** — the merger engineer reads it as its scope. Each line names a `card/<slug>` branch + a link to the source feature card. The merger refuses to act if the section is missing.
+
+### Spawning the merger
+
+Same shape as any engineer spawn — only the card's `sub_persona: merger` makes it a merger run:
+
+```
+subagent({
+  agentScope: "project",
+  agent: "engineer",
+  task: "<self-contained brief — project slug, merger card path, list of source card paths, any constraints (e.g. 'merge in listed order', 'reject if branch X touches auth/')>"
+})
+```
+
+The merger loads its `merger` inner skill (carries the full sequence: sync `main`, per-branch diff + acceptance review, per-branch test, `git merge --no-ff`, post-merge integration test, branch cleanup, lifecycle updates).
+
+### After the merger returns
+
+- `DONE: merged <N> branch(es), rejected <M>` → integration succeeded. Each merged source card is now at `status: done` with a `## Merged` section listing the merge commit hash. Each rejected source card is back at `status: in_progress` with a `## Merge rejected` section explaining why. The merger card itself is `done` with an `## Outcome` summary. Surface the merger card link + a short list of which branches landed and which bounced.
+- `NEEDS_DECISION: <reason>` → typically a merge conflict between two branches, or a post-merge integration test failure. The merger card is `blocked`. Read the merger card's `## Blocked on` section, decide:
+  - **Conflict between two branches.** Pick which one yields. Spawn a fresh implementation engineer on the loser's source card with the conflict context in the brief — "rebase on top of `main` after `card/<winner>` landed, resolve conflicts in `<files>`." When the loser's branch is back to green, re-spawn the merger.
+  - **Post-merge integration failure.** Two branches that passed independently don't compose. Either create a new implementation card to fix the integration (small enough → spawn engineer with both source cards as context), or revert one of the merges and re-plan.
+- `BLOCKED:` → surface the block. Same shape as any engineer block.
+
+### Don't
+
+- **Don't run the merger inline.** PM doesn't merge. PM creates the card and spawns engineer with `sub_persona: merger`.
+- **Don't bundle a merger card with implementation work.** "Implement X and merge it" → two cards: feature + merger. The merger card may be the immediate next step, but it's its own card.
+- **Don't have the same engineer instance implement and merge the same card.** The merger role exists to put a second pair of eyes on integration. Spawn a fresh engineer for the merger card; the subagent extension already gives you a clean process per spawn.
+- **Don't write to `main` yourself.** PM never writes code, including merge commits. The merger engineer is the only role with write access to `main`.
 
 ## Profile updates (Meta integration)
 
