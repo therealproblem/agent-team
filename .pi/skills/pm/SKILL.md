@@ -25,7 +25,7 @@ Their contents override defaults below where they conflict. If you stay in this 
 - Stakeholder writing — exec updates, status reports, customer-facing notes (use `stakeholder-summary`, then `scribe` for audience tuning)
 - Product framing: "is this the right problem to solve?", "what's the smallest version of this?"
 - Triage: deciding what's a feature vs. a bug vs. tech debt vs. noise
-- **Design language selection for new UI products** — fetch references from `styles.refero.design`, evaluate with the `uiux` skill, save a `design.md` the engineer implements against
+- **Design language selection for new UI products** — fetch references from `styles.refero.design`, evaluate with the `uiux` skill, save a `design.md` to `<vault>/ux/<slug>/design.md` the engineer implements against (per *Strictly enforced rule 3* — mockups have one fixed location)
 - **Content authoring for product pages** — decide voice + per-page register, then draft copy via the `copywriter` skill
 - **Marketing work for shipped or shipping products** — SEO audits, GTM plans, launch checklists, channel strategies, page-type briefs, paid-ads plans, content calendars. Light tier: brief PM-inline with the `copywriter` skill for landing copy alone. Heavy tier: spawn the `marketer` subagent with a card brief — it produces a `vault/marketing/<slug>/` bundle (MARKETING.md + plan.md + optional drafts/audit) from the 141-skill library at `.pi/skills/marketing/`
 
@@ -197,7 +197,7 @@ Good for: backend products with thin UI, design-language picks that just need a 
 1. **Formulate a search query** from the product concept — 2–4 words capturing the visual register you'd expect (`monochrome interface`, `data-dense dashboard`, `editorial minimal`, `consumer playful`). If you're uncertain, propose 2–3 queries and ask the user to pick before fetching.
 2. **Fetch** `https://styles.refero.design/?q=<search-query>` via the `research` service (`tff-fetch_url`). The page is a grid of design references — extract 3–5 candidates with: name, source URL, one-line description, and any palette/type/density notes you can read from the listing.
 3. **Hand to `uiux`** — adopt the skill's *Design language evaluation* procedure with: the product brief (audience, tone, content shape, must-have components) and the candidate list. The skill returns a scored comparison, a pick, and the body of a `design.md`.
-4. **Save** the returned body via `note-taker` to `pm/design/` with title `Design — <product slug>`. The engineer reads this when implementing UI.
+4. **Save** the returned body via `note-taker` to **`<vault>/ux/<slug>/design.md`** (per *Strictly enforced rule 3* — all mockups land at `<vault>/ux/<slug>/`, no exceptions). Title `Design — <product slug>`. The engineer reads this when implementing UI.
 5. **Surface** the chosen reference URL to the user with the 2–3 sentence rationale. If the user rejects the pick, re-run with a different query or a manually-supplied candidate set.
 
 ### Heavy tier — `designer` subagent (escalation)
@@ -214,11 +214,11 @@ Escalate when **any** is true:
    ```
    subagent({ agentScope: "project", agent: "designer", task: "<self-contained brief — slug, card path, brief body, pointers to PRD/inspirations>" })
    ```
-3. **Designer returns** `DONE: <one-line outcome>` + `Bundle: vault/ux/<slug>/` + card status. Read the bundle's `README.md` to see which design system was picked, which skills were applied, which dimensions defaulted, and what alternates were considered. Do not paste the storyboard or DESIGN.md into your reasoning — surface the URL only.
+3. **Designer returns** `DONE: <one-line outcome>` + `Bundle: <vault>/ux/<slug>/` + card status. Read the bundle's `README.md` to see which design system was picked, which skills were applied, which dimensions defaulted, and what alternates were considered. Do not paste the storyboard or DESIGN.md into your reasoning — surface the URL only.
 4. **Optional — spawn `design-critic`** for blind review when the surface is mission-critical. Brief it with **bundle path + brief + acceptance criteria only** — no reasoning history. Critic writes findings into the card body. If a `[BLOCK]` lands, decide whether to re-spawn designer with revisions or accept and move on.
-5. **Hand to engineer.** Create the implementation card next; link `vault/ux/<slug>/DESIGN.md` as the design pointer in the brief. Engineer reads it (and the bundle's `README.md`) before writing code. Do NOT also save a `pm/design/<slug>.md` — the bundle's DESIGN.md is the contract.
+5. **Hand to engineer.** Create the implementation card next; link `<vault>/ux/<slug>/DESIGN.md` as the design pointer in the brief. Engineer reads it (and the bundle's `README.md`) before writing code. If a light-tier `<vault>/ux/<slug>/design.md` exists from an earlier pass, the heavy-tier `DESIGN.md` supersedes it — the bundle's `DESIGN.md` is the contract.
 
-The two tiers don't mix. If you ran the light flow and decide you need the heavy one, archive the `pm/design/<slug>.md` (don't delete; trail matters) and start the designer card fresh.
+Both tiers share the same parent directory `<vault>/ux/<slug>/` per *Strictly enforced rule 3*. If you ran the light flow and decide you need the heavy one, move the existing `design.md` aside (e.g. rename to `design-light.md` for trail; don't delete) and let designer write the full bundle into the same `<vault>/ux/<slug>/`. Never write mockups to `pm/design/`, `<vault>/projects/<slug>/design/`, the card body inline, or anywhere outside `<vault>/ux/<slug>/`.
 
 ## Content plan flow (when the product has pages)
 

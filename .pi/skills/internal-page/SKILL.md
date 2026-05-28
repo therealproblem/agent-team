@@ -1,5 +1,5 @@
 ---
-description: Layer 3 shared skill — build an internal-tool web page (dashboard, news feed, ops view, status page) by composing the shadcn + Tailwind v4 component kit at `.pi/server/components/ui/`. Authors a Next.js `app/<route>/page.tsx` (RSC by default, client islands when needed), reading DESIGN-2 design decisions from `pm/design/<slug>.md` and copy from `pm/content/<slug>.md` when the PM persona has prepared them. NOT for vault renders — those go through `render-html`. The live component reference lives at `http://localhost:8080/components`.
+description: Layer 3 shared skill — build an internal-tool web page (dashboard, news feed, ops view, status page) by composing the shadcn + Tailwind v4 component kit at `.pi/server/components/ui/`. Authors a Next.js `app/<route>/page.tsx` (RSC by default, client islands when needed), reading design decisions from `<vault>/ux/<slug>/{DESIGN.md | design.md}` and copy from `<vault>/pm/content/<slug>.md` when the PM persona has prepared them. NOT for vault renders — those go through `render-html`. The live component reference lives at `http://localhost:8080/components`.
 disable-model-invocation: true
 ---
 
@@ -74,8 +74,8 @@ For a complete list of available primitives, `ls .pi/server/components/ui/` or o
 
 Before writing UI, read what the PM persona has already decided for this product:
 
-- `vault/learning/pm/design/<product-slug>.md` — palette confirmation, type stack, density notes, component picks. If absent, the page inherits DESIGN-2 defaults.
-- `vault/learning/pm/content/<product-slug>.md` — copy, voice & tone, per-page register. If absent, write neutral utilitarian copy.
+- `<vault>/ux/<product-slug>/DESIGN.md` (designer heavy-tier) or `<vault>/ux/<product-slug>/design.md` (PM uiux light-tier) — palette confirmation, type stack, density notes, component picks. When both exist, `DESIGN.md` wins. If neither is present, the page inherits DESIGN-2 defaults. This is the single fixed mockup location per *Strictly enforced rule 3* in `.pi/SYSTEM.md` — never search `pm/design/`.
+- `<vault>/pm/content/<product-slug>.md` — copy, voice & tone, per-page register. If absent, write neutral utilitarian copy.
 
 If neither exists and the page is non-trivial, ask the user whether PM should produce them first.
 
@@ -169,4 +169,4 @@ Notice: no inline `style=`, no arbitrary colors, no rounded utilities, no dark v
 - **Don't author `.mdx` for product pages.** MDX is for vault renders (`render-html`). Product pages are `.tsx`.
 - **Don't import from `components/docs/`.** That namespace is internal to the MDX renderer. Use `components/ui/` and `components/blocks/`.
 - **Don't replicate the kit.** If you're about to hand-roll a "card" or a "modal", check `/components` first — it's already there.
-- **Don't ship a page that ignores PM artifacts.** If `pm/design/<slug>.md` exists, read it before deciding density / component picks.
+- **Don't ship a page that ignores PM artifacts.** If `<vault>/ux/<slug>/DESIGN.md` or `<vault>/ux/<slug>/design.md` exists, read it before deciding density / component picks (heavy-tier `DESIGN.md` wins when both are present).

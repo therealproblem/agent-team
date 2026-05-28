@@ -209,8 +209,10 @@ The engineer also has the `codegraph_*` MCP tools (`search`, `context`, `callers
 
 PM has two design escalation tiers:
 
-- **Light** — the `uiux` inner skill runs inline under the PM persona for sketches, mood boards, copy-on-image trial balloons. Output lands in `vault/pm/design/`.
-- **Heavy** — when the design is committed work (full screen flow, brand artifact, slide deck for an external recipient), PM spawns the `designer` subagent. Designer reads `.pi/design-systems/INDEX.md` to pick one or two system candidates, applies the vendored open-design skill library, and produces a `vault/ux/<slug>/` bundle: `DESIGN.md` (spec + decisions), `storyboard.html` (interactive walkthrough), and `prompts/` (LLM prompts for external image / video / 3D generation tools). Returns a one-line outcome + the bundle path. Engineer reads the linked `DESIGN.md` when picking up implementation cards.
+- **Light** — the `uiux` inner skill runs inline under the PM persona for sketches, mood boards, copy-on-image trial balloons. Output lands in `<vault>/ux/<slug>/design.md` (single file, no full bundle).
+- **Heavy** — when the design is committed work (full screen flow, brand artifact, slide deck for an external recipient), PM spawns the `designer` subagent. Designer reads `.pi/design-systems/INDEX.md` to pick one or two system candidates, applies the vendored open-design skill library, and produces a `<vault>/ux/<slug>/` bundle: `DESIGN.md` (spec + decisions), `storyboard.html` (interactive walkthrough), and `prompts/` (LLM prompts for external image / video / 3D generation tools). Returns a one-line outcome + the bundle path. Engineer reads the linked `DESIGN.md` when picking up implementation cards.
+
+Both tiers write to the same parent directory `<vault>/ux/<slug>/` — this is *Strictly enforced rule 3* in `.pi/SYSTEM.md`. Mockups never land in `pm/design/`, the card body inline, or anywhere else.
 
 Designer runs on `openai/gpt-5.5` with `thinking: high` — the artifact is long-form, multi-section, and references skill-library conventions that need the larger context window. `design-critic` (mirroring `prd-critic`) is the blind reviewer PM spawns after the bundle lands.
 

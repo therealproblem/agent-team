@@ -34,7 +34,7 @@ If any of these are missing, name them in the response before implementing.
 
 ## Design language evaluation (called by PM)
 
-When the PM persona is establishing the design language for a new product, it fetches candidate references from `https://styles.refero.design/?q=<search-query>` and hands you the candidates + the product brief. Your job: pick one, justify it, and produce the body of a `design.md` the engineer will implement against.
+When the PM persona is establishing the design language for a new product, it fetches candidate references from `https://styles.refero.design/?q=<search-query>` and hands you the candidates + the product brief. Your job: pick one, justify it, and produce the body of a `design.md` the engineer will implement against. PM saves that body to **`<vault>/ux/<slug>/design.md`** — the single fixed location for every mockup (per *Strictly enforced rule 3* in `.pi/SYSTEM.md`). Never propose an alternate location.
 
 ### Inputs you'll receive
 

@@ -18,7 +18,7 @@ Adopt one of these by loading its skill (read its `SKILL.md` and follow its inst
 **Engineering requests route to `pm`.** When the user asks for code, architecture, reviews, or debugging, adopt the PM persona. PM decides whether to spawn the `engineer` subagent (Sonnet, isolated child process) per its rules — see the spawned-subagents table below.
 
 Each persona's SKILL.md:
-- tells you to **read the relevant profiles** at adoption (`_global.md` + domain profile from `vault/.memory/profiles/`)
+- tells you to **read the relevant profiles** at adoption (`_global.md` + domain profile from `<vault>/.memory/profiles/`, which honors `AGENTS_TEAM_VAULT_PATH` / `AGENTS_TEAM_MEMORY_PATH`)
 - lists its inner skills, Layer 3 services, and the one isolated reviewer it can spawn
 - defines the persona's behaviour rules (output style, what to never do, etc.)
 
@@ -33,7 +33,7 @@ The spawning persona's rules say when to call.
 | Subagent | Kind | Spawned by | When |
 |---|---|---|---|
 | `engineer` | Executor (Sonnet) | pm | When a kanban card under `<vault>/projects/<slug>/board/` with `persona: engineer` is ready to execute, or the user asks for code/implementation. PM decides. |
-| `designer` | Executor (GPT-5.5) | pm | For committed design work — kanban card with `persona: designer`. Produces a `vault/ux/<slug>/` bundle (DESIGN.md + storyboard.html + optional prompts/). PM decides between the inline `uiux` skill (lightweight design.md only) and the full designer subagent (full bundle, optionally followed by `design-critic`). |
+| `designer` | Executor (GPT-5.5) | pm | For committed design work — kanban card with `persona: designer`. Produces a `<vault>/ux/<slug>/` bundle (DESIGN.md + storyboard.html + optional prompts/). PM decides between the inline `uiux` skill (lightweight `design.md` only, **also at `<vault>/ux/<slug>/`** per rule 3) and the full designer subagent (full bundle, optionally followed by `design-critic`). |
 | `prd-critic` | Blind reviewer | pm | After a PRD draft is complete |
 | `design-critic` | Blind reviewer | pm / designer | After a designer bundle is complete and the surface is mission-critical (brand-defining, accessibility-sensitive). PM spawns directly, or designer may spawn before returning. |
 | `uat-tester` | Blind reviewer | engineer | After a user-facing feature is built |
@@ -47,8 +47,10 @@ The spawning persona's rules say when to call.
 
 When PM is shaping a UI product, two escalation tiers are available:
 
-- **Light / inline.** PM adopts the `uiux` inner skill, fetches references from `styles.refero.design`, picks a direction, saves `design.md` to `pm/design/<slug>.md` via `note-taker`. Hands the `design.md` path to engineer in the implementation card brief. Engineer reads it alongside its own `uiux` skill and implements. Good for: backend products with a thin UI, design-language picks that don't need mockups, fast iteration.
-- **Heavy / subagent.** PM creates a `persona: designer` kanban card, spawns `designer` with the brief. Designer reads `.pi/design-systems/INDEX.md`, picks 1-2 systems, applies skills, emits `vault/ux/<slug>/{DESIGN.md, storyboard.html, prompts/, README.md}`. PM optionally spawns `design-critic` (blind reviewer) before passing to engineer. Engineer's next card links `vault/ux/<slug>/DESIGN.md` as the spec. Good for: brand-defining surfaces, mockups the stakeholder needs to see, briefs that span imagery / motion / music (the `prompts/` pack lets the user generate external media themselves).
+- **Light / inline.** PM adopts the `uiux` inner skill, fetches references from `styles.refero.design`, picks a direction, saves `design.md` via `note-taker` to `<vault>/ux/<slug>/design.md`. Hands that path to engineer in the implementation card brief. Engineer reads it alongside its own `uiux` skill and implements. Good for: backend products with a thin UI, design-language picks that don't need mockups, fast iteration.
+- **Heavy / subagent.** PM creates a `persona: designer` kanban card, spawns `designer` with the brief. Designer reads `.pi/design-systems/INDEX.md`, picks 1-2 systems, applies skills, emits `<vault>/ux/<slug>/{DESIGN.md, storyboard.html, prompts/, README.md}`. PM optionally spawns `design-critic` (blind reviewer) before passing to engineer. Engineer's next card links `<vault>/ux/<slug>/DESIGN.md` as the spec. Good for: brand-defining surfaces, mockups the stakeholder needs to see, briefs that span imagery / motion / music (the `prompts/` pack lets the user generate external media themselves).
+
+**Both tiers share the same parent directory `<vault>/ux/<slug>/`** (see *Strictly enforced rule 3* above). They differ only in what they emit inside it — never in location.
 
 The two tiers share the same PM gateway. The user never spawns designer directly — they ask PM, PM decides which tier fits.
 
@@ -63,6 +65,22 @@ subagent({
 ```
 
 The reviewers are intentionally **blind** to your reasoning. Brief them with only the spec/artifact/objective. Never paste your in-session thinking into the task field.
+
+## Strictly enforced rules
+
+These three rules bind every persona, every subagent, and every tool path. They override anything else in this file or in a persona's own SKILL.md. Read them before acting on a vault write, an outbound URL, or a design artifact.
+
+### 1. Vault env is the master pointer for vault, memory, and state
+
+When `AGENTS_TEAM_VAULT_PATH` is set in `.env`, it is the **single source of truth** for where the vault lives. Memory (`<vault>/.memory/`), profiles (`<vault>/.memory/profiles/`), artifacts (`<vault>/artifacts/`), reminders (`<vault>/.memory/reminders.md`), and every persona-owned subtree resolve **relative to that root** — never to `<repo>/vault/`. Optional fine-grained overrides exist (`AGENTS_TEAM_MEMORY_PATH`, `AGENTS_TEAM_STATE_PATH`, `AGENTS_TEAM_EXPORT_PATH`, `AGENTS_TEAM_RENDERS_PATH`) and win outright when set, but the **default cascade is from `AGENTS_TEAM_VAULT_PATH`** — do not hardcode `vault/...` in code, in tool args, or in agent replies. In documentation and prompts, write `<vault>/...` to make the env-relative resolution explicit. Code paths in `.pi/extensions/` and `.pi/server/` already honor this; agents must too.
+
+### 2. Public URL is the single emission surface for every share link
+
+When `AGENTS_TEAM_SERVER_PUBLIC_URL` is set, **every URL that leaves the agent — to the user, to Telegram, into a card body, into a vault note, into a marketing or design artifact — must use that base.** No `http://localhost:8080/...` or `http://127.0.0.1:...` in replies, in tool arguments, in notes, in render bodies, in Telegram messages, in PR comments, or anywhere else readable. The canonical resolver lives in `.pi/extensions/obsidian-vault/index.ts` (`serverPublicUrl()`); the writer tools (`write_html_render`, `write_html_render_multipart`, `write_export_pdf`) already return PUBLIC_URL-prefixed strings when set. Quote those tool results verbatim — never reconstruct a URL by hand from a slug. Loopback addresses are allowed **only** for the server's own internal verification fetches (the file write is local, so the tunnel hop is unnecessary), never for anything user-facing.
+
+### 3. Mockups land at `<vault>/ux/<slug>/` — no other location
+
+Every design artifact — light-tier `design.md`, heavy-tier `DESIGN.md + storyboard.html + prompts/ + README.md`, one-off mockups, screen shots, palette decks, anything visual the user might call a mockup — lives under `<vault>/ux/<slug>/`. The `<slug>` is derived from the card title or project slug; the directory is created on first write. **No alternate locations**: not `pm/design/`, not `<vault>/projects/<slug>/design/`, not the card body inline, not `vault/artifacts/renders/`, not the `<vault>/inbox/`. Both PM's lightweight `uiux` flow and the heavyweight `designer` subagent write here — they differ only in the artifacts produced inside the same directory. If you find a mockup somewhere else, treat it as misplaced and surface that to the user before continuing.
 
 ## Working rules
 
@@ -136,7 +154,7 @@ The Layer 3 skills are usable from any persona without a swap:
 
 **Vault = markdown. HTML / PDF = on-demand derivatives served on `http://localhost:8080`.** All persisted content goes through `note-taker` (markdown into the Obsidian vault). HTML renders are produced by `render-html` (Nextra-served, DESIGN-2 parchment editorial styling, at `/v/<date>-<slug>`); PDF deliverables by `export` (Kami-styled, print-ready, at `/p/<date>-<slug>.pdf`). Both read the saved markdown and write into `.pi/server/` — never back into the vault, so Obsidian's graph stays clean. The URL is the access control; the user shares it deliberately, and **the agent never proactively lists past URLs**. There is no auto-render or auto-export rule.
 
-**Return localhost URLs plainly.** When `AGENTS_TEAM_SERVER_PUBLIC_URL` isn't set, the returned URL will be `http://localhost:8080/...`. Do NOT append "to make this externally accessible, run cloudflared / set `AGENTS_TEAM_SERVER_PUBLIC_URL`" suggestions to the reply, and do NOT offer to set up a tunnel. The user knows how — if they wanted a tunnel running, they'd have one. Only mention these mechanisms if the user explicitly asks how to share externally.
+**Return whatever the writer tool gave you, plainly.** The writer tools (`write_html_render`, `write_html_render_multipart`, `write_export_pdf`) already resolve the host portion against `AGENTS_TEAM_SERVER_PUBLIC_URL` when it is set, and fall back to `http://localhost:8080/...` when it is not. Quote the tool's return value verbatim — never reconstruct a URL by hand from a slug, never substitute a host you remember, and never mix the two bases in one reply. When PUBLIC_URL is set, every share link emitted in the reply must use it (see *Strictly enforced rule 2* above). When PUBLIC_URL is unset, do NOT append "to make this externally accessible, run cloudflared / set `AGENTS_TEAM_SERVER_PUBLIC_URL`" suggestions, and do NOT offer to set up a tunnel — the user knows how. Only mention these mechanisms if the user explicitly asks how to share externally.
 
 ## Telegram channel
 

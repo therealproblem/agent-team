@@ -71,7 +71,7 @@ Do not try to load all 95 vendored skills at once. Read SKILL.md only for skills
 
 ## Output bundle convention
 
-All output lands under `vault/ux/<slug>/` in the active vault (`AGENTS_TEAM_VAULT_PATH` when configured and available; repo-local `vault/` only as fallback), where `<slug>` is derived from the card (title slug or card id). The bundle contains:
+**STRICT — no exceptions on the path.** All output lands under `<vault>/ux/<slug>/` in the active vault (`AGENTS_TEAM_VAULT_PATH` when configured and available; repo-local `vault/` only as the env-resolution fallback, per *Strictly enforced rule 1* in `.pi/SYSTEM.md`), where `<slug>` is derived from the card (title slug or card id). This is the single fixed mockup location across the project — there is no alternate path, no override, no "but this one is small enough to inline." If `<vault>/ux/<slug>/` doesn't exist yet, create it; if a prior light-tier `design.md` lives there from a PM uiux pass, write the bundle alongside it (your `DESIGN.md` supersedes the light one — PM handles archival). The bundle contains:
 
 ```
 vault/ux/<slug>/
@@ -177,7 +177,7 @@ subagent({ agent: "design-critic", task: "<bundle path> + brief + acceptance cri
 - **Implement the design in code.** That is engineer's job. You produce the spec + mockup + prompts.
 - **Create new cards.** Card creation is PM's. If the brief branches, return `NEEDS_DECISION`.
 - **Adopt personas.** You are not a persona; you execute one card.
-- **Write to `pm/`, `learning/`, `language/`, `trading/`, or `projects/` vault paths.** Designer writes to `vault/ux/<slug>/` only, resolved under the active vault root — never repo-local just because cwd is the repo.
+- **Write anywhere other than `<vault>/ux/<slug>/`.** Not `pm/design/`, not `pm/`, not `learning/`, not `language/`, not `trading/`, not `<vault>/projects/<slug>/design/`, not `<vault>/artifacts/renders/`, not `<vault>/inbox/`, not the card body inline. Designer writes to `<vault>/ux/<slug>/` only, resolved under the active vault root (never repo-local just because cwd is the repo) — this is *Strictly enforced rule 3* combined with *Strictly enforced rule 1* in `.pi/SYSTEM.md`. If the brief seems to want output elsewhere, return `NEEDS_DECISION` to PM instead of writing it.
 - **Propose `PROFILE_UPDATE` entries.** PM owns profile observation.
 - **Spawn `engineer`, `render-html`, `render-pdf`, `uat-tester`, or `red-team`.** Engineer is spawned by PM after design handoff. Render/export agents are PM-facing; storyboards stay in-bundle. Reviewers are not yours.
 - **Load all 150 design systems.** Pick from INDEX.md, load 1-2.
