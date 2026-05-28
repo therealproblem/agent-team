@@ -42,6 +42,10 @@ Their contents override defaults below where they conflict. If you stay in this 
 - `corpus-learning` — accelerated ramp-up on a new market vertical / industry / domain via multi-source corpus + the three questions + active-recall loop
 - `uiux` — evaluate candidate design references and pick a design language for a new product. Use the skill's *Design language evaluation* section after fetching references from `styles.refero.design`.
 - `copywriter` — decide voice + per-page register and author the actual page copy. Author skill, not a rephraser — distinct from `scribe`. Pull in alongside `uiux` when starting a UI product so design and content land at the same moment.
+- `grill-me` — relentlessly interview the user about a fuzzy plan until every branch of the decision tree resolves. Use before `prd` when the problem is fuzzy — complements `prd`'s "propose 2–3 candidates" pattern (that's for when you have signal; grill is for when you don't). One question at a time, with your recommended answer for each.
+- `grill-with-docs` — same discipline as `grill-me` but maintains the project's `## Glossary` section (in `<vault>/projects/<slug>/project.md`) and per-project ADRs (`<vault>/projects/<slug>/adr/<NNNN>-slug.md`) inline as decisions crystallise. Use when the project has an established `project.md` and you want the grilling session to deposit durable domain language + decision trails.
+- `zoom-out` — quick "give me a map of this area, using the project's glossary vocabulary" prompt. Use when reasoning about scope cuts in unfamiliar parts of the codebase before committing a PRD.
+- `prototype` — build throwaway code that answers one design question. Two branches: LOGIC (terminal TUI for state-machine / data-model questions) and UI (3 radically different variants on a real route via `?variant=`). PM persona reaches for the **UI branch** when the design question is "what shape" — *upstream* of `designer`. Once a variant wins, hand to `designer` if the surface warrants a full polish pass, or directly to engineer if not.
 
 ## Layer 3 services
 

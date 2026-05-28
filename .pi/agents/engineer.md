@@ -105,6 +105,10 @@ These skills are available — read their `SKILL.md` when the work calls for it:
 - `feynman` — verify understanding by plain-language explanation
 - `research` — online research via `tff-fetch_url` / `tff-search_web`
 - `commit-and-push` — final step of implementation work, NOT a separate card
+- `tdd` — red-green-refactor loop with strict vertical-slice discipline (no "write all tests, then all code"). Use on implementation cards with non-trivial behaviour: auth, payments, state machines, parsers, anything with edge cases. Tests target observable behaviour through public interfaces, not implementation details.
+- `improve-codebase-architecture` — find deepening opportunities (shallow modules → deep modules), informed by the project's `## Glossary` in `project.md` and existing ADRs in `<vault>/projects/<slug>/adr/`. Outputs an editorial HTML report with before/after diagrams in `$TMPDIR`. Use on review cards or dedicated architecture cards. Prefer CodeGraph tools for the structural exploration step.
+- `zoom-out` — quick "map this area at one layer up" prompt. Use at the start of a card that touches unfamiliar code, before drafting acceptance work. Prefer `codegraph_context` if the project has CodeGraph initialized — it does the same job structurally.
+- `prototype` — build throwaway code that answers one design question. Two branches: LOGIC (terminal TUI for state-machine / data-model questions) and UI (3 radically different variants on a real route via `?variant=`). Engineer reaches for the **LOGIC branch** when a card's state model looks fine on paper but unclear under edge cases — drive the TUI by hand with the user, lift the validated reducer / machine into real code, delete the shell. Logic module must be pure; TUI is throwaway.
 
 You may load multiple skills in one task — they share your context.
 

@@ -96,6 +96,14 @@ Trader is uniquely **a student of the user's trading**. Never prescriptive. Surf
 │   ├── clarifier/SKILL.md     inner (trader)
 │   ├── pattern-watch/SKILL.md inner (trader)
 │   ├── question-generator/SKILL.md    inner (trader)
+│   │
+│   ├── grill-me/SKILL.md     inner (pm) — imported from mattpocock/skills
+│   ├── grill-with-docs/SKILL.md   inner (pm) — imported, adapted to option-3 hybrid (project.md `## Glossary` + per-project `adr/`)
+│   ├── tdd/SKILL.md          inner (engineer subagent) — imported · red-green-refactor with vertical-slice discipline
+│   ├── improve-codebase-architecture/SKILL.md   inner (engineer subagent) — imported, adapted to option-3 hybrid
+│   ├── zoom-out/SKILL.md     inner (pm + engineer subagent) — imported · one-line "map this area" prompt
+│   ├── prototype/SKILL.md    inner (pm + engineer subagent) — imported · throwaway LOGIC (TUI) or UI (?variant=) prototypes
+│   │
 │   └── meta-review/SKILL.md   Layer 0 — cross-profile synthesis
 ├── extensions/                TypeScript extensions (auto-loaded by Pi)
 │   ├── tmux-host/             At module-load (before any session_start handler), re-execs the process as `tmux new-session -A -s pi pi <argv>` when `$TMUX` is unset and the invocation is interactive (no `--no-session`/`-p`/`--prompt`). Result: every interactive Pi session runs inside the `pi` tmux session, which the `show-md` skill's side-pane viewer depends on. Sentinel env var `AGENTS_TEAM_NO_TMUX_REEXEC=1` disables the re-exec (set automatically on the inner pi after re-exec; set manually in cron / CI / embedded contexts).
@@ -268,6 +276,23 @@ These apply to every agent:
 4. **Trader is a student.** Never prescribes; only questions.
 5. **Memory ops are quiet.** Operations on `.pi/state/` (reminders, profile updates, any other state) must not surface thinking blocks, diff visualizations, or prose summaries. Use purpose-built tools where they exist (`reminder_add` / `reminder_resolve` / `reminder_list` for reminders) instead of `read` + `edit`, so the TUI shows a one-line tool result rather than a diff. For profile updates: surface the `PROFILE_UPDATE` proposal text to the user for approval, then apply silently — no narration of what just changed.
 6. **Markdown surfaces open in tmux side panes by default, and the chat reply collapses when they do.** When a persona's reply names a vault markdown file the user is meant to read, it also calls `show-md` to open the file in a tmux side pane via `leaf`. **When `show-md` returns `opened: true`, the chat reply shrinks to one line — the file path plus at most one sentence of context (next step, follow-up question, an offer to also render HTML/PDF). Do not also paste the file's tables, bullet lists, headings, key-points, or active-recall questions into chat — leaf is already rendering them in the side pane, and duplicating the body forces the user to read everything twice.** When `show-md` no-ops (`opened: false` — `not_in_tmux` / `not_found`), fall back to the persona's normal reply (which may include a short summary). Skip `show-md` entirely for agent-to-agent output (reviewers, sub-sessions), headless runs (`--no-session`, cron), and replies that don't surface a file path. The `tmux-host` extension guarantees the Pi session is inside tmux for every interactive run, so the split-pane is reliably available; on the rare headless paths the tool silently no-ops. `show-md` is independent of `render-html` and `export` — call any combination when warranted.
+
+## Imported skills (provenance)
+
+Six skills are imported from [mattpocock/skills](https://github.com/mattpocock/skills) — Matt Pocock's "skills for real engineers" library. Each carries a `## Source` footer linking back to the original; the list below is the audit trail.
+
+| Skill | Caller | Adaptation |
+|---|---|---|
+| [`grill-me`](.pi/skills/grill-me/SKILL.md) | pm | verbatim |
+| [`grill-with-docs`](.pi/skills/grill-with-docs/SKILL.md) | pm | **option-3 hybrid**: glossary → `## Glossary` section of `<vault>/projects/<slug>/project.md`; ADRs → `<vault>/projects/<slug>/adr/<NNNN>-slug.md` (per-project, one file per decision, routed through `note-taker`). Multi-context = `## Glossary — <context>` subheadings; truly separate contexts = separate projects. |
+| [`zoom-out`](.pi/skills/zoom-out/SKILL.md) | pm + engineer | verbatim. `disable-model-invocation: true` (matches existing convention for `refactor`, `prd`, `debugger`). |
+| [`tdd`](.pi/skills/tdd/SKILL.md) | engineer | verbatim — preserves Matt's vertical-slice anti-pattern guard (no horizontal slicing) and progressive-disclosure sidecars (`tests.md`, `mocking.md`, `deep-modules.md`, `interface-design.md`, `refactoring.md`). |
+| [`improve-codebase-architecture`](.pi/skills/improve-codebase-architecture/SKILL.md) | engineer | **option-3 hybrid**: same glossary + ADR adaptation as `grill-with-docs`. Adds explicit preference for CodeGraph MCP tools in the exploration step. HTML-report flow (Tailwind + Mermaid editorial layout in `$TMPDIR`) preserved verbatim — Nextra's `render-html` would flatten the editorial design. Optional step 5 routes findings through `note-taker` → `projects/<slug>/architecture-reviews/` for users who want vault archival. |
+| [`prototype`](.pi/skills/prototype/SKILL.md) | pm (UI branch) + engineer (LOGIC branch) | verbatim except *When done* section routed to this project's vault-archive paths (`adr/` for hard-to-reverse decisions, card body for engineer notes, `<vault>/ux/<slug>/prototype-notes.md` for design picks). |
+
+Additionally, the existing [`debugger`](.pi/skills/debugger/SKILL.md) skill **absorbed** Matt's `diagnose` feedback-loop discipline — the 10 feedback-loop construction techniques, the "treat the loop as a product" iteration, non-deterministic-bug handling, the 3-5 ranked-falsifiable hypotheses pattern (replacing the previous one-hypothesis-at-a-time approach), tagged `[DEBUG-...]` instrumentation, the correct-seam regression-test insight, and the Phase-6 hand-off to `improve-codebase-architecture`. Original hypothesis-loop framing and output template are preserved. Caller notes (engineer / trader) preserved.
+
+The skills are auto-discovered by Pi (no `persona-registry.json` change needed) and wired into the PM persona's inner-skills list (`.pi/skills/pm/SKILL.md`) and the engineer subagent's inner-skills list (`.pi/agents/engineer.md`).
 
 ## Build status
 
