@@ -1,6 +1,7 @@
 {
   "packages": [
-    "npm:@the-forge-flow/camoufox-pi"
+    "npm:@the-forge-flow/camoufox-pi",
+    "npm:@sinclair/typebox@^0.34.0"
   ],
   "enableSkillCommands": false,
   "defaultModel": "openai/gpt-5.5"
