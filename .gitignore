@@ -2,8 +2,17 @@
 data/
 
 # Notes vault — agent output, personal data. Override with AGENTS_TEAM_VAULT_PATH
-# if you'd rather point at your real Obsidian vault.
-vault/
+# if you'd rather point at your real Obsidian vault. Ignore both the repo-local
+# directory fallback and the project-root compatibility symlink.
+vault
+/vault/
+/vault
+
+# Vault reconciliation backups are local safety copies and may contain personal
+# Obsidian content.
+/vault-backup*/
+/vault_backup*/
+/vault*.bak/
 
 # Safety net for stray vault content that lands outside `vault/`. The board
 # extension writes cards to `<vaultRoot>/projects/<slug>/board/...` and
