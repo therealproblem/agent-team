@@ -1,5 +1,5 @@
 ---
-description: Engineer inner skill. Review one or more feature branches against their card acceptance criteria, then merge to main via local-only git merge (no PR ceremony). Invoke on cards with `sub_persona: merger`. The merger is the single integration gatekeeper — only this role writes to `main`.
+description: "Engineer inner skill. Review one or more feature branches against their card acceptance criteria, then merge to main via local-only git merge (no PR ceremony). Invoke on cards with `sub_persona: merger`. The merger is the single integration gatekeeper — only this role writes to `main`."
 disable-model-invocation: true
 ---
 
