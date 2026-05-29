@@ -551,11 +551,12 @@ export default function ComponentsPage() {
           {/* Compact filter — segmented */}
           <div className="pt-2">
             <p className={`${caption} text-pressed-cacao mb-3`}>Compact filter — segmented</p>
-            <Tabs defaultValue="highlights" className="w-fit">
-              <TabsList className="rounded-[12px] bg-cloud-fog p-1 h-11 gap-1 items-center">
-                <TabsTrigger value="highlights" className="!h-8 rounded-[8px] px-4 text-[14px] font-medium text-pressed-cacao hover:text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Highlights</TabsTrigger>
-                <TabsTrigger value="all" className="!h-8 rounded-[8px] px-4 text-[14px] font-medium text-pressed-cacao hover:text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">All</TabsTrigger>
-                <TabsTrigger value="bookmarked" className="!h-8 rounded-[8px] px-4 text-[14px] font-medium text-pressed-cacao hover:text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Bookmarked</TabsTrigger>
+            <Tabs defaultValue="score" className="w-fit">
+              <TabsList className="rounded-full bg-cloud-fog p-1 h-11 gap-1 items-center">
+                <TabsTrigger value="score" className="!h-9 rounded-full px-5 text-[14px] font-medium !text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Score</TabsTrigger>
+                <TabsTrigger value="reviews" className="!h-9 rounded-full px-5 text-[14px] font-medium !text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Reviews</TabsTrigger>
+                <TabsTrigger value="details" className="!h-9 rounded-full px-5 text-[14px] font-medium !text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Details</TabsTrigger>
+                <TabsTrigger value="similar" className="!h-9 rounded-full px-5 text-[14px] font-medium !text-deep-cognac data-[state=active]:!bg-burnt-umber data-[state=active]:!text-white data-[state=active]:!shadow-none">Similar</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
