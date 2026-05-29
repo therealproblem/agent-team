@@ -16,6 +16,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadDotenv } from "../../lib/dotenv";
 import { resolveVaultRoot } from "../../lib/vault-path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
@@ -31,6 +32,17 @@ const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 
 loadDotenv();
+
+// Sibling extensions to force-load into every spawned subagent via Pi's
+// `--extension <path>` flag. Pi auto-discovers extensions from the spawned
+// cwd's `.pi/extensions/`, but the engineer often runs against an external
+// project where those don't exist — passing absolute paths ensures the
+// subagent gets agents-team's tools regardless of cwd. Resolved at module
+// load relative to this file so the path survives repo moves.
+const SUBAGENT_EXT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const SIBLING_EXTENSIONS_TO_INJECT = ["codegraph"].map((name) =>
+	path.resolve(SUBAGENT_EXT_DIR, "..", name, "index.ts"),
+);
 
 // Project-scope agent names already confirmed by the user in this Pi process.
 // One Pi process == one session, so this trust set lives for the lifetime of
@@ -368,6 +380,14 @@ async function runSingleAgent(
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 	if (agent.thinking) args.push("--thinking", agent.thinking);
+
+	// Force-load sibling extensions (codegraph, …) so the spawned subagent
+	// has the tools regardless of which project's cwd it runs in. Skips any
+	// path that isn't on disk so a copied subagent extension still works in
+	// projects that don't have those siblings.
+	for (const extPath of SIBLING_EXTENSIONS_TO_INJECT) {
+		if (fs.existsSync(extPath)) args.push("--extension", extPath);
+	}
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
