@@ -1,0 +1,8 @@
+{
+  "name": "agents-team-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:ai-provider": "node scripts/test-ai-provider.mjs"
+  }
+}
