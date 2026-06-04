@@ -15,6 +15,7 @@
 #   stop-server          Stop any running server on AGENTS_TEAM_SERVER_PORT
 #   install-tmux         Install and configure tmux
 #   install-node-tools   Install Pi and leaf
+#   install-rtk          Install rtk (LLM token-saving CLI proxy)
 #   install-pi-packages  Install Pi project-local packages and patches
 #   install-codegraph    Install codegraph CLI + index this repo for Pi MCP
 #   setup-env            Setup .env and vault artifact directories
@@ -54,6 +55,7 @@ PHASES=(
 	"stop-server:Stop any running server on port ${AGENTS_TEAM_SERVER_PORT:-8080}"
 	"install-tmux:Install and configure tmux"
 	"install-node-tools:Install Pi and leaf"
+	"install-rtk:Install rtk (LLM token-saving CLI proxy)"
 	"install-pi-packages:Install Pi project-local packages and patches"
 	"install-codegraph:Install codegraph CLI + index this repo for Pi MCP"
 	"setup-env:Setup .env and vault artifact directories"

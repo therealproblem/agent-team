@@ -315,17 +315,18 @@ The bootstrap script is idempotent and handles:
 
 1. tmux install + Pi-friendly key config (`extended-keys`, csi-u modifier encoding)
 2. Pi runtime install (`@earendil-works/pi-coding-agent`)
-3. Pi project-local packages (replayed from `.pi/settings.json` - notably `@the-forge-flow/camoufox-pi` for the `research` skill)
-4. Local patches against vendored npm packages (`scripts/patches/`)
-5. `codegraph` CLI install (`@colbymchenry/codegraph`) + initial index of this repo's TS/JS/Python under `.codegraph/codegraph.db` (gitignored, per-developer). Re-runs are incremental via `codegraph sync`. The Pi-side wiring lives in `.pi/mcp.json` (checked in).
-6. `.env` scaffold from `.env.example` (preserves existing `.env`)
-7. Vault artifact roots (`<vault>/artifacts/{renders,exports}/`) created; PDFs are served by the runtime route at `app/p/[slug]/route.ts` reading straight from disk (no symlink needed)
-8. Nextra server `pnpm install` in `.pi/server/`
-9. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server - unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
-10. Nextra production build (`next build`) - `.env` is sourced first so build-time vars get baked in
-11. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
-12. Python research deps (`beautifulsoup4` + `requests`) installed to `--user` via `python3 -m pip` so the `research` skill's batch URL-fetch heredoc doesn't die with `ModuleNotFoundError`. Retries with `--break-system-packages` on PEP 668 systems.
-13. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
+3. `rtk` install — a small Rust CLI proxy that compresses noisy command output (`ls`, `cat`, `grep`, `git`, test runners, etc.) before it reaches LLM context. Setup installs it globally via Homebrew on macOS when available, otherwise via the upstream installer.
+4. Pi project-local packages (replayed from `.pi/settings.json` - notably `@the-forge-flow/camoufox-pi` for the `research` skill)
+5. Local patches against vendored npm packages (`scripts/patches/`)
+6. `codegraph` CLI install (`@colbymchenry/codegraph`) + initial index of this repo's TS/JS/Python under `.codegraph/codegraph.db` (gitignored, per-developer). Re-runs are incremental via `codegraph sync`. The Pi-side wiring lives in `.pi/mcp.json` (checked in).
+7. `.env` scaffold from `.env.example` (preserves existing `.env`)
+8. Vault artifact roots (`<vault>/artifacts/{renders,exports}/`) created; PDFs are served by the runtime route at `app/p/[slug]/route.ts` reading straight from disk (no symlink needed)
+9. Nextra server `pnpm install` in `.pi/server/`
+10. Stops only the process bound to `AGENTS_TEAM_SERVER_PORT` (default 8080) so the rebuild doesn't fight a stale server - unrelated Node servers and Pi sessions on the same machine are left alone, and the script won't suicide when launched from inside a Pi session
+11. Nextra production build (`next build`) - `.env` is sourced first so build-time vars get baked in
+12. Chrome auto-install via `@puppeteer/browsers` when no system Chrome is found, pinned into `.env` as `AGENTS_TEAM_CHROME_PATH` (path is quoted because Chrome-for-Testing's path contains spaces)
+13. Python research deps (`beautifulsoup4` + `requests`) installed to `--user` via `python3 -m pip` so the `research` skill's batch URL-fetch heredoc doesn't die with `ModuleNotFoundError`. Retries with `--break-system-packages` on PEP 668 systems.
+14. `news-cron` crontab entry (`0 7 * * * scripts/news-cron.sh`) installed idempotently. Soft-fails with a Full Disk Access hint when macOS TCC denies the spool write so the rest of setup still completes.
 
 Then start the agent:
 
@@ -438,7 +439,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 .codegraph/              Local code knowledge graph DB (gitignored; built by scripts/phases/install-codegraph.sh)
 scripts/
 ├── setup.sh             Idempotent bootstrap (orchestrates phases/)
-├── phases/              Modular setup phases (stop-server, install-tmux, etc.)
+├── phases/              Modular setup phases (stop-server, install-tmux, install-rtk, etc.)
 ├── lib/                 Shared helpers (common.sh)
 ├── news-cron.sh         Daily 07:00 news refresh (installed by setup)
 ├── apply-patches.sh     Reapply local patches after npm installs
