@@ -25,17 +25,20 @@ else
 	ok "tmux installed ($(tmux -V))"
 fi
 
-# tmux config: ensure Pi-friendly key handling.
+# tmux config: ensure Pi-friendly defaults.
 #   extended-keys on           -- reports modified Enter etc. correctly
 #   extended-keys-format csi-u -- csi-u modifier-key encoding (default xterm
 #                                  format drops some modifier+key combinations
 #                                  that Pi relies on)
+#   mouse on                   -- enables scrolling, pane selection, resizing,
+#                                  and copy-mode mouse support by default.
 TMUX_CONF="${HOME}/.tmux.conf"
 
 # format: key|value|comment
 declare -a TMUX_SETTINGS=(
 	"extended-keys|on|Reports modified Enter / Shift+Enter etc. to terminal apps."
 	"extended-keys-format|csi-u|Required by Pi. Uses csi-u modifier-key encoding."
+	"mouse|on|Enables mouse scrolling, pane selection, resizing, and copy-mode support."
 )
 
 ensure_tmux_setting() {

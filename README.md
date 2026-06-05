@@ -313,7 +313,7 @@ bash scripts/setup.sh
 
 The bootstrap script is idempotent and handles:
 
-1. tmux install + Pi-friendly key config (`extended-keys`, csi-u modifier encoding)
+1. tmux install + Pi-friendly config (`extended-keys`, csi-u modifier encoding, mouse mode on)
 2. Pi runtime install (`@earendil-works/pi-coding-agent`)
 3. `rtk` install — a small Rust CLI proxy that compresses noisy command output (`ls`, `cat`, `grep`, `git`, test runners, etc.) before it reaches LLM context. Setup installs it globally via Homebrew on macOS when available, otherwise via the upstream installer.
 4. Pi project-local packages (replayed from `.pi/settings.json` - notably `@the-forge-flow/camoufox-pi` for the `research` skill)
