@@ -61,6 +61,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { loadDotenv } from "../../lib/dotenv";
 import { createBoxRenderer, surface as surfaceShared } from "../../lib/tui";
+import { HEALTH_PROBE_TIMEOUT_MS, nextHealthPollTransition } from "./health";
 
 loadDotenv();
 
@@ -77,7 +78,7 @@ const NEXT_BUILD_DIR = join(SERVER_ROOT, ".next");
 async function isPortBound(port: number): Promise<boolean> {
 	try {
 		await fetch(`http://localhost:${port}/`, {
-			signal: AbortSignal.timeout(500),
+			signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
 		});
 		return true;
 	} catch {
@@ -113,10 +114,14 @@ let pendingFrame = 0;
 // port probe every few seconds and flip the footer on a real transition.
 //
 // HEALTH_POLL_INTERVAL_MS=5000 trades off detection latency against work:
-// `isPortBound` is a fetch with a 500ms timeout, so each probe is a few ms
-// of local TCP. 5s is fast enough that a crashed server is visible before
-// the user notices on their own, slow enough that an idle TUI doesn't burn
-// CPU on it.
+// `isPortBound` is a fetch with a 3000ms timeout. 5s is fast enough that
+// a crashed server is visible before the user notices on their own, slow
+// enough that an idle TUI doesn't burn CPU on it.
+//
+// The periodic poll requires HEALTH_POLL_FAILURE_THRESHOLD consecutive failed
+// probes before surfacing or flipping ready→down. This tolerates transient
+// stalls during dev-mode Next compile/render while still marking real outages
+// down after the threshold.
 const HEALTH_POLL_INTERVAL_MS = 5_000;
 let healthTimer: ReturnType<typeof setInterval> | null = null;
 let lastKnownSrvState: "ready" | "down" | null = null;
@@ -246,6 +251,7 @@ export default function (pi: ExtensionAPI): void {
 	// only on the ready→down edge so we don't spam during sustained outage.
 	function startHealthPoll(ctx: ExtensionContext): void {
 		stopHealthPoll();
+		let consecutiveFailures = 0;
 		const tick = async (): Promise<void> => {
 			if (!alive) return;
 			let bound: boolean;
@@ -254,15 +260,16 @@ export default function (pi: ExtensionAPI): void {
 			} catch {
 				return;
 			}
-			const next: "ready" | "down" = bound ? "ready" : "down";
-			if (next === lastKnownSrvState) return;
-			if (next === "down" && lastKnownSrvState === "ready") {
+			const result = nextHealthPollTransition(lastKnownSrvState, consecutiveFailures, bound);
+			consecutiveFailures = result.consecutiveFailures;
+			if (!result.transition) return;
+			if (result.transition.shouldSurfaceStopped) {
 				surface(
 					pi,
 					`server: port ${SERVER_PORT} stopped responding — tail ${LOG_PATH}`,
 				);
 			}
-			setSrv(ctx, next);
+			setSrv(ctx, result.transition.next);
 		};
 		healthTimer = setInterval(() => {
 			void tick();
