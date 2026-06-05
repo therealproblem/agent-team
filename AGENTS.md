@@ -190,7 +190,7 @@ Not currently wired in — being built from scratch. The CLI (`pi` from the repo
 
 ## One-time setup
 
-Run the bootstrap script. Installs Pi, tmux (with Pi-friendly config), and creates a `.env` from the template:
+Run the bootstrap script. Installs Pi, tmux (with Pi-friendly config, including mouse mode), and creates a `.env` from the template:
 
 ```bash
 bash scripts/setup.sh
