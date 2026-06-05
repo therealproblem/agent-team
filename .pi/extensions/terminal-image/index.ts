@@ -1,12 +1,13 @@
 /**
- * terminal-image — explicit local image attachment from the terminal.
+ * terminal-image — automatic local image attachment from terminal prompts.
  *
- * UX: /image <path> <question>
+ * UX: paste/type a local image path with visual intent, e.g.
+ *   /Users/joseph/Downloads/cat.jpg what do you see in this image?
  *
  * Pi already supports ImageContent once a caller supplies structured image
- * blocks. This extension is only the terminal adapter: it keeps normal chat
- * path mentions as text, validates an explicitly requested local image, and
- * transforms that one TUI input into text + ImageContent before the model turn.
+ * blocks. This extension is only the terminal adapter: it validates local
+ * images and transforms visual-evaluation prompts into text + ImageContent,
+ * while leaving normal file-operation prompts as plain text.
  */
 
 import { existsSync } from "node:fs";
@@ -14,9 +15,9 @@ import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-const COMMAND = "/image";
+
 const CUSTOM_TYPE = "terminal-image";
-const DEFAULT_QUESTION = "What do you see in this image?";
+const MAX_AUTO_IMAGES = 3;
 
 // Keep comfortably below common provider limits after base64 expansion.
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -28,8 +29,12 @@ const SUPPORTED_IMAGE_TYPES = new Set([
 	"image/gif",
 ]);
 
-export interface ParsedImageCommand {
-	path: string;
+const IMAGE_EXT_RE = /\.(?:jpe?g|png|webp|gif)\b/i;
+const VISUAL_INTENT_RE = /\b(?:what\s+(?:do\s+)?(?:you\s+)?see|describe|caption|compare|analy[sz]e|inspect|look\s+at|view|identify|recognize|read|ocr|transcribe|extract|what(?:'s|\s+is)\s+(?:in|on)|in\s+this\s+(?:image|picture|photo|screenshot)|this\s+(?:image|picture|photo|screenshot)|picture|photo|screenshot|visual|diagram|chart)\b/i;
+const FILE_OPERATION_RE = /\b(?:move|mv|copy|cp|delete|del|remove|rm|archive|zip|tar|compress|rename|ren|open|edit|write|save|upload|download|attach|send|email|share|chmod|chown|mkdir|touch|find|locate|list|ls|cat|tail|head|convert|resize|crop|optimi[sz]e)\b/i;
+
+export interface AutoImagePrompt {
+	paths: string[];
 	question: string;
 }
 
@@ -70,55 +75,104 @@ function unescapeQuoted(value: string): string {
 	return value.replace(/\\([\\"'])/g, "$1");
 }
 
-/**
- * Parse `/image <path> <question>`.
- *
- * Supports quoted paths for spaces (`/image "~/Desktop/a b.png" ...`). Unquoted
- * paths intentionally stop at whitespace; users with spaces should quote.
- */
-export function parseImageArgs(args: string): ParsedImageCommand {
-	let rest = args.trimStart();
-	if (!rest) return { path: "", question: "" };
-
-	let path = "";
-	const quote = rest[0];
-	if (quote === "\"" || quote === "'") {
-		let escaped = false;
-		let end = -1;
-		for (let i = 1; i < rest.length; i++) {
-			const ch = rest[i];
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (ch === "\\") {
-				escaped = true;
-				continue;
-			}
-			if (ch === quote) {
-				end = i;
-				break;
-			}
-		}
-		if (end === -1) {
-			path = unescapeQuoted(rest.slice(1));
-			rest = "";
-		} else {
-			path = unescapeQuoted(rest.slice(1, end));
-			rest = rest.slice(end + 1).trimStart();
-		}
-	} else {
-		const match = rest.match(/^(\S+)(?:\s+([\s\S]*))?$/);
-		path = match?.[1] ?? "";
-		rest = match?.[2]?.trimStart() ?? "";
-	}
-
-	return { path, question: rest || DEFAULT_QUESTION };
+function isBoundary(ch: string | undefined): boolean {
+	return ch === undefined || /\s|["'`“”‘’()\[\]{}<>]/.test(ch);
 }
 
-export function parseImageCommand(text: string): ParsedImageCommand | null {
-	if (text !== COMMAND && !text.startsWith(`${COMMAND} `)) return null;
-	return parseImageArgs(text.slice(COMMAND.length));
+function maybePathEnd(ch: string | undefined): boolean {
+	return ch === undefined || /\s|["'`“”‘’()\[\]{}<>,;!?]/.test(ch);
+}
+
+function stripTrailingPunctuation(value: string): string {
+	return value.replace(/[.,;:!?]+$/g, "");
+}
+
+function containsVisualIntent(text: string): boolean {
+	return VISUAL_INTENT_RE.test(text);
+}
+
+function textWithoutQuotedSpans(text: string): string {
+	return text.replace(/(["'`])[^"'`]*\1/g, " ");
+}
+
+function containsFileOperationIntent(text: string): boolean {
+	return FILE_OPERATION_RE.test(textWithoutQuotedSpans(text));
+}
+
+function appendCandidate(
+	candidates: Array<{ path: string; start: number; end: number }>,
+	candidate: { path: string; start: number; end: number },
+): void {
+	if (!IMAGE_EXT_RE.test(candidate.path)) return;
+	if (candidates.some((existing) => existing.start === candidate.start && existing.end === candidate.end)) return;
+	candidates.push(candidate);
+}
+
+export function findImagePathCandidates(
+	text: string,
+	cwd = process.cwd(),
+): Array<{ path: string; start: number; end: number }> {
+	const candidates: Array<{ path: string; start: number; end: number }> = [];
+
+	const quoted = /(["'`])([^"'`]*?\.(?:jpe?g|png|webp|gif))\1/gi;
+	for (const match of text.matchAll(quoted)) {
+		const raw = match[2] ?? "";
+		appendCandidate(candidates, {
+			path: unescapeQuoted(raw),
+			start: (match.index ?? 0) + 1,
+			end: (match.index ?? 0) + 1 + raw.length,
+		});
+	}
+
+	for (let start = 0; start < text.length; start++) {
+		if (!isBoundary(text[start - 1])) continue;
+		const startsHome = text[start] === "~" && text[start + 1] === "/";
+		const startsAbsolute = text[start] === "/";
+		const startsRelative = text[start] === "." && text[start + 1] === "/";
+		if (!startsHome && !startsAbsolute && !startsRelative) continue;
+
+		const slice = text.slice(start);
+		const ext = slice.match(IMAGE_EXT_RE);
+		if (!ext || ext.index === undefined) continue;
+
+		const minEnd = start + ext.index + ext[0].length;
+		if (!maybePathEnd(text[minEnd])) continue;
+
+		let best: { path: string; end: number } | undefined;
+		for (let end = minEnd; end <= text.length; end++) {
+			if (!maybePathEnd(text[end])) continue;
+			const raw = stripTrailingPunctuation(text.slice(start, end));
+			if (!raw || !IMAGE_EXT_RE.test(raw)) continue;
+			const absolutePath = resolveImagePath(raw, cwd);
+			if (existsSync(absolutePath)) best = { path: raw, end: start + raw.length };
+		}
+
+		if (best) {
+			appendCandidate(candidates, { path: best.path, start, end: best.end });
+			start = Math.max(start, best.end - 1);
+		} else {
+			const raw = stripTrailingPunctuation(text.slice(start, minEnd));
+			appendCandidate(candidates, { path: raw, start, end: start + raw.length });
+			start = Math.max(start, minEnd - 1);
+		}
+	}
+
+	return candidates.sort((a, b) => a.start - b.start);
+}
+
+export function parseAutoImagePrompt(text: string, cwd = process.cwd()): AutoImagePrompt | null {
+	const trimmed = text.trim();
+	if (!trimmed) return null;
+	if (!containsVisualIntent(trimmed)) return null;
+	if (containsFileOperationIntent(trimmed)) return null;
+
+	const candidates = findImagePathCandidates(trimmed, cwd);
+	if (candidates.length === 0) return null;
+
+	return {
+		paths: candidates.map((candidate) => candidate.path),
+		question: trimmed,
+	};
 }
 
 export function detectMimeType(bytes: Uint8Array, filePath: string): string | undefined {
@@ -183,7 +237,7 @@ export function resolveImagePath(inputPath: string, cwd: string): string {
 
 export async function loadLocalImage(inputPath: string, cwd: string): Promise<LoadedImage> {
 	if (!inputPath.trim()) {
-		throw new Error("Usage: /image <path> <question>");
+		throw new Error("Image path is empty.");
 	}
 
 	const absolutePath = resolveImagePath(inputPath, cwd);
@@ -218,39 +272,52 @@ export async function loadLocalImage(inputPath: string, cwd: string): Promise<Lo
 	};
 }
 
-async function handleImageCommand(
+async function handleAutoImagePrompt(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
-	args: string,
+	parsed: AutoImagePrompt,
 ): Promise<void> {
-	const parsed = parseImageArgs(args);
+	if (parsed.paths.length > MAX_AUTO_IMAGES) {
+		surface(
+			pi,
+			`I found ${parsed.paths.length} image paths. Please narrow the request to ${MAX_AUTO_IMAGES} or fewer images.`,
+			{ count: parsed.paths.length, max: MAX_AUTO_IMAGES },
+		);
+		return;
+	}
 
 	if (!supportsImages(ctx)) {
 		surface(
 			pi,
-			`/image requires an image-capable model. ${modelName(ctx)} reports text-only input; switch models and retry.`,
+			`Image prompts require an image-capable model. ${modelName(ctx)} reports text-only input; switch models and retry.`,
 			{ model: ctx.model?.id, input: ctx.model?.input },
 		);
 		return;
 	}
 
 	try {
-		const loaded = await loadLocalImage(parsed.path, ctx.cwd ?? process.cwd());
+		const loaded = await Promise.all(
+			parsed.paths.map((path) => loadLocalImage(path, ctx.cwd ?? process.cwd())),
+		);
 		await pi.sendUserMessage([
 			{ type: "text", text: parsed.question },
-			loaded.content,
+			...loaded.map((image) => image.content),
 		]);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		surface(pi, `/image: ${message}`);
+		surface(pi, `Image prompt: ${message}`);
 	}
 }
 
 export default function (pi: ExtensionAPI): void {
-	pi.registerCommand("image", {
-		description: "Attach a local image to the next model turn: /image <path> <question>",
-		handler: async (args, ctx) => {
-			await handleImageCommand(pi, ctx, args);
-		},
+	pi.on("input", async (event, ctx) => {
+		if (event.source !== "interactive") return { action: "continue" };
+		if (event.images && event.images.length > 0) return { action: "continue" };
+
+		const parsed = parseAutoImagePrompt(event.text, ctx.cwd ?? process.cwd());
+		if (!parsed) return { action: "continue" };
+
+		await handleAutoImagePrompt(pi, ctx, parsed);
+		return { action: "handled" };
 	});
 }

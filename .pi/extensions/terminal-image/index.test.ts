@@ -8,16 +8,17 @@
  */
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as mod from "./index";
 
 const {
 	MAX_IMAGE_BYTES,
 	detectMimeType,
+	findImagePathCandidates,
 	loadLocalImage,
-	parseImageCommand,
+	parseAutoImagePrompt,
 	resolveImagePath,
 } = mod;
 
@@ -56,36 +57,46 @@ async function rejects(fn: () => Promise<unknown>, pattern: RegExp, message: str
 async function run(): Promise<void> {
 	console.log("terminal-image smoke tests");
 
-	eq(parseImageCommand("hello /image a.png"), null, "normal chat is not intercepted");
-	eq(parseImageCommand("/image /tmp/a.png what do you see?"), {
-		path: "/tmp/a.png",
-		question: "what do you see?",
-	}, "parses absolute path plus question");
-	eq(parseImageCommand('/image "/tmp/a b.png" describe it'), {
-		path: "/tmp/a b.png",
-		question: "describe it",
-	}, "parses quoted path with spaces");
-	eq(parseImageCommand("/image ./a.png"), {
-		path: "./a.png",
-		question: "What do you see in this image?",
-	}, "defaults missing question");
-
-	assert(resolveImagePath("relative.png", "/tmp/pi-test") === "/tmp/pi-test/relative.png", "resolves relative paths against cwd");
-
 	const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	const jpegHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 	const gifHeader = Buffer.from("GIF89a", "ascii");
 	const webpHeader = Buffer.from("RIFFxxxxWEBP", "ascii");
-	eq(detectMimeType(pngHeader, "x"), "image/png", "detects PNG magic bytes");
-	eq(detectMimeType(jpegHeader, "x"), "image/jpeg", "detects JPEG magic bytes");
-	eq(detectMimeType(gifHeader, "x"), "image/gif", "detects GIF magic bytes");
-	eq(detectMimeType(webpHeader, "x"), "image/webp", "detects WebP magic bytes");
-	eq(detectMimeType(Buffer.from("nope"), "x.txt"), undefined, "rejects unknown type");
 
 	const dir = await mkdtemp(join(tmpdir(), "terminal-image-"));
 	try {
 		const pngPath = join(dir, "tiny.png");
+		const spacedPath = join(dir, "tiny cat.png");
+		const secondPath = join(dir, "second.jpg");
 		await writeFile(pngPath, Buffer.concat([pngHeader, Buffer.from([0, 0, 0, 0])]));
+		await writeFile(spacedPath, Buffer.concat([pngHeader, Buffer.from([1, 1, 1, 1])]));
+		await writeFile(secondPath, Buffer.concat([jpegHeader, Buffer.from([2, 2, 2, 2])]));
+
+		eq(parseAutoImagePrompt(`${pngPath} what do u see in this image GPT`, dir), {
+			paths: [pngPath],
+			question: `${pngPath} what do u see in this image GPT`,
+		}, "detects absolute image path plus visual intent");
+		eq(parseAutoImagePrompt(`describe \"${spacedPath}\"`, dir), {
+			paths: [spacedPath],
+			question: `describe \"${spacedPath}\"`,
+		}, "detects quoted image path with spaces");
+		eq(parseAutoImagePrompt(`${pngPath} and ${secondPath} compare these images`, dir)?.paths, [
+			pngPath,
+			secondPath,
+		], "detects multiple image paths");
+		eq(parseAutoImagePrompt(`move ${pngPath} to the archive`, dir), null, "does not attach image for file move prompt");
+		eq(parseAutoImagePrompt(`delete ${pngPath}`, dir), null, "does not attach image for delete prompt");
+		eq(parseAutoImagePrompt(`please copy ${pngPath} to ${secondPath}`, dir), null, "does not attach image for copy prompt");
+		eq(parseAutoImagePrompt(`hello ${pngPath}`, dir), null, "does not attach path without visual intent");
+		eq(findImagePathCandidates(`describe ${spacedPath}`, dir).map((c) => c.path), [spacedPath], "detects existing unquoted path with spaces when feasible");
+
+		assert(resolveImagePath("relative.png", "/tmp/pi-test") === "/tmp/pi-test/relative.png", "resolves relative paths against cwd");
+
+		eq(detectMimeType(pngHeader, "x"), "image/png", "detects PNG magic bytes");
+		eq(detectMimeType(jpegHeader, "x"), "image/jpeg", "detects JPEG magic bytes");
+		eq(detectMimeType(gifHeader, "x"), "image/gif", "detects GIF magic bytes");
+		eq(detectMimeType(webpHeader, "x"), "image/webp", "detects WebP magic bytes");
+		eq(detectMimeType(Buffer.from("nope"), "x.txt"), undefined, "rejects unknown type");
+
 		const loaded = await loadLocalImage(pngPath, dir);
 		eq(loaded.content.type, "image", "loads image content block");
 		eq(loaded.content.mimeType, "image/png", "sets detected MIME type");
