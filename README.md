@@ -100,7 +100,7 @@ The fastest swap is a project-wide find-replace from `ELICE_<TIER>/` to your mat
 | Executor + reviewer subagents | `.pi/agents/<name>.md` - spawned as isolated sub-Pi processes via the `subagent` extension. Per-agent model pinned in frontmatter. |
 | Inner skills (prd, frontend, kanji, journal, ...) | `.pi/skills/<name>/SKILL.md` - Pi auto-discovers and loads on demand. |
 | Shared services | Same shape as inner skills, available under every persona. |
-| Tool surfaces | TypeScript extensions under `.pi/extensions/` (server, telegram-bot, working-mood, obsidian-vault, news-ingest, reminders, ...). |
+| Tool surfaces | TypeScript extensions under `.pi/extensions/` (server, telegram-bot, terminal-image, working-mood, obsidian-vault, news-ingest, reminders, ...). |
 
 ### Per-domain memory of you
 
@@ -430,7 +430,7 @@ AGENTS_TEAM_SERVER_TITLE=experimental pi
 │   ├── obsidian-vault/     Vault I/O + render-html / export tool surface
 │   ├── board/              board_create_card + board_add_comment tools
 │   ├── env-guard/          Strips .env values from assistant messages + tool args
-│   └── ...                   battery, news-ingest, reminders, srs, etc.
+│   └── ...                   battery, news-ingest, reminders, terminal-image, srs, etc.
 ├── server/              Next.js 16 + Nextra 4 app on :8080 — full-height scrollable TOC sidebar (capped at h3); in-page Fix-syntax for broken Mermaid; PM-reply coordinator at lib/pm-reply-coordinator.ts; proxy.ts auth gate (formerly middleware.ts)
 ├── state/               telegram/, meta-logs/, research-tree.json (per-run state; logbook lives in vault/.memory/), news.json + news-sources.json (RSS cache + config), persona-registry.json, srs.json, migration-map.json, server.log
 ├── lib/                 dotenv loader + shared TUI primitives
